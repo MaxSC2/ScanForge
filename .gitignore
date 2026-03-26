@@ -1,21 +1,40 @@
+# dependencies
 node_modules/
-dist/
-.vite/
-coverage/
 
+# build output
+dist/
+build/
+.vite/
+out/
+
+# logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# temp
 *.tmp
 *.temp
 *.tsbuildinfo
 
+# environment
+.env
+.env.*
+
+# OS
 .DS_Store
 Thumbs.db
 
-.env
-.env.*
-!.env.example
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
 
+# Tauri / Rust
 src-tauri/target/
-src-tauri/gen/
+target/
 
-*.scanforge.json
+# misc
+coverage/
