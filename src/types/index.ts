@@ -23,3 +23,12 @@ export type {
   LocalProjectSummary,
   LocalProjectSaveResult,
 } from './project';
+export type {
+  JobEntity,
+  JobQueueStatus,
+  JobType,
+  PageRecord,
+  ProjectRecord,
+  RegionRecord,
+  RegionRecordStatus,
+} from './domain';
