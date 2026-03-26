@@ -568,13 +568,17 @@ fn ensure_project_defaults(connection: &Connection, project_id: &str) -> Result<
             )
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             ON CONFLICT(project_id) DO UPDATE SET
+              ocr_engine = CASE
+                WHEN project_settings.ocr_engine = 'mock' THEN excluded.ocr_engine
+                ELSE project_settings.ocr_engine
+              END,
               default_text_style_id = COALESCE(project_settings.default_text_style_id, excluded.default_text_style_id)
             ",
             params![
                 project_id,
                 "auto",
                 "ru",
-                "mock",
+                "windows",
                 "mock",
                 default_text_style_id(project_id),
             ],

@@ -1,6 +1,6 @@
 export type ProjectSourceLanguage = 'ja' | 'zh' | 'ko' | 'en' | 'auto';
 export type ProjectTargetLanguage = 'ru' | 'en';
-export type OcrEngineId = 'mock' | 'tesseract' | 'paddle' | 'manga-ocr';
+export type OcrEngineId = 'mock' | 'windows' | 'tesseract' | 'paddle' | 'manga-ocr';
 export type TranslationProviderId = 'mock' | 'local' | 'remote';
 
 export interface ProjectSettings {

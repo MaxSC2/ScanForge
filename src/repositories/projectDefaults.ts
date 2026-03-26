@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import {
   createDefaultTextStyle,
   DEFAULT_PROJECT_SETTINGS,
@@ -12,6 +13,10 @@ export async function ensureProjectDomainDefaults(projectId: string) {
     projectSettingsRepository.getByProjectId(projectId),
     textStyleRepository.listByProject(projectId),
   ]);
+  const runtimeDefaults = {
+    ...DEFAULT_PROJECT_SETTINGS,
+    ocrEngine: isTauri() ? 'windows' : DEFAULT_PROJECT_SETTINGS.ocrEngine,
+  } as const;
 
   const defaultStyle =
     styles.find((style) => style.id === `${projectId}:default-style`) ??
@@ -23,7 +28,8 @@ export async function ensureProjectDomainDefaults(projectId: string) {
 
   const nextSettings: ProjectSettingsRecord = {
     projectId,
-    ...(existingSettings ?? DEFAULT_PROJECT_SETTINGS),
+    ...(existingSettings ?? runtimeDefaults),
+    ...(existingSettings?.ocrEngine === 'mock' && isTauri() ? { ocrEngine: 'windows' } : {}),
     defaultTextStyleId: existingSettings?.defaultTextStyleId ?? defaultStyle.id,
   };
 

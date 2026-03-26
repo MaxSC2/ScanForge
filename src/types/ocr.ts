@@ -25,6 +25,7 @@ export interface OcrPagePayload {
 export interface OcrRegionResult {
   regionId: string;
   text: string | null;
+  confidence?: number | null;
   skipped: boolean;
   reason: string | null;
 }
