@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import {
   Combine,
   Download,
+  Eye,
+  EyeOff,
   FileJson,
   Focus,
   FolderOpen,
@@ -60,11 +62,16 @@ export function Toolbar() {
   const setTool = useEditorStore((state) => state.setTool);
   const focusMode = useEditorStore((state) => state.focusMode);
   const toggleFocusMode = useEditorStore((state) => state.toggleFocusMode);
+  const viewMode = useEditorStore((state) => state.viewMode);
+  const regionOverlaysVisible = useEditorStore((state) => state.regionOverlaysVisible);
+  const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
+  const requestFitToWidth = useEditorStore((state) => state.requestFitToWidth);
+  const requestActualSize = useEditorStore((state) => state.requestActualSize);
+  const toggleRegionOverlays = useEditorStore((state) => state.toggleRegionOverlays);
   const zoom = useEditorStore((state) => state.zoom);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetZoom = useEditorStore((state) => state.resetZoom);
-  const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
 
   const pushToast = useToastStore((state) => state.push);
   const setMeta = useProjectStore((state) => state.setMeta);
@@ -78,7 +85,7 @@ export function Toolbar() {
   const canStitch = selectedPageIds.length >= 2 && !stitching;
   const canRunOcr = ocrTargetPageIds.length > 0;
 
-  const tools: { id: EditorTool; icon: React.ReactNode; label: string; shortcut: string }[] = [
+  const tools: { id: EditorTool; icon: ReactNode; label: string; shortcut: string }[] = [
     { id: 'select', icon: <MousePointer2 size={14} />, label: 'Выбор', shortcut: 'V' },
     { id: 'draw', icon: <Square size={14} />, label: 'Рисование региона', shortcut: 'R' },
     { id: 'pan', icon: <Hand size={14} />, label: 'Панорама', shortcut: 'H' },
@@ -142,7 +149,7 @@ export function Toolbar() {
     try {
       const data = await toProjectFile();
       await saveProjectFile(data);
-      pushToast('Проект сохранён', 'success');
+      pushToast('Проект сохранен', 'success');
     } catch {
       pushToast('Не удалось сохранить проект', 'error');
     }
@@ -250,7 +257,7 @@ export function Toolbar() {
         <IconButton
           active={focusMode}
           onClick={toggleFocusMode}
-          tooltip="Focus mode: panels overlay the canvas (Ctrl+.)"
+          tooltip="Focus mode: панели открываются поверх холста (Ctrl+.)"
           variant="ghost"
         >
           <Focus size={14} />
@@ -293,7 +300,7 @@ export function Toolbar() {
         <button
           onClick={resetZoom}
           className="h-7 rounded px-2 text-[11px] tabular-nums text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-          title="Сбросить масштаб (Ctrl+0)"
+          title="Ручной сброс масштаба (Ctrl+0)"
         >
           {Math.round(zoom * 100)}%
         </button>
@@ -301,13 +308,34 @@ export function Toolbar() {
         <IconButton onClick={zoomIn} tooltip="Увеличить (Ctrl+=)" variant="ghost">
           <ZoomIn size={14} />
         </IconButton>
+      </div>
 
-        <IconButton onClick={requestFitToPage} tooltip="Подогнать в окно" variant="ghost">
-          <Maximize size={14} />
-        </IconButton>
-
-        <IconButton onClick={resetZoom} tooltip="Сбросить вид (Ctrl+0)" variant="ghost">
-          <RotateCcw size={14} />
+      <div className="ml-2 flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/70 p-1">
+        <ViewPresetButton
+          label="1:1"
+          active={viewMode === 'actual'}
+          onClick={requestActualSize}
+          title="Показать в 100%"
+        />
+        <ViewPresetButton
+          label="Width"
+          active={viewMode === 'fit-width'}
+          onClick={requestFitToWidth}
+          title="Подогнать по ширине"
+        />
+        <ViewPresetButton
+          label="Page"
+          active={viewMode === 'fit-page'}
+          onClick={requestFitToPage}
+          title="Подогнать в окно"
+        />
+        <IconButton
+          active={!regionOverlaysVisible}
+          onClick={toggleRegionOverlays}
+          tooltip="Показать или скрыть region overlays"
+          variant="ghost"
+        >
+          {regionOverlaysVisible ? <Eye size={14} /> : <EyeOff size={14} />}
         </IconButton>
       </div>
 
@@ -321,7 +349,7 @@ export function Toolbar() {
         onAutoFix={() => {
           if (!safeSuggestion) return;
           setStitchOptions(safeSuggestion.patch);
-          pushToast(`Применён безопасный размер: ${safeSuggestion.targetCrossAxis}px`, 'info');
+          pushToast(`Применен безопасный размер: ${safeSuggestion.targetCrossAxis}px`, 'info');
         }}
         onAutoFixAndSubmit={async () => {
           if (!safeSuggestion) return;
@@ -336,7 +364,7 @@ export function Toolbar() {
           }
 
           pushToast(
-            `Автофикс применён (${safeSuggestion.targetCrossAxis}px), склейка выполнена`,
+            `Автофикс применен (${safeSuggestion.targetCrossAxis}px), склейка выполнена`,
             'success',
           );
           setStitchDialogOpen(false);
@@ -352,5 +380,31 @@ export function Toolbar() {
         }}
       />
     </>
+  );
+}
+
+function ViewPresetButton({
+  label,
+  active,
+  onClick,
+  title,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+        active
+          ? 'bg-indigo-500/15 text-indigo-200 ring-1 ring-indigo-500/20'
+          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+      }`}
+    >
+      {label}
+    </button>
   );
 }

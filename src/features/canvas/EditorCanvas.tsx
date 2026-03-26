@@ -39,13 +39,14 @@ export function EditorCanvas() {
   });
   const zoom = useEditorStore((s) => s.zoom);
   const stagePosition = useEditorStore((s) => s.stagePosition);
+  const viewMode = useEditorStore((s) => s.viewMode);
   const tool = useEditorStore((s) => s.tool);
+  const regionOverlaysVisible = useEditorStore((s) => s.regionOverlaysVisible);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const minimapVisible = useEditorStore((s) => s.minimapVisible);
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
-  const fitRequestNonce = useEditorStore((s) => s.fitRequestNonce);
-  const setZoom = useEditorStore((s) => s.setZoom);
-  const setStagePosition = useEditorStore((s) => s.setStagePosition);
+  const viewRequestNonce = useEditorStore((s) => s.viewRequestNonce);
+  const applyViewportTransform = useEditorStore((s) => s.applyViewportTransform);
   const selectedRegionId = useRegionStore((s) => s.selectedRegionId);
   const selectRegion = useRegionStore((s) => s.selectRegion);
   const addRegion = useRegionStore((s) => s.addRegion);
@@ -67,6 +68,7 @@ export function EditorCanvas() {
     width: number;
     height: number;
   } | null>(null);
+  const previousPageIdRef = useRef<string | null>(null);
 
   // Resize observer
   useEffect(() => {
@@ -82,26 +84,54 @@ export function EditorCanvas() {
 
   useEffect(() => {
     if (!activePage || size.width <= 0 || size.height <= 0) return;
+
+    const pageChanged = previousPageIdRef.current !== activePage.id;
+    previousPageIdRef.current = activePage.id;
+
+    const effectiveViewMode = pageChanged && viewMode === 'manual' ? 'fit-page' : viewMode;
+    if (effectiveViewMode === 'manual') return;
+
     const padding = 40;
-    const fitScale = Math.min(
-      (size.width - padding * 2) / activePage.naturalWidth,
-      (size.height - padding * 2) / activePage.naturalHeight,
-    );
-    const nextZoom = Number.isFinite(fitScale) && fitScale > 0 ? fitScale : 1;
-    setZoom(nextZoom);
-    setStagePosition({
-      x: (size.width - activePage.naturalWidth * nextZoom) / 2,
-      y: (size.height - activePage.naturalHeight * nextZoom) / 2,
+    const safeWidth = Math.max(1, size.width - padding * 2);
+    const safeHeight = Math.max(1, size.height - padding * 2);
+
+    let nextZoom = 1;
+
+    if (effectiveViewMode === 'fit-width') {
+      nextZoom = safeWidth / activePage.naturalWidth;
+    } else if (effectiveViewMode === 'fit-page') {
+      nextZoom = Math.min(
+        safeWidth / activePage.naturalWidth,
+        safeHeight / activePage.naturalHeight,
+      );
+    }
+
+    if (!Number.isFinite(nextZoom) || nextZoom <= 0) {
+      nextZoom = 1;
+    }
+
+    const scaledWidth = activePage.naturalWidth * nextZoom;
+    const scaledHeight = activePage.naturalHeight * nextZoom;
+    const centeredY = (size.height - scaledHeight) / 2;
+
+    applyViewportTransform({
+      zoom: nextZoom,
+      stagePosition: {
+        x: (size.width - scaledWidth) / 2,
+        y: effectiveViewMode === 'fit-width' && scaledHeight > size.height - padding * 2
+          ? padding
+          : centeredY,
+      },
     });
   }, [
-    fitRequestNonce,
+    viewRequestNonce,
+    viewMode,
     activePage?.id,
     activePage?.naturalWidth,
     activePage?.naturalHeight,
     size.width,
     size.height,
-    setZoom,
-    setStagePosition,
+    applyViewportTransform,
   ]);
 
   const getScaledPointer = useCallback(
@@ -349,14 +379,15 @@ export function EditorCanvas() {
           )}
 
           {/* Regions */}
-          {[...activePage.regions].sort((a, b) => a.order - b.order).map((r) => (
-            <RegionRect
-              key={r.id}
-              region={r}
-              isSelected={r.id === selectedRegionId}
-              onContextMenu={handleRegionContextMenu(r.id)}
-            />
-          ))}
+          {regionOverlaysVisible &&
+            [...activePage.regions].sort((a, b) => a.order - b.order).map((r) => (
+              <RegionRect
+                key={r.id}
+                region={r}
+                isSelected={r.id === selectedRegionId}
+                onContextMenu={handleRegionContextMenu(r.id)}
+              />
+            ))}
 
           {/* Draw preview */}
           {drawRect && (

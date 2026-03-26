@@ -89,9 +89,34 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (ctrl && event.shiftKey && key === '1') {
+        event.preventDefault();
+        useEditorStore.getState().requestActualSize();
+        return;
+      }
+
+      if (ctrl && event.shiftKey && key === 'w') {
+        event.preventDefault();
+        useEditorStore.getState().requestFitToWidth();
+        return;
+      }
+
+      if (ctrl && event.shiftKey && key === 'f') {
+        event.preventDefault();
+        useEditorStore.getState().requestFitToPage();
+        return;
+      }
+
+      if (ctrl && event.shiftKey && key === 'h') {
+        event.preventDefault();
+        useEditorStore.getState().toggleRegionOverlays();
+        return;
+      }
+
       if (ctrl && event.shiftKey && key === 'o') {
         const { activePageId, selectedPageIds } = usePageStore.getState();
-        const pageIds = selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : [];
+        const pageIds =
+          selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : [];
 
         if (pageIds.length > 0) {
           event.preventDefault();

@@ -1,22 +1,25 @@
 import { create } from 'zustand';
 
 export type EditorTool = 'select' | 'draw' | 'pan';
+export type ViewMode = 'manual' | 'fit-page' | 'fit-width' | 'actual';
 
 interface EditorState {
   tool: EditorTool;
   zoom: number;
   stagePosition: { x: number; y: number };
+  viewMode: ViewMode;
   /** Panel visibility */
   sidebarOpen: boolean;
   inspectorOpen: boolean;
   focusMode: boolean;
   /** Canvas overlays */
+  regionOverlaysVisible: boolean;
   gridVisible: boolean;
   labelsVisible: boolean;
   minimapVisible: boolean;
   /** Cursor canvas coords (for status bar) */
   cursorPosition: { x: number; y: number };
-  fitRequestNonce: number;
+  viewRequestNonce: number;
 
   setTool: (tool: EditorTool) => void;
   setZoom: (zoom: number) => void;
@@ -24,12 +27,19 @@ interface EditorState {
   zoomOut: () => void;
   resetZoom: () => void;
   setStagePosition: (pos: { x: number; y: number }) => void;
+  applyViewportTransform: (payload: {
+    zoom: number;
+    stagePosition: { x: number; y: number };
+  }) => void;
   toggleSidebar: () => void;
   toggleInspector: () => void;
   setSidebarOpen: (value: boolean) => void;
   setInspectorOpen: (value: boolean) => void;
   toggleFocusMode: () => void;
   setFocusMode: (value: boolean) => void;
+  requestFitToWidth: () => void;
+  requestActualSize: () => void;
+  toggleRegionOverlays: () => void;
   toggleGrid: () => void;
   toggleLabels: () => void;
   toggleMinimap: () => void;
@@ -49,21 +59,24 @@ export const useEditorStore = create<EditorState>((set) => ({
   tool: 'select',
   zoom: 1,
   stagePosition: { x: 0, y: 0 },
+  viewMode: 'fit-page',
   sidebarOpen: true,
   inspectorOpen: true,
   focusMode: false,
+  regionOverlaysVisible: true,
   gridVisible: false,
   labelsVisible: true,
   minimapVisible: true,
   cursorPosition: { x: 0, y: 0 },
-  fitRequestNonce: 0,
+  viewRequestNonce: 0,
 
   setTool: (tool) => set({ tool }),
-  setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
-  zoomIn: () => set((s) => ({ zoom: clampZoom(s.zoom + ZOOM_STEP) })),
-  zoomOut: () => set((s) => ({ zoom: clampZoom(s.zoom - ZOOM_STEP) })),
-  resetZoom: () => set({ zoom: 1, stagePosition: { x: 0, y: 0 } }),
-  setStagePosition: (stagePosition) => set({ stagePosition }),
+  setZoom: (zoom) => set({ zoom: clampZoom(zoom), viewMode: 'manual' }),
+  zoomIn: () => set((s) => ({ zoom: clampZoom(s.zoom + ZOOM_STEP), viewMode: 'manual' })),
+  zoomOut: () => set((s) => ({ zoom: clampZoom(s.zoom - ZOOM_STEP), viewMode: 'manual' })),
+  resetZoom: () => set({ zoom: 1, stagePosition: { x: 0, y: 0 }, viewMode: 'manual' }),
+  setStagePosition: (stagePosition) => set({ stagePosition, viewMode: 'manual' }),
+  applyViewportTransform: ({ zoom, stagePosition }) => set({ zoom: clampZoom(zoom), stagePosition }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   setSidebarOpen: (value) => set({ sidebarOpen: value }),
@@ -80,12 +93,27 @@ export const useEditorStore = create<EditorState>((set) => ({
       sidebarOpen: value ? state.sidebarOpen : false,
       inspectorOpen: value ? state.inspectorOpen : false,
     })),
+  requestFitToWidth: () =>
+    set((state) => ({
+      viewMode: 'fit-width',
+      viewRequestNonce: state.viewRequestNonce + 1,
+    })),
+  requestActualSize: () =>
+    set((state) => ({
+      viewMode: 'actual',
+      viewRequestNonce: state.viewRequestNonce + 1,
+    })),
+  toggleRegionOverlays: () =>
+    set((state) => ({
+      regionOverlaysVisible: !state.regionOverlaysVisible,
+    })),
   toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
   toggleLabels: () => set((s) => ({ labelsVisible: !s.labelsVisible })),
   toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),
   setCursorPosition: (cursorPosition) => set({ cursorPosition }),
   requestFitToPage: () =>
     set((s) => ({
-      fitRequestNonce: s.fitRequestNonce + 1,
+      viewMode: 'fit-page',
+      viewRequestNonce: s.viewRequestNonce + 1,
     })),
 }));
