@@ -2,7 +2,7 @@ export { JobRepository, jobRepository } from './jobRepository';
 export { mergeJobsWithRepository, syncJobsForProject } from './jobPersistence';
 export { PageRepository, pageRepository } from './pageRepository';
 export { mergePagesWithRepository, syncPagesForProject } from './pagePersistence';
-export { ensureProjectDomainDefaults } from './projectDefaults';
+export { ensureProjectDomainDefaults, loadProjectDomainContext } from './projectDefaults';
 export { ProjectRepository, projectRepository } from './projectRepository';
 export {
   ProjectSettingsRepository,

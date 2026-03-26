@@ -4,12 +4,10 @@ import {
   mergeJobsWithRepository,
   mergeRegionsForPage,
   syncJobsForProject,
-  syncPagesForProject,
-  syncRegionsForPages,
 } from '../repositories';
 import { runPageOcr } from '../services/ocr';
+import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
-import { getProjectRepository } from '../storage';
 import type { JobRecord, JobResultSummary } from '../types';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
@@ -46,29 +44,10 @@ function trimJobs(jobs: JobRecord[]) {
     .slice(0, MAX_JOBS);
 }
 
-const projectRepository = getProjectRepository();
-
-async function ensureProjectSyncedForPipeline() {
-  let meta = useProjectStore.getState().meta;
-  if (!meta.localProjectId) {
-    const project = await usePageStore.getState().toProjectFile();
-    const result = await projectRepository.saveProject(project);
-    meta = result.project.meta;
-    if (useProjectStore.getState().meta.localProjectId !== meta.localProjectId) {
-      useProjectStore.getState().setMeta(meta);
-    }
-  }
-
-  const current = usePageStore.getState();
-  await syncPagesForProject(meta, current.pages);
-  await syncRegionsForPages(current.pages);
-  return useProjectStore.getState().meta;
-}
-
 async function persistCurrentJobs() {
   let meta = useProjectStore.getState().meta;
   if (!meta.localProjectId && useJobStore.getState().jobs.length > 0) {
-    meta = await ensureProjectSyncedForPipeline();
+    meta = await ensureProjectDomainStatePersisted();
   }
 
   await syncJobsForProject(meta, useJobStore.getState().jobs);
@@ -140,7 +119,7 @@ async function runOcrJob(job: JobRecord) {
   }
 
   try {
-    await ensureProjectSyncedForPipeline();
+    await ensureProjectDomainStatePersisted();
     const ocrResult = await runPageOcr(page, (progress, message) => {
       updateJob(job.id, { progress, message });
     });
@@ -211,7 +190,7 @@ async function runTranslationJob(job: JobRecord) {
   }
 
   try {
-    await ensureProjectSyncedForPipeline();
+    await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().translationOverwrite;
     const translationResult = await runPageTranslation(
       page,

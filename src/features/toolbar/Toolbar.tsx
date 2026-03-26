@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { IconButton } from '../../components/IconButton';
 import { StitchDialog } from '../../components/StitchDialog';
+import { exportRenderedPageAsPng } from '../export/renderExport';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
 import { useJobStore } from '../../stores/useJobStore';
@@ -181,12 +182,12 @@ export function Toolbar() {
     if (!activePage) return;
 
     try {
-      const saved = await exportPageImage(activePage);
+      const saved = await exportRenderedPageAsPng(activePage);
       if (saved) {
-        pushToast(`Экспортировано: ${activePage.fileName}`, 'success');
+        pushToast(`Рендер экспортирован: ${activePage.fileName}`, 'success');
       }
     } catch {
-      pushToast('Не удалось экспортировать изображение', 'error');
+      pushToast('Не удалось экспортировать рендер страницы', 'error');
     }
   };
 
@@ -249,11 +250,11 @@ export function Toolbar() {
 
       <IconButton
         onClick={handleExportActive}
-        tooltip="Экспорт активной страницы в PNG (Ctrl+Shift+E)"
+        tooltip="Экспорт рендера активной страницы в PNG (Ctrl+Shift+E)"
         disabled={!activePage}
       >
         <Download size={14} />
-        <span className="hidden xl:inline">Экспорт PNG</span>
+        <span className="hidden xl:inline">Рендер PNG</span>
       </IconButton>
 
       <IconButton

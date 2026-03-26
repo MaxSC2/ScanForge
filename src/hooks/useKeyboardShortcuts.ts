@@ -4,7 +4,7 @@ import { useHistoryStore } from '../stores/useHistoryStore';
 import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useRegionStore } from '../stores/useRegionStore';
-import { exportPageImage } from '../utils/persistence';
+import { exportRenderedPageAsPng } from '../features/export/renderExport';
 
 export function useKeyboardShortcuts() {
   useEffect(() => {
@@ -182,7 +182,7 @@ export function useKeyboardShortcuts() {
         const page = activePageId ? pages.find((item) => item.id === activePageId) : null;
         if (page) {
           event.preventDefault();
-          void exportPageImage(page);
+          void exportRenderedPageAsPng(page);
         }
         return;
       }
