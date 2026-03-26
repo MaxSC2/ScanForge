@@ -1,0 +1,94 @@
+import { isTauri } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
+import { readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import type { Page, ProjectFile } from '../types';
+
+export async function saveProjectFile(contents: ProjectFile): Promise<void> {
+  const text = JSON.stringify(contents, null, 2);
+
+  if (isTauri()) {
+    const path = await save({
+      title: 'Сохранить проект ScanForge',
+      defaultPath: `${contents.meta.name || 'scanforge-project'}.scanforge.json`,
+      filters: [{ name: 'Проект ScanForge', extensions: ['scanforge.json', 'json'] }],
+    });
+    if (!path) return;
+    await writeTextFile(path, text);
+    return;
+  }
+
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${contents.meta.name || 'scanforge-project'}.scanforge.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function openProjectFile(): Promise<ProjectFile | null> {
+  if (isTauri()) {
+    const path = await open({
+      title: 'Открыть проект ScanForge',
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'Проект ScanForge', extensions: ['scanforge.json', 'json'] }],
+    });
+    if (!path || Array.isArray(path)) return null;
+    const text = await readTextFile(path);
+    return JSON.parse(text) as ProjectFile;
+  }
+
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.scanforge.json';
+    input.onchange = async () => {
+      try {
+        const file = input.files?.[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        const text = await file.text();
+        resolve(JSON.parse(text) as ProjectFile);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    input.click();
+  });
+}
+
+function toPngName(fileName: string): string {
+  const base = fileName.replace(/\.[a-z0-9]+$/i, '');
+  return `${base}.png`;
+}
+
+async function saveBlob(blob: Blob, suggestedName: string): Promise<boolean> {
+  if (isTauri()) {
+    const path = await save({
+      title: 'Экспорт изображения',
+      defaultPath: suggestedName,
+      filters: [{ name: 'PNG изображение', extensions: ['png'] }],
+    });
+    if (!path) return false;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    await writeFile(path, bytes);
+    return true;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  a.click();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+export async function exportPageImage(page: Page): Promise<boolean> {
+  const response = await fetch(page.imageUrl);
+  const blob = await response.blob();
+  return saveBlob(blob, toPngName(page.fileName));
+}
