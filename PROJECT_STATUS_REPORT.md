@@ -2,7 +2,7 @@
 
 Date: 2026-03-26
 Branch: `stage-3-pipeline-foundation`
-Report scope: post-Stage-3 render/export foundation
+Report scope: post-Stage-3 verification preparation
 
 ## 1. Executive Summary
 
@@ -31,7 +31,7 @@ This is a serious step forward from Stage 2, but Stage 3 is still not fully comp
 
 What is still missing before Stage 3 can be called done:
 
-- end-to-end verification and stabilization pass
+- full end-to-end manual verification and stabilization sign-off
 - stronger OCR and translation provider coverage beyond current local draft paths
 
 ## 2. Current Stage Status
@@ -61,7 +61,7 @@ Workstream status:
 - Workstream B `Real OCR integration` -> usable and integrated
 - Workstream C `Translation pipeline` -> first real foundation implemented
 - Workstream D `Final render / export foundation` -> foundation implemented
-- Workstream E `Verification and stabilization` -> not done
+- Workstream E `Verification and stabilization` -> in progress, smoke checks added, manual sign-off pending
 
 Practical Stage 3 verdict:
 
@@ -82,15 +82,17 @@ Recent Stage 3 milestone commits:
 - `0c08929` `refactor: hydrate stage 3 project domain config`
 - `5d1187d` `feat: add windows ocr provider`
 - `3aab524` `feat: add translation pipeline foundation`
+- `2e681a4` `feat: add rendered export foundation`
 
 Build health right now:
 
 - `npm run build` passes
 - `cargo check` passes
+- `npm run test` passes
 
 Quality/process status:
 
-- no automated test suite yet
+- basic Vitest smoke coverage now exists
 - no CI pipeline yet
 - no dedicated lint pipeline yet
 
@@ -178,13 +180,16 @@ Platform integrations:
 
 - Windows WinRT OCR provider via PowerShell bridge for desktop OCR
 
+Quality tooling now present:
+
+- Vitest smoke test runner
+
 Not present:
 
 - FastAPI
 - PaddleOCR
 - OpenCV
 - external translation SDKs
-- automated test runner in active use
 
 ## 7. Implemented Product Surface
 
@@ -491,6 +496,28 @@ Current limitations:
 
 ## 14. Quality and Risk Assessment
 
+### 14.1 Verification assets now present
+
+Verification foundation added during the current stabilization pass:
+
+- `Vitest` smoke tests for translation draft helpers
+- `Vitest` smoke tests for render helper logic
+- `STAGE_3_VERIFICATION_CHECKLIST.md` for the full manual OCR -> translation -> export flow
+
+Automated smoke status on the current branch:
+
+- `npm run build` -> green
+- `cargo check` -> green
+- `npm run test` -> green
+
+What this means:
+
+- core helper logic for draft translation and rendered export naming/style resolution now has repeatable coverage
+- the repository finally has a lightweight automated verification entry point
+- Stage 3 still requires the manual end-to-end sign-off described in the checklist
+
+### 14.2 Strengths and risks
+
 Current strengths:
 
 - editor shell and viewing UX
@@ -506,7 +533,7 @@ Current risks:
 - translation quality is draft-level
 - OCR provider coverage is platform-limited
 - image asset storage is still data-URL heavy
-- no automated tests
+- only minimal smoke tests exist so far
 - undo/redo is still snapshot-based and not aligned with the long-term action model
 
 ## 15. Stage 3 Done-Definition Check
@@ -520,18 +547,19 @@ Stage 3 done-definition vs actual status:
 - project settings include source/target language and providers -> yes
 - rendered export produces composed page output -> yes
 - build remains green -> yes
-- Stage 2 projects still load -> expected yes, but full verification pass still pending
+- smoke test suite exists and passes -> yes
+- Stage 2 projects still load -> expected yes, but full manual verification pass still pending
 
 Practical conclusion:
 
 - Stage 3 is not done yet
-- the repo is now close enough that verification and stabilization are the right next targets
+- the repo is now in final verification territory rather than feature-foundation work
 
 ## 16. Recommended Next Steps
 
 The correct next execution order from here is:
 
-1. add a repeatable manual verification checklist for OCR -> translation -> export
+1. execute the manual checklist in `STAGE_3_VERIFICATION_CHECKLIST.md`
 2. verify Stage 2 project migration through OCR -> translation -> export
 3. add minimal automated checks around repository CRUD and job lifecycles
 4. harden provider failure reporting and recovery paths
@@ -557,4 +585,4 @@ But the project is still one major slice away from a legitimate Stage 3 finish:
 
 The most honest current description is:
 
-`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, and first rendered PNG export, pending verification and stabilization.`
+`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, rendered PNG export, and first smoke-test coverage, pending final verification and stabilization.`

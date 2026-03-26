@@ -3,22 +3,13 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { loadProjectDomainContext, pageRepository, regionRepository } from '../../repositories';
 import { ensureProjectDomainStatePersisted } from '../../services/projectSync';
-import {
-  createDefaultTextStyle,
-  type Page,
-  type RegionRecord,
-  type TextStyleRecord,
-} from '../../types';
+import { type Page, type RegionRecord, type TextStyleRecord } from '../../types';
+import { buildRenderedPngName, resolveTextStyle } from './renderHelpers';
 
 interface RenderTextLayout {
   fontSize: number;
   lineHeightPx: number;
   lines: string[];
-}
-
-function toPngName(fileName: string) {
-  const base = fileName.replace(/\.[a-z0-9]+$/i, '');
-  return `${base}-rendered.png`;
 }
 
 async function saveBlob(blob: Blob, suggestedName: string): Promise<boolean> {
@@ -137,19 +128,6 @@ function buildTextLayout(
   };
 }
 
-function resolveTextStyle(
-  region: RegionRecord,
-  styles: TextStyleRecord[],
-  fallbackStyle: TextStyleRecord,
-  defaultTextStyleId?: string,
-) {
-  return (
-    styles.find((style) => style.id === region.textStyleId) ??
-    styles.find((style) => style.id === defaultTextStyleId) ??
-    fallbackStyle
-  );
-}
-
 function drawRegionText(
   context: CanvasRenderingContext2D,
   region: RegionRecord,
@@ -226,7 +204,6 @@ async function renderPageToBlob(page: Page) {
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  const fallbackStyle = createDefaultTextStyle(pageRecord.projectId);
   const visibleTranslatedRegions = regionRecords
     .filter((region) => region.visible && region.translatedText.trim())
     .sort((left, right) => (left.order || 0) - (right.order || 0));
@@ -235,7 +212,7 @@ async function renderPageToBlob(page: Page) {
     const style = resolveTextStyle(
       region,
       domainContext.textStyles,
-      fallbackStyle,
+      pageRecord.projectId,
       domainContext.settings.defaultTextStyleId,
     );
     drawRegionText(context, region, style);
@@ -253,5 +230,5 @@ async function renderPageToBlob(page: Page) {
 
 export async function exportRenderedPageAsPng(page: Page): Promise<boolean> {
   const blob = await renderPageToBlob(page);
-  return saveBlob(blob, toPngName(page.fileName));
+  return saveBlob(blob, buildRenderedPngName(page.fileName));
 }
