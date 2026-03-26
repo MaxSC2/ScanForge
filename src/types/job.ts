@@ -2,6 +2,7 @@ export type JobStage = 'ocr';
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed';
 
 export interface JobResultSummary {
+  engine: string;
   regionsProcessed: number;
   filledCount: number;
   skippedCount: number;

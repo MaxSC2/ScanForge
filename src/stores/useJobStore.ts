@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
-import type { JobRecord, JobResultSummary, Page, Region } from '../types';
+import { runPageOcr } from '../services/ocr';
+import type { JobRecord, JobResultSummary } from '../types';
 import { useHistoryStore } from './useHistoryStore';
 import { usePageStore } from './usePageStore';
 import { useProjectStore } from './useProjectStore';
 import { useToastStore } from './useToastStore';
 
 const MAX_JOBS = 30;
-const OCR_REGION_DELAY_MS = 120;
 
 interface JobState {
   jobs: JobRecord[];
@@ -17,26 +17,8 @@ interface JobState {
   clearFinished: () => void;
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
 function summarizeResult(result: JobResultSummary) {
-  return `Распознано ${result.filledCount}/${result.regionsProcessed}, пропущено ${result.skippedCount}`;
-}
-
-function synthesizeOcrText(page: Page, region: Region) {
-  const pageStem = page.fileName.replace(/\.[^.]+$/, '');
-  const kindLabel =
-    region.kind === 'speech'
-      ? 'реплика'
-      : region.kind === 'sfx'
-        ? 'sfx'
-        : region.kind === 'narration'
-          ? 'нарратив'
-          : 'текст';
-
-  return `[Mock OCR] ${pageStem} · ${kindLabel} ${region.order}`;
+  return `${result.engine}: filled ${result.filledCount}/${result.regionsProcessed}, skipped ${result.skippedCount}`;
 }
 
 function updateJob(jobId: string, patch: Partial<JobRecord>) {
@@ -71,7 +53,7 @@ async function runOcrJob(job: JobRecord) {
     status: 'running',
     startedAt: Date.now(),
     progress: 0.05,
-    message: 'Подготовка OCR',
+    message: 'Preparing OCR job',
     error: null,
     result: null,
   });
@@ -82,8 +64,8 @@ async function runOcrJob(job: JobRecord) {
       status: 'failed',
       finishedAt: Date.now(),
       progress: 1,
-      error: 'Страница не найдена',
-      message: 'OCR не выполнен',
+      error: 'Page not found',
+      message: 'OCR job failed',
     });
     return;
   }
@@ -93,48 +75,49 @@ async function runOcrJob(job: JobRecord) {
       status: 'failed',
       finishedAt: Date.now(),
       progress: 1,
-      error: 'На странице нет регионов для OCR',
-      message: 'Нет регионов для распознавания',
+      error: 'No regions on page',
+      message: 'OCR skipped: empty page',
     });
     return;
   }
 
-  const fillMap = new Map<string, string>();
-  let filledCount = 0;
-  let skippedCount = 0;
+  try {
+    const ocrResult = await runPageOcr(page, (progress, message) => {
+      updateJob(job.id, { progress, message });
+    });
 
-  for (let index = 0; index < page.regions.length; index += 1) {
-    const region = page.regions[index];
-    await wait(OCR_REGION_DELAY_MS);
+    const fillMap = new Map(
+      ocrResult.results
+        .filter((item) => !item.skipped && item.text)
+        .map((item) => [item.regionId, item.text ?? ''] as const),
+    );
 
-    if (region.locked || region.sourceText.trim()) {
-      skippedCount += 1;
-    } else {
-      fillMap.set(region.id, synthesizeOcrText(page, region));
-      filledCount += 1;
-    }
+    applyOcrResult(page.id, fillMap);
+
+    const result: JobResultSummary = {
+      engine: ocrResult.engine,
+      regionsProcessed: ocrResult.regionsProcessed,
+      filledCount: ocrResult.filledCount,
+      skippedCount: ocrResult.skippedCount,
+    };
 
     updateJob(job.id, {
-      progress: (index + 1) / page.regions.length,
-      message: `OCR: регион ${index + 1}/${page.regions.length}`,
+      status: 'done',
+      finishedAt: Date.now(),
+      progress: 1,
+      result,
+      message: summarizeResult(result),
+    });
+  } catch (error) {
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: error instanceof Error ? error.message : 'OCR backend error',
+      message: 'OCR job failed',
+      result: null,
     });
   }
-
-  applyOcrResult(page.id, fillMap);
-
-  const result: JobResultSummary = {
-    regionsProcessed: page.regions.length,
-    filledCount,
-    skippedCount,
-  };
-
-  updateJob(job.id, {
-    status: 'done',
-    finishedAt: Date.now(),
-    progress: 1,
-    result,
-    message: summarizeResult(result),
-  });
 }
 
 async function pumpQueue() {
@@ -184,7 +167,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       startedAt: null,
       finishedAt: null,
       progress: 0,
-      message: 'Ожидает запуска OCR',
+      message: 'Queued for OCR',
       error: null,
       result: null,
     }));
@@ -193,9 +176,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       jobs: [...newJobs, ...state.jobs].slice(0, MAX_JOBS),
     }));
 
-    useToastStore
-      .getState()
-      .push(`OCR jobs в очереди: ${newJobs.length}`, 'info');
+    useToastStore.getState().push(`OCR jobs queued: ${newJobs.length}`, 'info');
     void pumpQueue();
     return newJobs.length;
   },

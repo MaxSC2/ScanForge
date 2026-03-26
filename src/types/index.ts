@@ -8,6 +8,12 @@ export type {
   JobStatus,
 } from './job';
 export type {
+  OcrPagePayload,
+  OcrPageResult,
+  OcrRegionInput,
+  OcrRegionResult,
+} from './ocr';
+export type {
   ProjectMeta,
   StitchOptions,
   StitchAlign,
