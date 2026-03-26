@@ -1,130 +1,158 @@
 # ScanForge Project Status Report
 
 Date: 2026-03-26
-Branch: `stage-2-domain-refactor`
-Report scope: post-Stage-2 repository state
+Branch: `stage-3-pipeline-foundation`
+Report scope: post-Stage-3 translation foundation
 
 ## 1. Executive Summary
 
-ScanForge is no longer a bare prototype. The repository now contains a working local-first desktop editing foundation with:
+ScanForge is no longer just an editor shell.
+
+The repository now contains a working local-first desktop pipeline foundation with:
 
 - React + TypeScript editor UI
 - Tauri desktop shell
-- normalized SQLite domain tables for `projects`, `pages`, `regions`, and `jobs`
+- normalized SQLite domain storage
 - repository layer for domain access
-- local project library
+- persisted local project library
 - page and region editing workflow
-- OCR preview pipeline wired through backend storage
-- persisted OCR job queue state
+- real local OCR path on Windows via WinRT OCR
+- persisted OCR and translation jobs
+- draft translation pipeline with provider abstraction
+- project pipeline settings and text style persistence
 - strong viewer and inspection UX
 
-The current product is best described as:
+The most accurate current one-line description is:
 
-`Local-first scanlation editor foundation with normalized persistence and OCR-preview backend`
+`Local-first scanlation editor foundation with normalized persistence, real Windows OCR, draft translation pipeline, and strong viewer/editor UX`
 
-It is still not a full scanlation studio. Major pipeline stages such as translation, cleaning, redraw, typesetting, QC, and final composed export are not implemented yet.
+This is a serious step forward from Stage 2, but Stage 3 is still not fully complete.
 
-Most important reality check:
+What is still missing before Stage 3 can be called done:
 
-- Stage 2 is substantially completed.
-- Core domain entities now live in normalized storage.
-- JSON snapshot storage is no longer the main domain source.
-- JSON is still retained as a compatibility and backup layer for import/export and for some UI-only metadata that the current domain schema does not yet store.
+- final rendered export foundation
+- end-to-end verification/stabilization pass
+- stronger OCR/translation provider coverage beyond current local draft paths
 
-## 2. Repository and Delivery Status
+## 2. Current Stage Status
 
-Version-control and repo state:
+### 2.1 Stage 2
 
-- Git is configured and used actively.
-- The current working branch is `stage-2-domain-refactor`.
-- The repository has a clean incremental history for Stage 2.
+Stage 2 can be treated as completed for practical purposes.
 
-Recent milestone commits:
+Closed outcomes:
 
-- `e3ffe03` `refactor: add normalized sqlite schema foundation`
-- `9cb48f9` `refactor: add domain repository layer`
-- `41b09e0` `refactor: connect pages to domain storage`
-- `f6a3e64` `refactor: connect regions to domain storage`
-- `3fd1ab8` `refactor: route ocr through domain storage`
-- `9e8a406` `refactor: persist jobs in domain storage`
-- `32fa130` `refactor: make local project storage db-first`
+- normalized domain storage became the main persistence backbone
+- repositories exist for core entities
+- pages, regions, jobs, and OCR all route through DB-backed paths
+- snapshot JSON is no longer the primary source of truth
+
+Remaining Stage 2 caveat:
+
+- snapshot compatibility still exists for project import/export and a small amount of non-critical UI context such as `activePageId`
+
+### 2.2 Stage 3
+
+Stage 3 is in progress and materially advanced.
+
+Workstream status:
+
+- Workstream A `Domain & schema completion` -> substantially done
+- Workstream B `Real OCR integration` -> usable and integrated
+- Workstream C `Translation pipeline` -> first real foundation is now implemented
+- Workstream D `Final render / export foundation` -> not done
+- Workstream E `Verification and stabilization` -> not done
+
+Practical Stage 3 verdict:
+
+- the repo is no longer "editor + OCR preview only"
+- the repo is now "editor + OCR + translation draft foundation"
+- Stage 3 is not done yet because rendered export and verification are still missing
+
+## 3. Repository and Branch State
+
+Current active branch:
+
+- `stage-3-pipeline-foundation`
+
+Recent Stage 3 milestone commits:
+
+- `e2fb632` `docs: add stage 3 execution plan`
+- `ddbc0e3` `refactor: start stage 3 domain completion`
+- `0c08929` `refactor: hydrate stage 3 project domain config`
+- `5d1187d` `feat: add windows ocr provider`
+- `3aab524` `feat: add translation pipeline foundation`
 
 Build health right now:
 
 - `npm run build` passes
 - `cargo check` passes
 
-Quality/process gaps:
+Quality/process status:
 
-- no automated test suite
-- no lint step
-- no CI pipeline in the repo
+- no automated test suite yet
+- no CI pipeline yet
+- no dedicated lint pipeline yet
 
-## 3. Planned Product vs Current Reality
+## 4. Planned Product vs Current Reality
 
-### 3.1 Planned product from specs
+### 4.1 Target product from specs
 
-From `CORE.md`, `ENGINEERING_SPEC.md`, and `UX_SPEC.md`, the target product is:
+From `CORE.md`, `ENGINEERING_SPEC.md`, and `UX_SPEC.md`, the target product remains:
 
 - local-first scanlation studio
 - pipeline `RAW -> OCR -> Translation -> Cleaning -> Redraw -> Typesetting -> QC -> Export`
-- architecture `UI -> API -> Services -> Storage`
-- stack direction `React + Tauri + FastAPI + PaddleOCR + OpenCV`
-- strong region/job systems and explicit lifecycle handling
+- architecture direction `UI -> API -> Services -> Storage`
+- strong region/job lifecycle handling
 
-### 3.2 Current reality in code
-
-What is implemented now:
-
-- desktop-first React/Tauri editor
-- page import, selection, reorder, and stitching
-- region draw/edit workflow
-- project autosave and restore
-- normalized local storage for project/page/region/job domain data
-- OCR preview backend through Tauri
-- persisted job queue core state
-- polished inspection and reading UX
-
-What is not implemented now:
-
-- FastAPI layer
-- translation pipeline
-- cleaning tools
-- redraw tools
-- typesetting engine
-- QC workflow
-- final composed export renderer
-- real OCR engine integration
-- action-based undo/redo architecture
-- region/page lifecycle state machines
-
-## 4. Current Architecture
-
-Current practical architecture is:
-
-`React UI -> Zustand stores -> repository helpers -> Tauri commands / browser adapters -> SQLite normalized tables + snapshot backup`
-
-This is much closer to the planned direction than the old snapshot-only setup, but it is not yet the full target architecture from the engineering spec.
+### 4.2 Current reality in code
 
 What exists now:
 
-- frontend UI layer
-- state layer via Zustand stores
-- repository layer for `projects/pages/regions/jobs`
-- Tauri backend commands
-- normalized SQLite tables
-- browser fallback domain persistence in `localStorage`
-- snapshot compatibility layer
+- desktop-first React/Tauri editor
+- normalized SQLite persistence
+- project settings and text styles in DB
+- page and region editor workflows
+- OCR provider path with real Windows OCR on desktop
+- translation provider path with persisted draft translations
+- persisted OCR and translation jobs
+- strong viewer/focus/clean reading modes
 
 What does not exist yet:
 
-- separate API boundary
-- separate service orchestration layer
-- worker subsystem outside the app process
-- FastAPI backend
-- external OCR/translation services
+- final rendered export pipeline
+- full typesetting workflow
+- cleaning/redraw toolset
+- QC workflow
+- FastAPI/service split
+- automated verification suite
 
-## 5. Technology Stack in the Repo
+## 5. Current Architecture
+
+Current practical architecture:
+
+`React UI -> Zustand stores -> repositories -> Tauri commands / browser adapters -> SQLite normalized tables + snapshot compatibility`
+
+This is the real architecture of the repo today.
+
+What exists:
+
+- frontend UI layer
+- Zustand state layer
+- repository persistence boundary
+- Tauri backend commands for OCR and translation
+- normalized SQLite tables for domain state
+- browser fallback domain storage for non-Tauri runs
+- snapshot compatibility and backup path
+
+What does not exist:
+
+- separate FastAPI service layer
+- external worker process architecture
+- cloud sync or collaboration
+- remote OCR/translation orchestration
+
+## 6. Technology Stack
 
 Frontend/runtime:
 
@@ -140,24 +168,29 @@ Frontend/runtime:
 Desktop/backend:
 
 - Tauri 2
+- Rust
 - `rusqlite`
 - `serde`
 - `serde_json`
 - Tauri dialog and fs plugins
 
+Platform integrations:
+
+- Windows WinRT OCR provider via PowerShell bridge for desktop OCR
+
 Not present:
 
 - FastAPI
-- Python backend services
 - PaddleOCR
 - OpenCV
-- Vitest/Jest/Playwright tests
+- external translation SDKs
+- automated test runner in active use
 
-## 6. Implemented Product Surface
+## 7. Implemented Product Surface
 
-### 6.1 App shell
+### 7.1 Editor shell
 
-The app shell is coherent and already usable:
+Implemented shell pieces:
 
 - `Layout`
 - `Toolbar`
@@ -167,7 +200,7 @@ The app shell is coherent and already usable:
 - `StatusBar`
 - `ToastContainer`
 
-### 6.2 Page workflow
+### 7.2 Page workflow
 
 Implemented page operations:
 
@@ -178,9 +211,9 @@ Implemented page operations:
 - active page switching
 - page deletion
 - page stitching
-- active page export as PNG
+- active page export of source PNG
 
-### 6.3 Region workflow
+### 7.3 Region workflow
 
 Implemented region operations:
 
@@ -194,21 +227,12 @@ Implemented region operations:
 - edit source text
 - edit translated text
 - edit notes
-- toggle lock/visibility
+- toggle lock and visibility
+- inspect OCR and translation metadata
 
-### 6.4 Inspector and sidebar UX
+### 7.4 Viewer UX
 
-Current side panels include:
-
-- Projects tab
-- Pages tab
-- Jobs tab
-- region detail inspector
-- all-regions list inspector
-
-### 6.5 Viewer UX
-
-This is one of the strongest implemented areas:
+This remains one of the strongest parts of the project:
 
 - zoom in/out
 - manual zoom reset
@@ -221,11 +245,212 @@ This is one of the strongest implemented areas:
 - auto-hide clean-view HUD
 - reader-style page navigation in clean view
 
-## 7. Zustand Store Topology
+### 7.5 Pipeline settings UX
 
-Current state is split across:
+Minimal Stage 3 settings are now accessible in the inspector via `ProjectSettingsPanel`:
+
+- source language selector
+- target language selector
+- OCR engine selector
+- translation provider selector
+
+Toolbar pipeline controls now include:
+
+- run OCR
+- run translation
+- overwrite-existing-translations toggle
+
+## 8. Domain Model and Persistence Status
+
+### 8.1 Core normalized entities
+
+Persisted normalized entities now include:
+
+- `projects`
+- `pages`
+- `regions`
+- `jobs`
+- `project_settings`
+- `text_styles`
+
+### 8.2 Region model maturity
+
+Critical Stage 3 region data is now DB-backed rather than snapshot-only:
+
+- geometry
+- label
+- kind
+- order
+- orientation
+- source text
+- OCR lifecycle fields
+- translated text
+- translation lifecycle fields
+- notes
+- visibility and lock state
+- text style reference
+
+This is a meaningful architectural improvement over the Stage 2 halfway state.
+
+### 8.3 Snapshot dependence
+
+The project is still not a pure snapshot-free app, but the remaining dependence is much smaller than before.
+
+Snapshot is still used for:
+
+- compatibility import/export
+- backup envelope behavior
+- some project file reconstruction concerns outside the DB core
+
+Snapshot is no longer required for core region metadata that matters to OCR/translation.
+
+### 8.4 Asset storage reality
+
+Important limitation still present:
+
+- page assets are still effectively stored as data URLs
+- DB stores `imagePath`, but in practice this still points to embedded image data rather than a durable filesystem asset path
+
+So persistence is normalized, but asset storage is still not production-grade.
+
+## 9. OCR Status
+
+### 9.1 What is implemented
+
+OCR is now provider-based and storage-backed.
+
+Current OCR path:
+
+1. sync current page/region domain state into DB
+2. run OCR by page id through Tauri
+3. backend reads page and regions from domain storage
+4. backend processes region crops
+5. backend writes OCR results back into `regions`
+6. frontend refreshes region state from repositories
+
+Desktop OCR on Windows:
+
+- real local OCR via WinRT OCR
+- region-level crop processing
+- OCR metadata persisted per region
+
+Persisted OCR metadata:
+
+- `sourceText`
+- `ocrStatus`
+- `ocrEngine`
+- `sourceLanguage`
+- `ocrUpdatedAt`
+- `ocrConfidence`
+
+### 9.2 Current limitations
+
+Important remaining OCR gaps:
+
+- OCR selected-region workflow is not yet first-class in the UI
+- OCR overwrite/fill-empty-only is still effectively fill-empty-only
+- only Windows currently has a real OCR provider path
+- Tesseract/Paddle/Manga OCR adapters are not implemented yet
+
+## 10. Translation Status
+
+### 10.1 What is implemented
+
+Stage 3 translation foundation now exists as a real persisted pipeline.
+
+Current translation path:
+
+1. sync current page/region state into DB
+2. resolve project settings from normalized storage
+3. run translation by page or selected region target
+4. provider writes translated draft text into `regions`
+5. frontend refreshes translated region state from repositories
+
+Implemented translation capabilities:
+
+- provider abstraction
+- Tauri translation backend command
+- browser fallback translation path
+- translation jobs in persisted queue
+- translate selected page
+- translate selected region
+- overwrite-existing toggle
+- translated text stored in DB and restored after reload
+
+Persisted translation metadata:
+
+- `translatedText`
+- `targetLanguage`
+- `translationStatus`
+- `translationProvider`
+- `translationUpdatedAt`
+
+### 10.2 Current translation provider reality
+
+The current provider is a local draft provider, not a production-grade translator.
+
+What exists today:
+
+- `local` draft provider
+- `mock` preview provider
+- persisted provider abstraction
+
+What it means in practice:
+
+- translation architecture is now real
+- translation job persistence is real
+- output is draft-quality and deterministic
+- this is enough to unblock the next render/export layer
+
+### 10.3 Current translation limitations
+
+Still missing:
+
+- real external or model-backed translation quality
+- translation batch review UX
+- stronger overwrite policy UX beyond a single toggle
+- richer translation job payload/result presentation
+
+## 11. Job System Status
+
+Jobs are no longer OCR-only.
+
+Current job system now supports:
+
+- `OCR`
+- `TRANSLATE`
+
+Persisted job fields:
+
+- type
+- status
+- project id
+- page id
+- optional region ids
+- progress
+- created/updated timestamps
+- summary
+- error
+
+Current behavior:
+
+- queued/running/done/failed states persist
+- job list restores after project reload
+- retry works for OCR and translation jobs
+- running jobs recover safely as queued jobs
+
+What is still missing:
+
+- richer per-job result payloads in UI
+- multi-stage orchestration across OCR -> translation -> render
+- dedicated verification around failure recovery
+
+## 12. Store and Repository Status
+
+Current store topology includes:
 
 - `useProjectStore`
+- `useProjectDomainStore`
 - `usePageStore`
 - `useRegionStore`
 - `useJobStore`
@@ -234,225 +459,92 @@ Current state is split across:
 - `useEditorStore`
 - `useToastStore`
 
-This is a meaningful improvement over the original single-snapshot shape, but the app is still not using a fully action-driven model.
-
 Important current behavior:
 
-- `projectStore` carries project meta
-- `pageStore` carries current in-memory pages
-- `regionStore` mutates region data within active page state
-- `jobStore` carries UI-visible job queue state and now syncs its core fields into DB
-- `historyStore` is still snapshot-based
+- stores drive UI and editor state
+- repositories remain the persistence boundary
+- OCR and translation are not implemented directly in the UI layer
+- project settings and text styles are hydrated from repositories
 
-## 8. Storage and Persistence Status
+This is aligned with the Stage 3 architectural rule to avoid turning stores into mini-backends.
 
-### 8.1 Stage 2 outcome
+## 13. Export Status
 
-Stage 2 goal was:
+Export is still not where Stage 3 needs it to be.
 
-`Snapshot JSON storage -> normalized domain-driven storage`
+Current export reality:
 
-That goal is mostly achieved.
+- active page export still behaves like source image export
+- stitched export is still source-image oriented
+- translated overlays are not yet rendered into exported PNG output
 
-What now exists in normalized storage:
+This is the biggest remaining functional gap before Stage 3 can be considered complete.
 
-- `projects`
-- `pages`
-- `regions`
-- `jobs`
+## 14. Quality and Risk Assessment
 
-What now persists in DB:
-
-- project meta
-- page order and image path
-- region geometry and domain text/status fields
-- job type/status/progress/error timestamps
-
-### 8.2 Current local persistence behavior
-
-Local persistence now works like this:
-
-1. The editor still serializes a project snapshot for backup and compatibility.
-2. The app syncs pages, regions, and jobs into normalized storage through repository helpers.
-3. On restore/load, the app hydrates a project payload and then overlays current domain data from repositories.
-4. Pages, regions, and jobs therefore come back from normalized storage, not only from raw snapshot JSON.
-
-### 8.3 Important caveat
-
-The system is not yet a pure domain-only reconstruction.
-
-Snapshot backup still matters for fields that are not present in the current normalized schema, especially:
-
-- region `label`
-- region `kind`
-- region `order` as editor metadata
-- region `notes`
-- `activePageId`
-
-Because of that, the runtime is best described as:
-
-`DB-first for core domain state, snapshot-assisted for UI-only metadata`
-
-### 8.4 Asset storage reality
-
-The engineering spec says `SQLite + local FS`.
-
-Current reality is:
-
-- page images are stored as data URLs
-- data URLs are written into snapshot backup
-- page `imagePath` in DB still points to data URLs, not filesystem assets
-
-So storage is normalized, but asset storage is not yet optimized.
-
-## 9. Repository Layer Status
-
-Implemented repositories:
-
-- `projectRepository.ts`
-- `pageRepository.ts`
-- `regionRepository.ts`
-- `jobRepository.ts`
-
-Implemented persistence bridges:
-
-- `pagePersistence.ts`
-- `regionPersistence.ts`
-- `jobPersistence.ts`
-
-What they now handle:
-
-- domain CRUD access
-- merge of repository data back into UI state
-- sync of in-memory page/region/job changes into DB
-- browser fallback behavior
-
-This is a major architectural milestone because the editor is no longer built around one opaque blob.
-
-## 10. OCR and Job System Status
-
-### 10.1 OCR status
-
-OCR is now wired through backend storage, not through raw in-memory JSON regions.
-
-Current OCR flow:
-
-1. sync current pages/regions into domain storage
-2. run OCR by page id
-3. backend reads page and region data from storage
-4. backend writes OCR result back into stored regions
-5. frontend reloads the updated regions from repository
-
-This is structurally the correct direction for the later pipeline.
-
-### 10.2 OCR limitation
-
-The OCR engine is still a preview/mock engine.
-
-It does not do real image recognition. It currently generates preview text based on page/region context and writes that into `sourceText`.
-
-### 10.3 Jobs status
-
-Jobs are no longer only transient UI state.
-
-Implemented now:
-
-- `queued`, `running`, `done`, `failed`
-- persisted core job state in `jobs` table
-- job restore on project load
-- running jobs normalized back to queued on recovery
-- retry and clear flow in the sidebar
-
-What is still missing:
-
-- richer persisted job payloads
-- persisted result summaries/messages
-- multi-stage job orchestration beyond OCR
-
-## 11. Stage 2 Plan Checkpoint
-
-Stage 2 checklist versus actual repo state:
-
-- `1. create SQLite schema` -> done
-- `2. make repositories` -> done
-- `3. connect pages` -> done
-- `4. connect regions` -> done
-- `5. adapt OCR` -> done
-- `6. add jobs` -> done
-- `7. make migration` -> done
-- `8. remove JSON dependency as primary source` -> mostly done, with compatibility caveat
-
-Practical Stage 2 verdict:
-
-- the old snapshot-only architecture is gone as the main project backbone
-- normalized domain storage is now the main structural source of truth for core entities
-- snapshot backup still participates where the current domain model is intentionally incomplete
-
-## 12. Remaining Gaps Against Original Specs
-
-Still missing relative to `CORE.md`, `ENGINEERING_SPEC.md`, and `UX_SPEC.md`:
-
-- translation pipeline
-- translation UI
-- cleaning workflow
-- redraw workflow
-- typesetting workflow
-- QC workflow
-- final composed export
-- real OCR engine
-- FastAPI/service architecture
-- page/region lifecycle machines
-- action-based history system
-- filesystem asset storage
-- automated tests
-
-## 13. Technical Debt and Risks
-
-Important current risks:
-
-- UI metadata still depends on snapshot fallback because the domain schema does not yet store all region/editor fields.
-- `imagePath` currently holds data URLs, which is heavy and not scalable for large projects.
-- Undo/redo is still snapshot-based and not aligned with the long-term action-system plan.
-- The project still lacks automated tests, so regression risk is manual.
-- OCR is architecturally correct but functionally still mock-level.
-- Job persistence stores the core queue state, but not the full rich UI job presentation.
-
-## 14. What Is Strong Right Now
-
-Strongest areas in the project today:
+Current strengths:
 
 - editor shell and viewing UX
-- page and region interaction model
-- local-first persistence foundation
-- normalized domain storage introduction
-- repository-layer architecture
-- OCR storage path design
-- project library and autosave behavior
+- normalized domain model
+- OCR repository path
+- translation repository path
+- project settings persistence
+- local-first recovery behavior
 
-## 15. What Needs to Happen Next
+Current risks:
 
-The next stage should no longer be another storage refactor. The foundation is good enough to move the product forward.
+- rendered export is still missing
+- translation quality is draft-level
+- OCR provider coverage is platform-limited
+- image asset storage is still data-URL heavy
+- no automated tests
+- undo/redo is still snapshot-based and not aligned with the long-term action model
 
-Best next priorities:
+## 15. Stage 3 Done-Definition Check
 
-1. Close the remaining domain gaps if full snapshot independence is required.
-2. Replace OCR preview with a real OCR engine.
-3. Build the translation pipeline on top of the normalized storage path.
-4. Add final rendered export so translated content can become real output.
-5. Introduce test coverage for repositories, persistence, and OCR/job flow.
+Stage 3 done-definition vs actual status:
 
-## 16. Final Assessment
+- normalized domain storage remains the core source of truth -> yes
+- real OCR replaces preview OCR -> partially yes on Windows, not fully cross-platform
+- translation jobs exist and persist -> yes
+- translated text survives reload -> yes
+- project settings include source/target language and providers -> yes
+- rendered export produces composed page output -> no
+- build remains green -> yes
+- Stage 2 projects still load -> expected yes, but full verification pass still pending
 
-ScanForge has moved from "interesting prototype" to "serious local-first editor foundation".
+Practical conclusion:
 
-It is still not the full product from the original vision, but the project is now in a far better place architecturally:
+- Stage 3 is not done yet
+- the repo is now close enough that final render/export and verification are the right next targets
 
-- normalized domain storage exists
-- OCR and jobs already use it
-- the editor is usable
-- local project recovery works
-- Stage 2 technical debt reduction is real, not cosmetic
+## 16. Recommended Next Steps
 
-The most accurate one-line description of the repository today is:
+The correct next execution order from here is:
 
-`A working local-first scanlation editor foundation with normalized persistence, OCR-preview backend, and strong viewer/editor UX, ready for real pipeline stages next.`
+1. build the rendered export foundation
+2. make export mean composed output, not source image dump
+3. add a repeatable manual verification checklist for OCR -> translation -> export
+4. add minimal automated checks around repository CRUD and job lifecycles
+
+If the next work goes into cosmetic editor features instead of rendered export, Stage 3 will drift again and remain unfinished.
+
+## 17. Final Assessment
+
+ScanForge has moved beyond "editor foundation only".
+
+The repository now contains:
+
+- a serious local-first editor
+- normalized domain-backed persistence
+- real Windows OCR
+- persisted translation draft pipeline
+- usable project-level pipeline settings
+
+But the project is still one major slice away from a legitimate Stage 3 finish:
+
+`rendered export + verification`
+
+The most honest current description is:
+
+`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, and unfinished final render/export pipeline.`
