@@ -38,7 +38,11 @@ function applyOcrResult(pageId: string, fillMap: Map<string, string>) {
             ...page,
             regions: page.regions.map((region) =>
               fillMap.has(region.id)
-                ? { ...region, sourceText: fillMap.get(region.id) ?? region.sourceText }
+                ? {
+                    ...region,
+                    sourceText: fillMap.get(region.id) ?? region.sourceText,
+                    status: region.translatedText.trim() ? 'translated' : 'ocr_done',
+                  }
                 : region,
             ),
           }

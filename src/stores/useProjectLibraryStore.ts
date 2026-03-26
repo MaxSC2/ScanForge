@@ -7,7 +7,7 @@ import { usePageStore } from './usePageStore';
 import { createProjectMeta, useProjectStore } from './useProjectStore';
 import { useRegionStore } from './useRegionStore';
 import { useToastStore } from './useToastStore';
-import { mergePagesWithRepository } from '../repositories';
+import { mergePagesWithRepository, mergeRegionsWithRepository } from '../repositories';
 import { hydrateProjectFile } from '../utils/persistence';
 
 interface ProjectLibraryState {
@@ -24,7 +24,8 @@ const NEW_PROJECT_TOKEN = '__new__';
 
 async function applyProject(project: ProjectFile) {
   const hydrated = await hydrateProjectFile(project);
-  const pages = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
+  const pagesWithDomainAssets = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
+  const pages = await mergeRegionsWithRepository(pagesWithDomainAssets);
   const activePageId = pages.some((page) => page.id === hydrated.activePageId)
     ? hydrated.activePageId
     : pages[0]?.id ?? null;

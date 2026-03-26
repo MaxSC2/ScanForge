@@ -7,7 +7,12 @@ import { usePageStore } from '../stores/usePageStore';
 import { useProjectLibraryStore } from '../stores/useProjectLibraryStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { useToastStore } from '../stores/useToastStore';
-import { mergePagesWithRepository, syncPagesForProject } from '../repositories';
+import {
+  mergePagesWithRepository,
+  mergeRegionsWithRepository,
+  syncPagesForProject,
+  syncRegionsForPages,
+} from '../repositories';
 import { hydrateProjectFile } from '../utils/persistence';
 
 const AUTOSAVE_DELAY_MS = 1500;
@@ -48,7 +53,8 @@ export function useLocalProjectPersistence() {
         isRestoringRef.current = true;
         const hydrated = await hydrateProjectFile(project);
         if (cancelled) return;
-        const pages = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
+        const pagesWithDomainAssets = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
+        const pages = await mergeRegionsWithRepository(pagesWithDomainAssets);
         const activePageId = pages.some((page) => page.id === hydrated.activePageId)
           ? hydrated.activePageId
           : pages[0]?.id ?? null;
@@ -96,6 +102,7 @@ export function useLocalProjectPersistence() {
           const result = await repository.saveProject(project);
           const current = usePageStore.getState();
           await syncPagesForProject(result.project.meta, current.pages);
+          await syncRegionsForPages(current.pages);
           lastPersistedTokenRef.current = buildPersistenceToken(
             result.project.meta,
             current.pages.length,

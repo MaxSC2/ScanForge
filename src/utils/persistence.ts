@@ -2,6 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { Page, ProjectFile, ProjectMeta } from '../types';
+import { normalizeRegion } from '../types/region';
 
 export interface HydratedProjectState {
   meta: ProjectMeta;
@@ -31,7 +32,7 @@ export async function hydrateProjectFile(contents: ProjectFile): Promise<Hydrate
         imageUrl: page.imageDataUrl,
         naturalWidth: actual.width,
         naturalHeight: actual.height,
-        regions: page.regions,
+        regions: page.regions.map((region) => normalizeRegion(region)),
       };
     }),
   );

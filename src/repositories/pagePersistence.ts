@@ -1,6 +1,7 @@
 import type { Page, ProjectMeta, ProjectRecord } from '../types';
 import { pageRepository } from './pageRepository';
 import { projectRepository } from './projectRepository';
+import { regionRepository } from './regionRepository';
 
 function buildProjectRecord(meta: ProjectMeta): ProjectRecord | null {
   const projectId = meta.localProjectId;
@@ -46,7 +47,10 @@ export async function syncPagesForProject(meta: ProjectMeta, pages: Page[]) {
   await Promise.all(
     existingPages
       .filter((page) => !incomingPageIds.has(page.id))
-      .map((page) => pageRepository.delete(page.id)),
+      .map(async (page) => {
+        await regionRepository.deleteByPage(page.id);
+        await pageRepository.delete(page.id);
+      }),
   );
 
   await Promise.all(
