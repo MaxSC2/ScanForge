@@ -1,7 +1,46 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
-import type { Page, ProjectFile } from '../types';
+import type { Page, ProjectFile, ProjectMeta } from '../types';
+
+export interface HydratedProjectState {
+  meta: ProjectMeta;
+  pages: Page[];
+  activePageId: string | null;
+}
+
+function readImageSize(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => reject(new Error('Failed to decode project image'));
+    image.src = src;
+  });
+}
+
+export async function hydrateProjectFile(contents: ProjectFile): Promise<HydratedProjectState> {
+  const pages = await Promise.all(
+    contents.pages.map(async (page) => {
+      const actual = await readImageSize(page.imageDataUrl);
+      return {
+        id: page.id,
+        fileName: page.fileName,
+        imageUrl: page.imageDataUrl,
+        naturalWidth: actual.width,
+        naturalHeight: actual.height,
+        regions: page.regions,
+      };
+    }),
+  );
+
+  return {
+    meta: contents.meta,
+    pages,
+    activePageId: contents.activePageId,
+  };
+}
 
 export async function saveProjectFile(contents: ProjectFile): Promise<void> {
   const text = JSON.stringify(contents, null, 2);

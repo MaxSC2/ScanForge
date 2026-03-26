@@ -8,4 +8,6 @@ export type {
   StitchDirection,
   StitchScaleMode,
   ProjectFile,
+  LocalProjectSummary,
+  LocalProjectSaveResult,
 } from './project';

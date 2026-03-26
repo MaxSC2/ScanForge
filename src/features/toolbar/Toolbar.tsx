@@ -8,6 +8,7 @@ import { IconButton } from '../../components/IconButton';
 import { StitchDialog } from '../../components/StitchDialog';
 import {
   exportPageImage,
+  hydrateProjectFile,
   openProjectFile,
   saveProjectFile,
 } from '../../utils/persistence';
@@ -28,17 +29,6 @@ import {
   Maximize,
   RotateCcw,
 } from 'lucide-react';
-
-function readImageSize(src: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => {
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => reject(new Error('Failed to decode project image'));
-    image.src = src;
-  });
-}
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -150,25 +140,11 @@ export function Toolbar() {
     try {
       const data = await openProjectFile();
       if (!data) return;
-      setMeta(data.meta);
-      const pages = await Promise.all(
-        data.pages.map(async (p) => {
-          // Re-read dimensions from image payload so project round-trips cannot drift.
-          const actual = await readImageSize(p.imageDataUrl);
-          return {
-            id: p.id,
-            fileName: p.fileName,
-            imageUrl: p.imageDataUrl,
-            naturalWidth: actual.width,
-            naturalHeight: actual.height,
-            regions: p.regions,
-          };
-        }),
-      );
-
+      const hydrated = await hydrateProjectFile(data);
+      setMeta(hydrated.meta);
       setProjectState({
-        pages,
-        activePageId: data.activePageId,
+        pages: hydrated.pages,
+        activePageId: hydrated.activePageId,
       });
       clearHistory();
       pushToast('Проект загружен', 'success');

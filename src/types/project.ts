@@ -1,4 +1,5 @@
 export interface ProjectMeta {
+  localProjectId?: string;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -36,4 +37,18 @@ export interface ProjectFile {
   meta: ProjectMeta;
   pages: ProjectFilePage[];
   activePageId: string | null;
+}
+
+export interface LocalProjectSummary {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  pageCount: number;
+  lastOpenedAt: number | null;
+}
+
+export interface LocalProjectSaveResult {
+  project: ProjectFile;
+  summary: LocalProjectSummary;
 }

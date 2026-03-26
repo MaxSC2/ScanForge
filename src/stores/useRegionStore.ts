@@ -4,6 +4,7 @@ import type { Region } from '../types';
 import { usePageStore } from './usePageStore';
 import { useHistoryStore } from './useHistoryStore';
 import { useEditorStore } from './useEditorStore';
+import { useProjectStore } from './useProjectStore';
 
 interface RegionState {
   selectedRegionId: string | null;
@@ -58,6 +59,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     mutatePage(pageId, (regions) => [...regions, region]);
     set({ selectedRegionId: region.id });
     useEditorStore.getState().setInspectorOpen(true);
+    useProjectStore.getState().touch();
     return region;
   },
 
@@ -69,6 +71,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
         .sort((a, b) => a.order - b.order)
         .map((r, i) => ({ ...r, order: i + 1 })),
     );
+    useProjectStore.getState().touch();
   },
 
   deleteRegion: (pageId, regionId) => {
@@ -78,6 +81,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
         .filter((r) => r.id !== regionId)
         .map((r, i) => ({ ...r, order: i + 1 })),
     );
+    useProjectStore.getState().touch();
     set((s) => ({
       selectedRegionId: s.selectedRegionId === regionId ? null : s.selectedRegionId,
     }));
@@ -98,6 +102,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     };
     mutatePage(pageId, (regions) => [...regions, newRegion]);
     set({ selectedRegionId: newRegion.id });
+    useProjectStore.getState().touch();
   },
 
   reorderRegions: (pageId, fromIndex, toIndex) => {
@@ -108,5 +113,6 @@ export const useRegionStore = create<RegionState>((set, get) => ({
       list.splice(toIndex, 0, moved);
       return list.map((r, i) => ({ ...r, order: i + 1 }));
     });
+    useProjectStore.getState().touch();
   },
 }));

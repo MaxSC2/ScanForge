@@ -6,9 +6,11 @@ import { RegionInspector } from './features/inspector/RegionInspector';
 import { StatusBar } from './components/StatusBar';
 import { ToastContainer } from './components/ToastContainer';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useLocalProjectPersistence } from './hooks/useLocalProjectPersistence';
 
 export default function App() {
   useKeyboardShortcuts();
+  useLocalProjectPersistence();
 
   return (
     <>
