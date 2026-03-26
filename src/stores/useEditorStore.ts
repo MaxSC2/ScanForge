@@ -9,6 +9,7 @@ interface EditorState {
   /** Panel visibility */
   sidebarOpen: boolean;
   inspectorOpen: boolean;
+  focusMode: boolean;
   /** Canvas overlays */
   gridVisible: boolean;
   labelsVisible: boolean;
@@ -27,6 +28,8 @@ interface EditorState {
   toggleInspector: () => void;
   setSidebarOpen: (value: boolean) => void;
   setInspectorOpen: (value: boolean) => void;
+  toggleFocusMode: () => void;
+  setFocusMode: (value: boolean) => void;
   toggleGrid: () => void;
   toggleLabels: () => void;
   toggleMinimap: () => void;
@@ -48,6 +51,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   stagePosition: { x: 0, y: 0 },
   sidebarOpen: true,
   inspectorOpen: true,
+  focusMode: false,
   gridVisible: false,
   labelsVisible: true,
   minimapVisible: true,
@@ -64,6 +68,18 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   setSidebarOpen: (value) => set({ sidebarOpen: value }),
   setInspectorOpen: (value) => set({ inspectorOpen: value }),
+  toggleFocusMode: () =>
+    set((state) => ({
+      focusMode: !state.focusMode,
+      sidebarOpen: !state.focusMode ? false : state.sidebarOpen,
+      inspectorOpen: !state.focusMode ? false : state.inspectorOpen,
+    })),
+  setFocusMode: (value) =>
+    set((state) => ({
+      focusMode: value,
+      sidebarOpen: value ? state.sidebarOpen : false,
+      inspectorOpen: value ? state.inspectorOpen : false,
+    })),
   toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
   toggleLabels: () => set((s) => ({ labelsVisible: !s.labelsVisible })),
   toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),

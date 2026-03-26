@@ -52,6 +52,15 @@ export function useKeyboardShortcuts() {
       }
 
       if (event.key === 'Escape') {
+        const { focusMode, sidebarOpen, inspectorOpen, toggleSidebar, toggleInspector } =
+          useEditorStore.getState();
+
+        if (focusMode && (sidebarOpen || inspectorOpen)) {
+          if (sidebarOpen) toggleSidebar();
+          if (inspectorOpen) toggleInspector();
+          return;
+        }
+
         useRegionStore.getState().selectRegion(null);
         return;
       }
@@ -71,6 +80,12 @@ export function useKeyboardShortcuts() {
       if (ctrl && event.key === '0') {
         event.preventDefault();
         useEditorStore.getState().resetZoom();
+        return;
+      }
+
+      if (ctrl && key === '.') {
+        event.preventDefault();
+        useEditorStore.getState().toggleFocusMode();
         return;
       }
 

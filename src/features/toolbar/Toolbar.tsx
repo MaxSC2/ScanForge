@@ -3,6 +3,7 @@ import {
   Combine,
   Download,
   FileJson,
+  Focus,
   FolderOpen,
   Hand,
   Maximize,
@@ -57,6 +58,8 @@ export function Toolbar() {
 
   const tool = useEditorStore((state) => state.tool);
   const setTool = useEditorStore((state) => state.setTool);
+  const focusMode = useEditorStore((state) => state.focusMode);
+  const toggleFocusMode = useEditorStore((state) => state.toggleFocusMode);
   const zoom = useEditorStore((state) => state.zoom);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
@@ -244,6 +247,15 @@ export function Toolbar() {
       <div className="h-5 w-px bg-zinc-700/60" />
 
       <div className="flex items-center gap-0.5 rounded-lg bg-zinc-800/50 p-0.5">
+        <IconButton
+          active={focusMode}
+          onClick={toggleFocusMode}
+          tooltip="Focus mode: panels overlay the canvas (Ctrl+.)"
+          variant="ghost"
+        >
+          <Focus size={14} />
+        </IconButton>
+
         {tools.map((item) => (
           <IconButton
             key={item.id}

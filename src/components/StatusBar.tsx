@@ -1,4 +1,5 @@
 import {
+  Focus,
   Grid3X3,
   Map,
   MousePointer2,
@@ -27,6 +28,7 @@ export function StatusBar() {
   const zoom = useEditorStore((state) => state.zoom);
   const cursorPos = useEditorStore((state) => state.cursorPosition);
   const tool = useEditorStore((state) => state.tool);
+  const focusMode = useEditorStore((state) => state.focusMode);
   const gridVisible = useEditorStore((state) => state.gridVisible);
   const labelsVisible = useEditorStore((state) => state.labelsVisible);
   const minimapVisible = useEditorStore((state) => state.minimapVisible);
@@ -83,6 +85,13 @@ export function StatusBar() {
           <span className="flex items-center gap-1 text-zinc-400">
             <ScanText size={11} />
             OCR: {runningJobs} active / {queuedJobs} queued
+          </span>
+        )}
+
+        {focusMode && (
+          <span className="flex items-center gap-1 text-zinc-400">
+            <Focus size={11} />
+            Focus mode
           </span>
         )}
       </div>
