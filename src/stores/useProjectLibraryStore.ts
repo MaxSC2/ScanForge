@@ -7,6 +7,7 @@ import { usePageStore } from './usePageStore';
 import { createProjectMeta, useProjectStore } from './useProjectStore';
 import { useRegionStore } from './useRegionStore';
 import { useToastStore } from './useToastStore';
+import { mergePagesWithRepository } from '../repositories';
 import { hydrateProjectFile } from '../utils/persistence';
 
 interface ProjectLibraryState {
@@ -23,15 +24,19 @@ const NEW_PROJECT_TOKEN = '__new__';
 
 async function applyProject(project: ProjectFile) {
   const hydrated = await hydrateProjectFile(project);
+  const pages = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
+  const activePageId = pages.some((page) => page.id === hydrated.activePageId)
+    ? hydrated.activePageId
+    : pages[0]?.id ?? null;
   useProjectStore.getState().setMeta(hydrated.meta);
   usePageStore.getState().setProjectState({
-    pages: hydrated.pages,
-    activePageId: hydrated.activePageId,
+    pages,
+    activePageId,
   });
   useRegionStore.getState().selectRegion(null);
   useHistoryStore.getState().clear();
 
-  if (hydrated.pages.length > 0) {
+  if (pages.length > 0) {
     useEditorStore.getState().requestFitToPage();
   } else {
     useEditorStore.getState().resetZoom();

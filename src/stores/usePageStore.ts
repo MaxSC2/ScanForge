@@ -44,21 +44,36 @@ interface PageState {
   toProjectFile: () => Promise<ProjectFile>;
 }
 
-/** Helper: read a File into an object-url and resolve natural dimensions */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Unable to encode image data'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Helper: read a File into a stable data-url and resolve natural dimensions */
 function loadImage(file: File): Promise<Omit<Page, 'regions'>> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    const reader = new FileReader();
     const img = new Image();
-    img.onload = () =>
-      resolve({
-        id: uuid(),
-        fileName: file.name,
-        imageUrl: url,
-        naturalWidth: img.naturalWidth,
-        naturalHeight: img.naturalHeight,
-      });
-    img.onerror = () => reject(new Error(`Failed to load ${file.name}`));
-    img.src = url;
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      img.onload = () =>
+        resolve({
+          id: uuid(),
+          fileName: file.name,
+          imagePath: dataUrl,
+          imageUrl: dataUrl,
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+        });
+      img.onerror = () => reject(new Error(`Failed to load ${file.name}`));
+      img.src = dataUrl;
+    };
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -278,11 +293,12 @@ export const usePageStore = create<PageState>((set, get) => ({
       );
       if (!blob) throw new Error('Failed to produce stitched image blob');
 
-      const imageUrl = URL.createObjectURL(blob);
+      const imageDataUrl = await blobToDataUrl(blob);
       const stitchedPage: Page = {
         id: uuid(),
         fileName: `stitched-${stitch.direction}-${sourcePages.length}-pages.png`,
-        imageUrl,
+        imagePath: imageDataUrl,
+        imageUrl: imageDataUrl,
         naturalWidth: width,
         naturalHeight: height,
         regions: [],
@@ -314,13 +330,11 @@ export const usePageStore = create<PageState>((set, get) => ({
     const { pages, activePageId } = get();
     const pageData = await Promise.all(
       pages.map(async (page) => {
-        const blob = await fetch(page.imageUrl).then((r) => r.blob());
-        const imageDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error('Unable to encode image data'));
-          reader.readAsDataURL(blob);
-        });
+        const imageDataUrl = page.imagePath.startsWith('data:')
+          ? page.imagePath
+          : await fetch(page.imageUrl)
+              .then((r) => r.blob())
+              .then(blobToDataUrl);
         return {
           id: page.id,
           fileName: page.fileName,

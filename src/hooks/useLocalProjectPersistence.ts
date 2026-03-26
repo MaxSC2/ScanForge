@@ -7,6 +7,7 @@ import { usePageStore } from '../stores/usePageStore';
 import { useProjectLibraryStore } from '../stores/useProjectLibraryStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { useToastStore } from '../stores/useToastStore';
+import { mergePagesWithRepository, syncPagesForProject } from '../repositories';
 import { hydrateProjectFile } from '../utils/persistence';
 
 const AUTOSAVE_DELAY_MS = 1500;
@@ -47,17 +48,21 @@ export function useLocalProjectPersistence() {
         isRestoringRef.current = true;
         const hydrated = await hydrateProjectFile(project);
         if (cancelled) return;
+        const pages = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
+        const activePageId = pages.some((page) => page.id === hydrated.activePageId)
+          ? hydrated.activePageId
+          : pages[0]?.id ?? null;
 
         setMeta(hydrated.meta);
         setProjectState({
-          pages: hydrated.pages,
-          activePageId: hydrated.activePageId,
+          pages,
+          activePageId,
         });
         clearHistory();
         lastPersistedTokenRef.current = buildPersistenceToken(
           hydrated.meta,
-          hydrated.pages.length,
-          hydrated.activePageId,
+          pages.length,
+          activePageId,
         );
         void useProjectLibraryStore.getState().refresh();
         requestFitToPage();
@@ -90,6 +95,7 @@ export function useLocalProjectPersistence() {
           const project = await usePageStore.getState().toProjectFile();
           const result = await repository.saveProject(project);
           const current = usePageStore.getState();
+          await syncPagesForProject(result.project.meta, current.pages);
           lastPersistedTokenRef.current = buildPersistenceToken(
             result.project.meta,
             current.pages.length,

@@ -27,6 +27,7 @@ export async function hydrateProjectFile(contents: ProjectFile): Promise<Hydrate
       return {
         id: page.id,
         fileName: page.fileName,
+        imagePath: page.imageDataUrl,
         imageUrl: page.imageDataUrl,
         naturalWidth: actual.width,
         naturalHeight: actual.height,
