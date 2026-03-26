@@ -61,7 +61,9 @@ export function Toolbar() {
   const tool = useEditorStore((state) => state.tool);
   const setTool = useEditorStore((state) => state.setTool);
   const focusMode = useEditorStore((state) => state.focusMode);
+  const cleanView = useEditorStore((state) => state.cleanView);
   const toggleFocusMode = useEditorStore((state) => state.toggleFocusMode);
+  const toggleCleanView = useEditorStore((state) => state.toggleCleanView);
   const viewMode = useEditorStore((state) => state.viewMode);
   const regionOverlaysVisible = useEditorStore((state) => state.regionOverlaysVisible);
   const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
@@ -261,6 +263,15 @@ export function Toolbar() {
           variant="ghost"
         >
           <Focus size={14} />
+        </IconButton>
+
+        <IconButton
+          active={cleanView}
+          onClick={toggleCleanView}
+          tooltip="Clean view: скрыть весь UI кроме холста (Ctrl+Shift+.)"
+          variant="ghost"
+        >
+          <Maximize size={14} />
         </IconButton>
 
         {tools.map((item) => (

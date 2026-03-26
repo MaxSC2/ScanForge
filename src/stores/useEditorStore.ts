@@ -12,6 +12,7 @@ interface EditorState {
   sidebarOpen: boolean;
   inspectorOpen: boolean;
   focusMode: boolean;
+  cleanView: boolean;
   /** Canvas overlays */
   regionOverlaysVisible: boolean;
   gridVisible: boolean;
@@ -37,6 +38,8 @@ interface EditorState {
   setInspectorOpen: (value: boolean) => void;
   toggleFocusMode: () => void;
   setFocusMode: (value: boolean) => void;
+  toggleCleanView: () => void;
+  setCleanView: (value: boolean) => void;
   requestFitToWidth: () => void;
   requestActualSize: () => void;
   toggleRegionOverlays: () => void;
@@ -63,6 +66,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   sidebarOpen: true,
   inspectorOpen: true,
   focusMode: false,
+  cleanView: false,
   regionOverlaysVisible: true,
   gridVisible: false,
   labelsVisible: true,
@@ -93,6 +97,14 @@ export const useEditorStore = create<EditorState>((set) => ({
       sidebarOpen: value ? state.sidebarOpen : false,
       inspectorOpen: value ? state.inspectorOpen : false,
     })),
+  toggleCleanView: () =>
+    set((state) => ({
+      cleanView: !state.cleanView,
+    })),
+  setCleanView: (value) =>
+    set({
+      cleanView: value,
+    }),
   requestFitToWidth: () =>
     set((state) => ({
       viewMode: 'fit-width',

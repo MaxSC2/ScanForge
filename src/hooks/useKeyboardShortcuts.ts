@@ -52,8 +52,13 @@ export function useKeyboardShortcuts() {
       }
 
       if (event.key === 'Escape') {
-        const { focusMode, sidebarOpen, inspectorOpen, toggleSidebar, toggleInspector } =
+        const { cleanView, focusMode, sidebarOpen, inspectorOpen, setCleanView, toggleSidebar, toggleInspector } =
           useEditorStore.getState();
+
+        if (cleanView) {
+          setCleanView(false);
+          return;
+        }
 
         if (focusMode && (sidebarOpen || inspectorOpen)) {
           if (sidebarOpen) toggleSidebar();
@@ -83,9 +88,15 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      if (ctrl && key === '.') {
+      if (ctrl && event.code === 'Period' && !event.shiftKey) {
         event.preventDefault();
         useEditorStore.getState().toggleFocusMode();
+        return;
+      }
+
+      if (ctrl && event.code === 'Period' && event.shiftKey) {
+        event.preventDefault();
+        useEditorStore.getState().toggleCleanView();
         return;
       }
 
