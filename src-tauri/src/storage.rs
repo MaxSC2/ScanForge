@@ -92,11 +92,25 @@ struct DomainRegionRow {
     width: f64,
     height: f64,
     rotation: f64,
+    label: String,
+    kind: String,
+    order: i64,
+    orientation: String,
     source_text: String,
+    source_language: Option<String>,
     translated_text: String,
     status: String,
+    ocr_status: String,
+    ocr_engine: Option<String>,
+    ocr_updated_at: Option<i64>,
+    target_language: Option<String>,
+    translation_status: String,
+    translation_provider: Option<String>,
+    translation_updated_at: Option<i64>,
+    notes: String,
     locked: bool,
     visible: bool,
+    text_style_id: Option<String>,
     ocr_confidence: Option<f64>,
 }
 
@@ -116,15 +130,43 @@ struct SnapshotRegion {
     #[serde(default)]
     rotation: f64,
     #[serde(default)]
+    label: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    order: Option<i64>,
+    #[serde(default)]
+    orientation: Option<String>,
+    #[serde(default)]
     source_text: String,
+    #[serde(default)]
+    source_language: Option<String>,
     #[serde(default)]
     translated_text: String,
     #[serde(default)]
     status: Option<String>,
     #[serde(default)]
+    ocr_status: Option<String>,
+    #[serde(default)]
+    ocr_engine: Option<String>,
+    #[serde(default)]
+    ocr_updated_at: Option<i64>,
+    #[serde(default)]
+    target_language: Option<String>,
+    #[serde(default)]
+    translation_status: Option<String>,
+    #[serde(default)]
+    translation_provider: Option<String>,
+    #[serde(default)]
+    translation_updated_at: Option<i64>,
+    #[serde(default)]
+    notes: String,
+    #[serde(default)]
     locked: bool,
     #[serde(default = "default_true")]
     visible: bool,
+    #[serde(default)]
+    text_style_id: Option<String>,
     #[serde(default)]
     ocr_confidence: Option<f64>,
 }
@@ -179,11 +221,25 @@ impl ProjectRepository {
                   width REAL,
                   height REAL,
                   rotation REAL,
+                  label TEXT DEFAULT '',
+                  kind TEXT DEFAULT 'speech',
+                  region_order INTEGER DEFAULT 0,
+                  orientation TEXT DEFAULT 'horizontal',
                   source_text TEXT,
+                  source_language TEXT,
                   translated_text TEXT,
                   status TEXT,
+                  ocr_status TEXT DEFAULT 'idle',
+                  ocr_engine TEXT,
+                  ocr_updated_at INTEGER,
+                  target_language TEXT,
+                  translation_status TEXT DEFAULT 'idle',
+                  translation_provider TEXT,
+                  translation_updated_at INTEGER,
+                  notes TEXT DEFAULT '',
                   locked INTEGER,
                   visible INTEGER,
+                  text_style_id TEXT,
                   ocr_confidence REAL
                 );
 
@@ -193,10 +249,35 @@ impl ProjectRepository {
                   status TEXT,
                   project_id TEXT,
                   page_id TEXT,
+                  region_ids TEXT,
                   progress REAL,
                   created_at INTEGER,
                   updated_at INTEGER,
+                  summary TEXT,
                   error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS project_settings (
+                  project_id TEXT PRIMARY KEY,
+                  source_language TEXT NOT NULL DEFAULT 'auto',
+                  target_language TEXT NOT NULL DEFAULT 'ru',
+                  ocr_engine TEXT NOT NULL DEFAULT 'mock',
+                  translation_provider TEXT NOT NULL DEFAULT 'mock',
+                  default_text_style_id TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS text_styles (
+                  id TEXT PRIMARY KEY,
+                  project_id TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  font_family TEXT NOT NULL,
+                  font_size REAL NOT NULL,
+                  line_height REAL NOT NULL,
+                  letter_spacing REAL NOT NULL,
+                  align TEXT NOT NULL,
+                  fill TEXT NOT NULL,
+                  stroke TEXT NOT NULL,
+                  stroke_width REAL NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS {PROJECT_SNAPSHOTS_TABLE} (
@@ -223,6 +304,33 @@ impl ProjectRepository {
                 "
             ))
             .map_err(|error| error.to_string())?;
+
+        ensure_table_column(&connection, REGIONS_TABLE, "label", "TEXT DEFAULT ''")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "kind", "TEXT DEFAULT 'speech'")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "region_order", "INTEGER DEFAULT 0")?;
+        ensure_table_column(
+            &connection,
+            REGIONS_TABLE,
+            "orientation",
+            "TEXT DEFAULT 'horizontal'",
+        )?;
+        ensure_table_column(&connection, REGIONS_TABLE, "source_language", "TEXT")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "ocr_status", "TEXT DEFAULT 'idle'")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "ocr_engine", "TEXT")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "ocr_updated_at", "INTEGER")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "target_language", "TEXT")?;
+        ensure_table_column(
+            &connection,
+            REGIONS_TABLE,
+            "translation_status",
+            "TEXT DEFAULT 'idle'",
+        )?;
+        ensure_table_column(&connection, REGIONS_TABLE, "translation_provider", "TEXT")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "translation_updated_at", "INTEGER")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "notes", "TEXT DEFAULT ''")?;
+        ensure_table_column(&connection, REGIONS_TABLE, "text_style_id", "TEXT")?;
+        ensure_table_column(&connection, JOBS_TABLE, "region_ids", "TEXT")?;
+        ensure_table_column(&connection, JOBS_TABLE, "summary", "TEXT")?;
 
         migrate_snapshot_projects(&connection)?;
         Ok(())
@@ -269,6 +377,7 @@ impl ProjectRepository {
                 ],
             )
             .map_err(|error| error.to_string())?;
+        ensure_project_defaults(&connection, &summary.id)?;
 
         connection
             .execute(
@@ -313,6 +422,7 @@ impl ProjectRepository {
 
         let project_row = get_project_row(&connection, id.clone())?
             .ok_or_else(|| format!("Local project {id} was not found"))?;
+        ensure_project_defaults(&connection, &project_row.id)?;
 
         update_snapshot_last_opened(&connection, id.clone())?;
 
@@ -403,6 +513,77 @@ fn default_true() -> bool {
     true
 }
 
+fn default_text_style_id(project_id: &str) -> String {
+    format!("{project_id}:default-style")
+}
+
+fn ensure_project_defaults(connection: &Connection, project_id: &str) -> Result<(), String> {
+    let default_style_id = default_text_style_id(project_id);
+
+    connection
+        .execute(
+            "
+            INSERT INTO text_styles (
+              id,
+              project_id,
+              name,
+              font_family,
+              font_size,
+              line_height,
+              letter_spacing,
+              align,
+              fill,
+              stroke,
+              stroke_width
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            ON CONFLICT(id) DO NOTHING
+            ",
+            params![
+                default_style_id,
+                project_id,
+                "Default",
+                "Arial",
+                28.0_f64,
+                1.15_f64,
+                0.0_f64,
+                "center",
+                "#ffffff",
+                "#111111",
+                3.0_f64,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            "
+            INSERT INTO project_settings (
+              project_id,
+              source_language,
+              target_language,
+              ocr_engine,
+              translation_provider,
+              default_text_style_id
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT(project_id) DO UPDATE SET
+              default_text_style_id = COALESCE(project_settings.default_text_style_id, excluded.default_text_style_id)
+            ",
+            params![
+                project_id,
+                "auto",
+                "ru",
+                "mock",
+                "mock",
+                default_text_style_id(project_id),
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
 fn normalize_snapshot_region_status(region: &SnapshotRegion) -> String {
     if let Some(status) = region.status.clone() {
         return status;
@@ -414,6 +595,30 @@ fn normalize_snapshot_region_status(region: &SnapshotRegion) -> String {
 
     if !region.source_text.trim().is_empty() {
         return "ocr_done".into();
+    }
+
+    "idle".into()
+}
+
+fn normalize_snapshot_ocr_status(region: &SnapshotRegion) -> String {
+    if let Some(status) = region.ocr_status.clone() {
+        return status;
+    }
+
+    if !region.source_text.trim().is_empty() {
+        return "done".into();
+    }
+
+    "idle".into()
+}
+
+fn normalize_snapshot_translation_status(region: &SnapshotRegion) -> String {
+    if let Some(status) = region.translation_status.clone() {
+        return status;
+    }
+
+    if !region.translated_text.trim().is_empty() {
+        return "done".into();
     }
 
     "idle".into()
@@ -445,20 +650,42 @@ fn build_project_from_domain(
                 .map(|(index, region)| {
                     Ok(json!({
                         "id": region.id,
-                        "label": format!("Region {}", index + 1),
+                        "label": if region.label.trim().is_empty() {
+                            format!("Region {}", index + 1)
+                        } else {
+                            region.label
+                        },
                         "x": region.x,
                         "y": region.y,
                         "width": region.width,
                         "height": region.height,
                         "rotation": region.rotation,
+                        "orientation": if region.orientation.trim().is_empty() {
+                            "horizontal".to_string()
+                        } else {
+                            region.orientation
+                        },
                         "sourceText": region.source_text,
+                        "sourceLanguage": region.source_language,
                         "translatedText": region.translated_text,
                         "status": region.status,
-                        "kind": "speech",
-                        "order": index + 1,
-                        "notes": "",
+                        "ocrStatus": region.ocr_status,
+                        "ocrEngine": region.ocr_engine,
+                        "ocrUpdatedAt": region.ocr_updated_at,
+                        "targetLanguage": region.target_language,
+                        "translationStatus": region.translation_status,
+                        "translationProvider": region.translation_provider,
+                        "translationUpdatedAt": region.translation_updated_at,
+                        "kind": if region.kind.trim().is_empty() {
+                            "speech".to_string()
+                        } else {
+                            region.kind
+                        },
+                        "order": region.order.max(1),
+                        "notes": region.notes,
                         "locked": region.locked,
                         "visible": region.visible,
+                        "textStyleId": region.text_style_id,
                         "ocrConfidence": region.ocr_confidence
                     }))
                 })
@@ -581,6 +808,7 @@ fn import_snapshot_project_into_domain(
             params![project_id.clone()],
         )
         .map_err(|error| error.to_string())?;
+    ensure_project_defaults(connection, &project_id)?;
 
     for (page_index, page) in project.pages.iter().enumerate() {
         connection
@@ -602,7 +830,7 @@ fn import_snapshot_project_into_domain(
             )
             .map_err(|error| error.to_string())?;
 
-        for raw_region in &page.regions {
+        for (region_index, raw_region) in page.regions.iter().enumerate() {
             let region = serde_json::from_value::<SnapshotRegion>(raw_region.clone())
                 .unwrap_or_else(|_| SnapshotRegion::default());
 
@@ -622,14 +850,31 @@ fn import_snapshot_project_into_domain(
                           width,
                           height,
                           rotation,
+                          label,
+                          kind,
+                          region_order,
+                          orientation,
                           source_text,
+                          source_language,
                           translated_text,
                           status,
+                          ocr_status,
+                          ocr_engine,
+                          ocr_updated_at,
+                          target_language,
+                          translation_status,
+                          translation_provider,
+                          translation_updated_at,
+                          notes,
                           locked,
                           visible,
+                          text_style_id,
                           ocr_confidence
                         )
-                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                        VALUES (
+                          ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                          ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+                        )
                         "
                     ),
                     params![
@@ -640,11 +885,36 @@ fn import_snapshot_project_into_domain(
                         region.width,
                         region.height,
                         region.rotation,
+                        if region.label.trim().is_empty() {
+                            format!("Region {}", region_index + 1)
+                        } else {
+                            region.label.clone()
+                        },
+                        if region.kind.trim().is_empty() {
+                            "speech".to_string()
+                        } else {
+                            region.kind.clone()
+                        },
+                        region.order.unwrap_or((region_index as i64) + 1).max(1),
+                        region
+                            .orientation
+                            .clone()
+                            .unwrap_or_else(|| "horizontal".to_string()),
                         region.source_text,
+                        region.source_language,
                         region.translated_text,
                         normalize_snapshot_region_status(&region),
+                        normalize_snapshot_ocr_status(&region),
+                        region.ocr_engine,
+                        region.ocr_updated_at,
+                        region.target_language,
+                        normalize_snapshot_translation_status(&region),
+                        region.translation_provider,
+                        region.translation_updated_at,
+                        region.notes,
                         bool_to_sql(region.locked),
                         bool_to_sql(region.visible),
+                        region.text_style_id,
                         region.ocr_confidence,
                     ],
                 )
@@ -725,15 +995,29 @@ fn list_regions_by_page(
               width,
               height,
               rotation,
+              label,
+              kind,
+              region_order,
+              orientation,
               source_text,
+              source_language,
               translated_text,
               status,
+              ocr_status,
+              ocr_engine,
+              ocr_updated_at,
+              target_language,
+              translation_status,
+              translation_provider,
+              translation_updated_at,
+              notes,
               locked,
               visible,
+              text_style_id,
               ocr_confidence
             FROM {REGIONS_TABLE}
             WHERE page_id = ?1
-            ORDER BY rowid ASC
+            ORDER BY region_order ASC, rowid ASC
             "
         ))
         .map_err(|error| error.to_string())?;
@@ -747,12 +1031,26 @@ fn list_regions_by_page(
                 width: row.get(4)?,
                 height: row.get(5)?,
                 rotation: row.get(6)?,
-                source_text: row.get(7)?,
-                translated_text: row.get(8)?,
-                status: row.get(9)?,
-                locked: sql_to_bool(row.get::<_, i64>(10)?),
-                visible: sql_to_bool(row.get::<_, i64>(11)?),
-                ocr_confidence: row.get(12)?,
+                label: row.get(7)?,
+                kind: row.get(8)?,
+                order: row.get(9)?,
+                orientation: row.get(10)?,
+                source_text: row.get(11)?,
+                source_language: row.get(12)?,
+                translated_text: row.get(13)?,
+                status: row.get(14)?,
+                ocr_status: row.get(15)?,
+                ocr_engine: row.get(16)?,
+                ocr_updated_at: row.get(17)?,
+                target_language: row.get(18)?,
+                translation_status: row.get(19)?,
+                translation_provider: row.get(20)?,
+                translation_updated_at: row.get(21)?,
+                notes: row.get(22)?,
+                locked: sql_to_bool(row.get::<_, i64>(23)?),
+                visible: sql_to_bool(row.get::<_, i64>(24)?),
+                text_style_id: row.get(25)?,
+                ocr_confidence: row.get(26)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -857,6 +1155,25 @@ fn table_has_column(
     }
 
     Ok(false)
+}
+
+fn ensure_table_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    if table_has_column(connection, table_name, column_name)? {
+        return Ok(());
+    }
+
+    let statement = format!(
+        "ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+    );
+    connection
+        .execute(&statement, [])
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn bool_to_sql(value: bool) -> i64 {

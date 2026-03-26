@@ -3,6 +3,7 @@ import {
   readBrowserDomainState,
   writeBrowserDomainState,
 } from '../repositories/browserDomainState';
+import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import type {
   LocalProjectSaveResult,
   LocalProjectSummary,
@@ -78,8 +79,8 @@ function deriveFileName(page: PageRecord) {
 
 function sortRegionRecords(records: RegionRecord[], fallbackMap: Map<string, Region>) {
   return [...records].sort((left, right) => {
-    const leftOrder = fallbackMap.get(left.id)?.order;
-    const rightOrder = fallbackMap.get(right.id)?.order;
+    const leftOrder = left.order || fallbackMap.get(left.id)?.order;
+    const rightOrder = right.order || fallbackMap.get(right.id)?.order;
 
     if (typeof leftOrder === 'number' || typeof rightOrder === 'number') {
       return (leftOrder ?? Number.MAX_SAFE_INTEGER) - (rightOrder ?? Number.MAX_SAFE_INTEGER);
@@ -153,11 +154,29 @@ function writeProjectIntoDomainState(
         width: region.width,
         height: region.height,
         rotation: region.rotation,
+        label: region.label,
+        kind: region.kind,
+        order: region.order,
+        orientation: region.orientation,
         sourceText: region.sourceText,
+        ...(region.sourceLanguage ? { sourceLanguage: region.sourceLanguage } : {}),
         translatedText: region.translatedText,
         status: region.status,
+        ocrStatus: region.ocrStatus,
+        ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
+        ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
+        ...(region.targetLanguage ? { targetLanguage: region.targetLanguage } : {}),
+        translationStatus: region.translationStatus,
+        ...(region.translationProvider
+          ? { translationProvider: region.translationProvider }
+          : {}),
+        ...(typeof region.translationUpdatedAt === 'number'
+          ? { translationUpdatedAt: region.translationUpdatedAt }
+          : {}),
+        notes: region.notes,
         locked: region.locked,
         visible: region.visible,
+        ...(region.textStyleId ? { textStyleId: region.textStyleId } : {}),
         ...(typeof region.ocrConfidence === 'number'
           ? { ocrConfidence: region.ocrConfidence }
           : {}),
@@ -225,20 +244,30 @@ function buildProjectFromDomain(
       ).map((region, index) =>
         normalizeRegion({
           id: region.id,
-          label: fallbackRegions.get(region.id)?.label ?? `Region ${index + 1}`,
+          label: region.label || fallbackRegions.get(region.id)?.label || `Region ${index + 1}`,
           x: region.x,
           y: region.y,
           width: region.width,
           height: region.height,
           rotation: region.rotation,
+          orientation: region.orientation,
           sourceText: region.sourceText,
+          sourceLanguage: region.sourceLanguage,
           translatedText: region.translatedText,
           status: region.status,
-          kind: fallbackRegions.get(region.id)?.kind ?? 'speech',
-          order: fallbackRegions.get(region.id)?.order ?? index + 1,
-          notes: fallbackRegions.get(region.id)?.notes ?? '',
+          ocrStatus: region.ocrStatus,
+          ocrEngine: region.ocrEngine,
+          ocrUpdatedAt: region.ocrUpdatedAt,
+          targetLanguage: region.targetLanguage,
+          translationStatus: region.translationStatus,
+          translationProvider: region.translationProvider,
+          translationUpdatedAt: region.translationUpdatedAt,
+          kind: region.kind || fallbackRegions.get(region.id)?.kind || 'speech',
+          order: region.order || fallbackRegions.get(region.id)?.order || index + 1,
+          notes: region.notes ?? fallbackRegions.get(region.id)?.notes ?? '',
           locked: region.locked,
           visible: region.visible,
+          textStyleId: region.textStyleId ?? fallbackRegions.get(region.id)?.textStyleId,
           ocrConfidence: region.ocrConfidence,
         }),
       );
@@ -285,6 +314,7 @@ export const browserProjectRepository: ProjectRepository = {
 
     writeProjectIntoDomainState(state, storedProject);
     writeBrowserDomainState(state);
+    await ensureProjectDomainDefaults(localProjectId);
 
     const summary = buildSummary(storedProject);
     const summaryMap = new Map(envelope.summaries.map((item) => [item.id, item] as const));
@@ -309,6 +339,7 @@ export const browserProjectRepository: ProjectRepository = {
       writeProjectIntoDomainState(state, envelope.projects[id]);
       writeBrowserDomainState(state);
     }
+    await ensureProjectDomainDefaults(id);
 
     const project = buildProjectFromDomain(id, state, envelope);
     envelope.latestProjectId = id;

@@ -1,10 +1,19 @@
-import type { JobEntity, PageRecord, ProjectRecord, RegionRecord } from '../types';
+import type {
+  JobEntity,
+  PageRecord,
+  ProjectRecord,
+  ProjectSettingsRecord,
+  RegionRecord,
+  TextStyleRecord,
+} from '../types';
 
 interface BrowserDomainState {
   projects: Record<string, ProjectRecord>;
   pages: Record<string, PageRecord>;
   regions: Record<string, RegionRecord>;
   jobs: Record<string, JobEntity>;
+  projectSettings: Record<string, ProjectSettingsRecord>;
+  textStyles: Record<string, TextStyleRecord>;
 }
 
 const STORAGE_KEY = 'scanforge.domain-repositories.v1';
@@ -15,6 +24,8 @@ function emptyState(): BrowserDomainState {
     pages: {},
     regions: {},
     jobs: {},
+    projectSettings: {},
+    textStyles: {},
   };
 }
 
@@ -33,7 +44,15 @@ export function readBrowserDomainState(): BrowserDomainState {
   }
 
   try {
-    return JSON.parse(raw) as BrowserDomainState;
+    const parsed = JSON.parse(raw) as Partial<BrowserDomainState>;
+    return {
+      projects: parsed.projects ?? {},
+      pages: parsed.pages ?? {},
+      regions: parsed.regions ?? {},
+      jobs: parsed.jobs ?? {},
+      projectSettings: parsed.projectSettings ?? {},
+      textStyles: parsed.textStyles ?? {},
+    };
   } catch {
     return emptyState();
   }

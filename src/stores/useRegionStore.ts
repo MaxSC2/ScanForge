@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
 import type { Region } from '../types';
+import { normalizeRegion } from '../types/region';
 import { usePageStore } from './usePageStore';
 import { useHistoryStore } from './useHistoryStore';
 import { useEditorStore } from './useEditorStore';
@@ -49,9 +50,12 @@ export const useRegionStore = create<RegionState>((set, get) => ({
       label: `Region ${index}`,
       ...rect,
       rotation: 0,
+      orientation: 'horizontal',
       sourceText: '',
       translatedText: '',
       status: 'idle',
+      ocrStatus: 'idle',
+      translationStatus: 'idle',
       kind: 'speech',
       order: index,
       notes: '',
@@ -69,7 +73,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     useHistoryStore.getState().capture();
     mutatePage(pageId, (regions) =>
       regions
-        .map((r) => (r.id === regionId ? { ...r, ...patch } : r))
+        .map((r) => (r.id === regionId ? normalizeRegion({ ...r, ...patch }) : r))
         .sort((a, b) => a.order - b.order)
         .map((r, i) => ({ ...r, order: i + 1 })),
     );

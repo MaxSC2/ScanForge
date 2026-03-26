@@ -12,6 +12,9 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
     status: job.status,
     projectId: meta.localProjectId,
     pageId: job.pageId,
+    summary: job.result
+      ? `${job.result.engine}: ${job.result.filledCount}/${job.result.regionsProcessed}`
+      : job.message,
     progress: job.progress,
     createdAt: job.createdAt,
     updatedAt: job.finishedAt ?? job.startedAt ?? job.createdAt,
@@ -58,7 +61,7 @@ function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord
     message:
       entity.status === 'running'
         ? 'Recovered queued OCR job'
-        : deriveMessage(entity),
+        : entity.summary ?? deriveMessage(entity),
     error: entity.error ?? null,
     result: null,
   };

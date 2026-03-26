@@ -64,6 +64,14 @@ export class ProjectRepository {
       }
     }
 
+    delete state.projectSettings[id];
+
+    for (const style of Object.values(state.textStyles)) {
+      if (style.projectId === id) {
+        delete state.textStyles[style.id];
+      }
+    }
+
     writeBrowserDomainState(state);
   }
 

@@ -33,6 +33,33 @@ pub struct PageRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectSettingsRecord {
+    pub project_id: String,
+    pub source_language: String,
+    pub target_language: String,
+    pub ocr_engine: String,
+    pub translation_provider: String,
+    pub default_text_style_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextStyleRecord {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub font_family: String,
+    pub font_size: f64,
+    pub line_height: f64,
+    pub letter_spacing: f64,
+    pub align: String,
+    pub fill: String,
+    pub stroke: String,
+    pub stroke_width: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegionRecord {
     pub id: String,
     pub page_id: String,
@@ -41,11 +68,25 @@ pub struct RegionRecord {
     pub width: f64,
     pub height: f64,
     pub rotation: f64,
+    pub label: String,
+    pub kind: String,
+    pub order: i64,
+    pub orientation: String,
     pub source_text: String,
+    pub source_language: Option<String>,
     pub translated_text: String,
     pub status: String,
+    pub ocr_status: String,
+    pub ocr_engine: Option<String>,
+    pub ocr_updated_at: Option<i64>,
+    pub target_language: Option<String>,
+    pub translation_status: String,
+    pub translation_provider: Option<String>,
+    pub translation_updated_at: Option<i64>,
+    pub notes: String,
     pub locked: bool,
     pub visible: bool,
+    pub text_style_id: Option<String>,
     pub ocr_confidence: Option<f64>,
 }
 
@@ -58,9 +99,11 @@ pub struct JobEntity {
     pub status: String,
     pub project_id: String,
     pub page_id: Option<String>,
+    pub region_ids: Option<Vec<String>>,
     pub progress: f64,
     pub created_at: i64,
     pub updated_at: i64,
+    pub summary: Option<String>,
     pub error: Option<String>,
 }
 
@@ -112,11 +155,25 @@ impl DomainRepository {
                   width REAL,
                   height REAL,
                   rotation REAL,
+                  label TEXT DEFAULT '',
+                  kind TEXT DEFAULT 'speech',
+                  region_order INTEGER DEFAULT 0,
+                  orientation TEXT DEFAULT 'horizontal',
                   source_text TEXT,
+                  source_language TEXT,
                   translated_text TEXT,
                   status TEXT,
+                  ocr_status TEXT DEFAULT 'idle',
+                  ocr_engine TEXT,
+                  ocr_updated_at INTEGER,
+                  target_language TEXT,
+                  translation_status TEXT DEFAULT 'idle',
+                  translation_provider TEXT,
+                  translation_updated_at INTEGER,
+                  notes TEXT DEFAULT '',
                   locked INTEGER,
                   visible INTEGER,
+                  text_style_id TEXT,
                   ocr_confidence REAL
                 );
 
@@ -126,14 +183,66 @@ impl DomainRepository {
                   status TEXT,
                   project_id TEXT,
                   page_id TEXT,
+                  region_ids TEXT,
                   progress REAL,
                   created_at INTEGER,
                   updated_at INTEGER,
+                  summary TEXT,
                   error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS project_settings (
+                  project_id TEXT PRIMARY KEY,
+                  source_language TEXT NOT NULL DEFAULT 'auto',
+                  target_language TEXT NOT NULL DEFAULT 'ru',
+                  ocr_engine TEXT NOT NULL DEFAULT 'mock',
+                  translation_provider TEXT NOT NULL DEFAULT 'mock',
+                  default_text_style_id TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS text_styles (
+                  id TEXT PRIMARY KEY,
+                  project_id TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  font_family TEXT NOT NULL,
+                  font_size REAL NOT NULL,
+                  line_height REAL NOT NULL,
+                  letter_spacing REAL NOT NULL,
+                  align TEXT NOT NULL,
+                  fill TEXT NOT NULL,
+                  stroke TEXT NOT NULL,
+                  stroke_width REAL NOT NULL
                 );
                 ",
             )
             .map_err(|error| error.to_string())?;
+
+        ensure_table_column(&connection, "regions", "label", "TEXT DEFAULT ''")?;
+        ensure_table_column(&connection, "regions", "kind", "TEXT DEFAULT 'speech'")?;
+        ensure_table_column(&connection, "regions", "region_order", "INTEGER DEFAULT 0")?;
+        ensure_table_column(
+            &connection,
+            "regions",
+            "orientation",
+            "TEXT DEFAULT 'horizontal'",
+        )?;
+        ensure_table_column(&connection, "regions", "source_language", "TEXT")?;
+        ensure_table_column(&connection, "regions", "ocr_status", "TEXT DEFAULT 'idle'")?;
+        ensure_table_column(&connection, "regions", "ocr_engine", "TEXT")?;
+        ensure_table_column(&connection, "regions", "ocr_updated_at", "INTEGER")?;
+        ensure_table_column(&connection, "regions", "target_language", "TEXT")?;
+        ensure_table_column(
+            &connection,
+            "regions",
+            "translation_status",
+            "TEXT DEFAULT 'idle'",
+        )?;
+        ensure_table_column(&connection, "regions", "translation_provider", "TEXT")?;
+        ensure_table_column(&connection, "regions", "translation_updated_at", "INTEGER")?;
+        ensure_table_column(&connection, "regions", "notes", "TEXT DEFAULT ''")?;
+        ensure_table_column(&connection, "regions", "text_style_id", "TEXT")?;
+        ensure_table_column(&connection, "jobs", "region_ids", "TEXT")?;
+        ensure_table_column(&connection, "jobs", "summary", "TEXT")?;
 
         Ok(())
     }
@@ -212,10 +321,223 @@ impl DomainRepository {
             .execute("DELETE FROM pages WHERE project_id = ?1", params![id.clone()])
             .map_err(|error| error.to_string())?;
         transaction
+            .execute(
+                "DELETE FROM project_settings WHERE project_id = ?1",
+                params![id.clone()],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "DELETE FROM text_styles WHERE project_id = ?1",
+                params![id.clone()],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
             .execute("DELETE FROM projects WHERE id = ?1", params![id])
             .map_err(|error| error.to_string())?;
 
         transaction.commit().map_err(|error| error.to_string())
+    }
+
+    pub fn get_project_settings(
+        &self,
+        project_id: String,
+    ) -> Result<Option<ProjectSettingsRecord>, String> {
+        let connection = self.connect()?;
+        connection
+            .query_row(
+                "
+                SELECT
+                  project_id,
+                  source_language,
+                  target_language,
+                  ocr_engine,
+                  translation_provider,
+                  default_text_style_id
+                FROM project_settings
+                WHERE project_id = ?1
+                ",
+                params![project_id],
+                map_project_settings_record,
+            )
+            .optional()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn upsert_project_settings(
+        &self,
+        settings: ProjectSettingsRecord,
+    ) -> Result<ProjectSettingsRecord, String> {
+        let connection = self.connect()?;
+        connection
+            .execute(
+                "
+                INSERT INTO project_settings (
+                  project_id,
+                  source_language,
+                  target_language,
+                  ocr_engine,
+                  translation_provider,
+                  default_text_style_id
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                ON CONFLICT(project_id) DO UPDATE SET
+                  source_language = excluded.source_language,
+                  target_language = excluded.target_language,
+                  ocr_engine = excluded.ocr_engine,
+                  translation_provider = excluded.translation_provider,
+                  default_text_style_id = excluded.default_text_style_id
+                ",
+                params![
+                    settings.project_id,
+                    settings.source_language,
+                    settings.target_language,
+                    settings.ocr_engine,
+                    settings.translation_provider,
+                    settings.default_text_style_id,
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+
+        Ok(settings)
+    }
+
+    pub fn delete_project_settings(&self, project_id: String) -> Result<(), String> {
+        let connection = self.connect()?;
+        connection
+            .execute(
+                "DELETE FROM project_settings WHERE project_id = ?1",
+                params![project_id],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_text_styles_by_project(
+        &self,
+        project_id: String,
+    ) -> Result<Vec<TextStyleRecord>, String> {
+        let connection = self.connect()?;
+        let mut statement = connection
+            .prepare(
+                "
+                SELECT
+                  id,
+                  project_id,
+                  name,
+                  font_family,
+                  font_size,
+                  line_height,
+                  letter_spacing,
+                  align,
+                  fill,
+                  stroke,
+                  stroke_width
+                FROM text_styles
+                WHERE project_id = ?1
+                ORDER BY name ASC, id ASC
+                ",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![project_id], map_text_style_record)
+            .map_err(|error| error.to_string())?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn get_text_style(&self, id: String) -> Result<Option<TextStyleRecord>, String> {
+        let connection = self.connect()?;
+        connection
+            .query_row(
+                "
+                SELECT
+                  id,
+                  project_id,
+                  name,
+                  font_family,
+                  font_size,
+                  line_height,
+                  letter_spacing,
+                  align,
+                  fill,
+                  stroke,
+                  stroke_width
+                FROM text_styles
+                WHERE id = ?1
+                ",
+                params![id],
+                map_text_style_record,
+            )
+            .optional()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn upsert_text_style(&self, style: TextStyleRecord) -> Result<TextStyleRecord, String> {
+        let connection = self.connect()?;
+        connection
+            .execute(
+                "
+                INSERT INTO text_styles (
+                  id,
+                  project_id,
+                  name,
+                  font_family,
+                  font_size,
+                  line_height,
+                  letter_spacing,
+                  align,
+                  fill,
+                  stroke,
+                  stroke_width
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                ON CONFLICT(id) DO UPDATE SET
+                  project_id = excluded.project_id,
+                  name = excluded.name,
+                  font_family = excluded.font_family,
+                  font_size = excluded.font_size,
+                  line_height = excluded.line_height,
+                  letter_spacing = excluded.letter_spacing,
+                  align = excluded.align,
+                  fill = excluded.fill,
+                  stroke = excluded.stroke,
+                  stroke_width = excluded.stroke_width
+                ",
+                params![
+                    style.id,
+                    style.project_id,
+                    style.name,
+                    style.font_family,
+                    style.font_size,
+                    style.line_height,
+                    style.letter_spacing,
+                    style.align,
+                    style.fill,
+                    style.stroke,
+                    style.stroke_width,
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+
+        Ok(style)
+    }
+
+    pub fn delete_text_style(&self, id: String) -> Result<(), String> {
+        let connection = self.connect()?;
+        connection
+            .execute("DELETE FROM text_styles WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_text_styles_by_project(&self, project_id: String) -> Result<(), String> {
+        let connection = self.connect()?;
+        connection
+            .execute("DELETE FROM text_styles WHERE project_id = ?1", params![project_id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     pub fn list_pages_by_project(&self, project_id: String) -> Result<Vec<PageRecord>, String> {
@@ -329,15 +651,29 @@ impl DomainRepository {
                   width,
                   height,
                   rotation,
+                  label,
+                  kind,
+                  region_order,
+                  orientation,
                   source_text,
+                  source_language,
                   translated_text,
                   status,
+                  ocr_status,
+                  ocr_engine,
+                  ocr_updated_at,
+                  target_language,
+                  translation_status,
+                  translation_provider,
+                  translation_updated_at,
+                  notes,
                   locked,
                   visible,
+                  text_style_id,
                   ocr_confidence
                 FROM regions
                 WHERE page_id = ?1
-                ORDER BY rowid ASC
+                ORDER BY region_order ASC, rowid ASC
                 ",
             )
             .map_err(|error| error.to_string())?;
@@ -362,11 +698,25 @@ impl DomainRepository {
                   width,
                   height,
                   rotation,
+                  label,
+                  kind,
+                  region_order,
+                  orientation,
                   source_text,
+                  source_language,
                   translated_text,
                   status,
+                  ocr_status,
+                  ocr_engine,
+                  ocr_updated_at,
+                  target_language,
+                  translation_status,
+                  translation_provider,
+                  translation_updated_at,
+                  notes,
                   locked,
                   visible,
+                  text_style_id,
                   ocr_confidence
                 FROM regions
                 WHERE id = ?1
@@ -391,14 +741,31 @@ impl DomainRepository {
                   width,
                   height,
                   rotation,
+                  label,
+                  kind,
+                  region_order,
+                  orientation,
                   source_text,
+                  source_language,
                   translated_text,
                   status,
+                  ocr_status,
+                  ocr_engine,
+                  ocr_updated_at,
+                  target_language,
+                  translation_status,
+                  translation_provider,
+                  translation_updated_at,
+                  notes,
                   locked,
                   visible,
+                  text_style_id,
                   ocr_confidence
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                VALUES (
+                  ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                  ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+                )
                 ON CONFLICT(id) DO UPDATE SET
                   page_id = excluded.page_id,
                   x = excluded.x,
@@ -406,11 +773,25 @@ impl DomainRepository {
                   width = excluded.width,
                   height = excluded.height,
                   rotation = excluded.rotation,
+                  label = excluded.label,
+                  kind = excluded.kind,
+                  region_order = excluded.region_order,
+                  orientation = excluded.orientation,
                   source_text = excluded.source_text,
+                  source_language = excluded.source_language,
                   translated_text = excluded.translated_text,
                   status = excluded.status,
+                  ocr_status = excluded.ocr_status,
+                  ocr_engine = excluded.ocr_engine,
+                  ocr_updated_at = excluded.ocr_updated_at,
+                  target_language = excluded.target_language,
+                  translation_status = excluded.translation_status,
+                  translation_provider = excluded.translation_provider,
+                  translation_updated_at = excluded.translation_updated_at,
+                  notes = excluded.notes,
                   locked = excluded.locked,
                   visible = excluded.visible,
+                  text_style_id = excluded.text_style_id,
                   ocr_confidence = excluded.ocr_confidence
                 ",
                 params![
@@ -421,11 +802,25 @@ impl DomainRepository {
                     region.width,
                     region.height,
                     region.rotation,
+                    region.label,
+                    region.kind,
+                    region.order,
+                    region.orientation,
                     region.source_text,
+                    region.source_language,
                     region.translated_text,
                     region.status,
+                    region.ocr_status,
+                    region.ocr_engine,
+                    region.ocr_updated_at,
+                    region.target_language,
+                    region.translation_status,
+                    region.translation_provider,
+                    region.translation_updated_at,
+                    region.notes,
                     bool_to_sql(region.locked),
                     bool_to_sql(region.visible),
+                    region.text_style_id,
                     region.ocr_confidence,
                 ],
             )
@@ -455,7 +850,18 @@ impl DomainRepository {
         let mut statement = connection
             .prepare(
                 "
-                SELECT id, type, status, project_id, page_id, progress, created_at, updated_at, error
+                SELECT
+                  id,
+                  type,
+                  status,
+                  project_id,
+                  page_id,
+                  region_ids,
+                  progress,
+                  created_at,
+                  updated_at,
+                  summary,
+                  error
                 FROM jobs
                 WHERE project_id = ?1
                 ORDER BY created_at DESC, id DESC
@@ -475,7 +881,18 @@ impl DomainRepository {
         connection
             .query_row(
                 "
-                SELECT id, type, status, project_id, page_id, progress, created_at, updated_at, error
+                SELECT
+                  id,
+                  type,
+                  status,
+                  project_id,
+                  page_id,
+                  region_ids,
+                  progress,
+                  created_at,
+                  updated_at,
+                  summary,
+                  error
                 FROM jobs
                 WHERE id = ?1
                 ",
@@ -488,6 +905,7 @@ impl DomainRepository {
 
     pub fn upsert_job(&self, job: JobEntity) -> Result<JobEntity, String> {
         let connection = self.connect()?;
+        let serialized_region_ids = serialize_string_list(&job.region_ids)?;
         connection
             .execute(
                 "
@@ -497,20 +915,24 @@ impl DomainRepository {
                   status,
                   project_id,
                   page_id,
+                  region_ids,
                   progress,
                   created_at,
                   updated_at,
+                  summary,
                   error
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                 ON CONFLICT(id) DO UPDATE SET
                   type = excluded.type,
                   status = excluded.status,
                   project_id = excluded.project_id,
                   page_id = excluded.page_id,
+                  region_ids = excluded.region_ids,
                   progress = excluded.progress,
                   created_at = excluded.created_at,
                   updated_at = excluded.updated_at,
+                  summary = excluded.summary,
                   error = excluded.error
                 ",
                 params![
@@ -519,9 +941,11 @@ impl DomainRepository {
                     job.status,
                     job.project_id,
                     job.page_id,
+                    serialized_region_ids,
                     job.progress,
                     job.created_at,
                     job.updated_at,
+                    job.summary,
                     job.error,
                 ],
             )
@@ -567,6 +991,35 @@ fn map_page_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<PageRecord> {
     })
 }
 
+fn map_project_settings_record(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<ProjectSettingsRecord> {
+    Ok(ProjectSettingsRecord {
+        project_id: row.get(0)?,
+        source_language: row.get(1)?,
+        target_language: row.get(2)?,
+        ocr_engine: row.get(3)?,
+        translation_provider: row.get(4)?,
+        default_text_style_id: row.get(5)?,
+    })
+}
+
+fn map_text_style_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TextStyleRecord> {
+    Ok(TextStyleRecord {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        name: row.get(2)?,
+        font_family: row.get(3)?,
+        font_size: row.get(4)?,
+        line_height: row.get(5)?,
+        letter_spacing: row.get(6)?,
+        align: row.get(7)?,
+        fill: row.get(8)?,
+        stroke: row.get(9)?,
+        stroke_width: row.get(10)?,
+    })
+}
+
 fn map_region_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegionRecord> {
     Ok(RegionRecord {
         id: row.get(0)?,
@@ -576,12 +1029,26 @@ fn map_region_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegionRecord> 
         width: row.get(4)?,
         height: row.get(5)?,
         rotation: row.get(6)?,
-        source_text: row.get(7)?,
-        translated_text: row.get(8)?,
-        status: row.get(9)?,
-        locked: sql_to_bool(row.get::<_, i64>(10)?),
-        visible: sql_to_bool(row.get::<_, i64>(11)?),
-        ocr_confidence: row.get(12)?,
+        label: row.get(7)?,
+        kind: row.get(8)?,
+        order: row.get(9)?,
+        orientation: row.get(10)?,
+        source_text: row.get(11)?,
+        source_language: row.get(12)?,
+        translated_text: row.get(13)?,
+        status: row.get(14)?,
+        ocr_status: row.get(15)?,
+        ocr_engine: row.get(16)?,
+        ocr_updated_at: row.get(17)?,
+        target_language: row.get(18)?,
+        translation_status: row.get(19)?,
+        translation_provider: row.get(20)?,
+        translation_updated_at: row.get(21)?,
+        notes: row.get(22)?,
+        locked: sql_to_bool(row.get::<_, i64>(23)?),
+        visible: sql_to_bool(row.get::<_, i64>(24)?),
+        text_style_id: row.get(25)?,
+        ocr_confidence: row.get(26)?,
     })
 }
 
@@ -592,10 +1059,12 @@ fn map_job_entity(row: &rusqlite::Row<'_>) -> rusqlite::Result<JobEntity> {
         status: row.get(2)?,
         project_id: row.get(3)?,
         page_id: row.get(4)?,
-        progress: row.get(5)?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
-        error: row.get(8)?,
+        region_ids: deserialize_string_list(row.get::<_, Option<String>>(5)?),
+        progress: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
+        summary: row.get(9)?,
+        error: row.get(10)?,
     })
 }
 
@@ -605,6 +1074,60 @@ fn bool_to_sql(value: bool) -> i64 {
 
 fn sql_to_bool(value: i64) -> bool {
     value != 0
+}
+
+fn table_has_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, String> {
+    let pragma = format!("PRAGMA table_info({table_name})");
+    let mut statement = connection
+        .prepare(&pragma)
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?;
+
+    for column in rows {
+        let column = column.map_err(|error| error.to_string())?;
+        if column == column_name {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+fn ensure_table_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+    definition: &str,
+) -> Result<(), String> {
+    if table_has_column(connection, table_name, column_name)? {
+        return Ok(());
+    }
+
+    let statement = format!(
+        "ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+    );
+    connection
+        .execute(&statement, [])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn serialize_string_list(values: &Option<Vec<String>>) -> Result<Option<String>, String> {
+    values
+        .as_ref()
+        .map(|items| serde_json::to_string(items).map_err(|error| error.to_string()))
+        .transpose()
+}
+
+fn deserialize_string_list(value: Option<String>) -> Option<Vec<String>> {
+    value.and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
 }
 
 #[tauri::command]
@@ -636,6 +1159,70 @@ pub fn delete_project_record(
     repository: State<'_, DomainRepository>,
 ) -> Result<(), String> {
     repository.delete_project(id)
+}
+
+#[tauri::command]
+pub fn get_project_settings_record(
+    project_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<Option<ProjectSettingsRecord>, String> {
+    repository.get_project_settings(project_id)
+}
+
+#[tauri::command]
+pub fn upsert_project_settings_record(
+    settings: ProjectSettingsRecord,
+    repository: State<'_, DomainRepository>,
+) -> Result<ProjectSettingsRecord, String> {
+    repository.upsert_project_settings(settings)
+}
+
+#[tauri::command]
+pub fn delete_project_settings_record(
+    project_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<(), String> {
+    repository.delete_project_settings(project_id)
+}
+
+#[tauri::command]
+pub fn list_text_style_records_by_project(
+    project_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<Vec<TextStyleRecord>, String> {
+    repository.list_text_styles_by_project(project_id)
+}
+
+#[tauri::command]
+pub fn get_text_style_record(
+    id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<Option<TextStyleRecord>, String> {
+    repository.get_text_style(id)
+}
+
+#[tauri::command]
+pub fn upsert_text_style_record(
+    style: TextStyleRecord,
+    repository: State<'_, DomainRepository>,
+) -> Result<TextStyleRecord, String> {
+    repository.upsert_text_style(style)
+}
+
+#[tauri::command]
+pub fn delete_text_style_record(
+    id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<(), String> {
+    repository.delete_text_style(id)
+}
+
+#[tauri::command]
+pub fn delete_text_style_records_by_project(
+    project_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<(), String> {
+    repository.delete_text_styles_by_project(project_id)
 }
 
 #[tauri::command]

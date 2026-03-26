@@ -59,11 +59,29 @@ function toFallbackContext(page: Page): StoredOcrContext {
         width: region.width,
         height: region.height,
         rotation: region.rotation,
+        label: region.label,
+        kind: region.kind,
+        order: region.order,
+        orientation: region.orientation,
         sourceText: region.sourceText,
+        ...(region.sourceLanguage ? { sourceLanguage: region.sourceLanguage } : {}),
         translatedText: region.translatedText,
         status: region.status,
+        ocrStatus: region.ocrStatus,
+        ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
+        ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
+        ...(region.targetLanguage ? { targetLanguage: region.targetLanguage } : {}),
+        translationStatus: region.translationStatus,
+        ...(region.translationProvider
+          ? { translationProvider: region.translationProvider }
+          : {}),
+        ...(typeof region.translationUpdatedAt === 'number'
+          ? { translationUpdatedAt: region.translationUpdatedAt }
+          : {}),
+        notes: region.notes,
         locked: region.locked,
         visible: region.visible,
+        ...(region.textStyleId ? { textStyleId: region.textStyleId } : {}),
         ...(typeof region.ocrConfidence === 'number'
           ? { ocrConfidence: region.ocrConfidence }
           : {}),
@@ -90,8 +108,8 @@ async function loadStoredOcrContext(page: Page): Promise<StoredOcrContext> {
     naturalHeight: pageRecord.height,
     regions: regionRecords.map((record, index) => ({
       record,
-      order: index + 1,
-      label: `Region ${index + 1}`,
+      order: record.order || index + 1,
+      label: record.label || `Region ${index + 1}`,
     })),
   };
 }
@@ -113,6 +131,9 @@ async function applyBrowserOcrResult(
         ...record,
         sourceText: result.text,
         status: record.translatedText.trim() ? 'translated' : 'ocr_done',
+        ocrStatus: 'done',
+        ocrEngine: 'scanforge-browser-preview',
+        ocrUpdatedAt: Date.now(),
       });
     }),
   );

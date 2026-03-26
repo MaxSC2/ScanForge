@@ -11,11 +11,29 @@ function toRegionRecord(pageId: string, region: Region): RegionRecord {
     width: region.width,
     height: region.height,
     rotation: region.rotation,
+    label: region.label,
+    kind: region.kind,
+    order: region.order,
+    orientation: region.orientation,
     sourceText: region.sourceText,
+    ...(region.sourceLanguage ? { sourceLanguage: region.sourceLanguage } : {}),
     translatedText: region.translatedText,
     status: region.status,
+    ocrStatus: region.ocrStatus,
+    ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
+    ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
+    ...(region.targetLanguage ? { targetLanguage: region.targetLanguage } : {}),
+    translationStatus: region.translationStatus,
+    ...(region.translationProvider
+      ? { translationProvider: region.translationProvider }
+      : {}),
+    ...(typeof region.translationUpdatedAt === 'number'
+      ? { translationUpdatedAt: region.translationUpdatedAt }
+      : {}),
+    notes: region.notes,
     locked: region.locked,
     visible: region.visible,
+    ...(region.textStyleId ? { textStyleId: region.textStyleId } : {}),
     ...(typeof region.ocrConfidence === 'number'
       ? { ocrConfidence: region.ocrConfidence }
       : {}),
@@ -24,8 +42,8 @@ function toRegionRecord(pageId: string, region: Region): RegionRecord {
 
 function sortRegionRecords(records: RegionRecord[], fallbackMap: Map<string, Region>) {
   return [...records].sort((left, right) => {
-    const leftOrder = fallbackMap.get(left.id)?.order;
-    const rightOrder = fallbackMap.get(right.id)?.order;
+    const leftOrder = left.order || fallbackMap.get(left.id)?.order;
+    const rightOrder = right.order || fallbackMap.get(right.id)?.order;
 
     if (typeof leftOrder === 'number' || typeof rightOrder === 'number') {
       return (leftOrder ?? Number.MAX_SAFE_INTEGER) - (rightOrder ?? Number.MAX_SAFE_INTEGER);
@@ -46,20 +64,30 @@ function sortRegionRecords(records: RegionRecord[], fallbackMap: Map<string, Reg
 function mergeRegionRecord(record: RegionRecord, fallback: Region | undefined, index: number): Region {
   return normalizeRegion({
     id: record.id,
-    label: fallback?.label ?? `Region ${index + 1}`,
+    label: record.label || fallback?.label || `Region ${index + 1}`,
     x: record.x,
     y: record.y,
     width: record.width,
     height: record.height,
     rotation: record.rotation,
+    orientation: record.orientation,
     sourceText: record.sourceText,
+    sourceLanguage: record.sourceLanguage,
     translatedText: record.translatedText,
     status: record.status,
-    kind: fallback?.kind ?? 'speech',
-    order: fallback?.order ?? index + 1,
-    notes: fallback?.notes ?? '',
+    ocrStatus: record.ocrStatus,
+    ocrEngine: record.ocrEngine,
+    ocrUpdatedAt: record.ocrUpdatedAt,
+    targetLanguage: record.targetLanguage,
+    translationStatus: record.translationStatus,
+    translationProvider: record.translationProvider,
+    translationUpdatedAt: record.translationUpdatedAt,
+    kind: record.kind || fallback?.kind || 'speech',
+    order: record.order || fallback?.order || index + 1,
+    notes: record.notes ?? fallback?.notes ?? '',
     locked: record.locked,
     visible: record.visible,
+    textStyleId: record.textStyleId ?? fallback?.textStyleId,
     ocrConfidence: record.ocrConfidence,
   });
 }

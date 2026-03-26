@@ -44,17 +44,21 @@ fn build_preview_text(
     page_name: &str,
     page_width: i64,
     page_height: i64,
-    region_order: usize,
     region: &RegionRecord,
 ) -> String {
     let page_area = (page_width.max(1) * page_height.max(1)) as f64;
     let region_area = (region.width.max(1.0) * region.height.max(1.0)).max(1.0);
     let coverage = ((region_area / page_area) * 1000.0).round() / 10.0;
+    let label = if region.label.trim().is_empty() {
+        format!("region {}", region.order.max(1))
+    } else {
+        region.label.to_lowercase()
+    };
 
     format!(
-        "OCR preview: {} / text / region {} / {:.1}%",
+        "OCR preview: {} / text / {} / {:.1}%",
         page_name,
-        region_order.max(1),
+        label,
         coverage.max(0.1)
     )
 }
@@ -80,7 +84,7 @@ pub fn run_page_ocr(
     let regions = repository.list_regions_by_page(page_id)?;
     let mut results = Vec::with_capacity(regions.len());
 
-    for (index, region) in regions.into_iter().enumerate() {
+    for region in regions.into_iter() {
         if region.locked {
             results.push(OcrRegionResult {
                 region_id: region.id.clone(),
@@ -111,7 +115,7 @@ pub fn run_page_ocr(
             continue;
         }
 
-        let text = build_preview_text(&page_name, page.width, page.height, index + 1, &region);
+        let text = build_preview_text(&page_name, page.width, page.height, &region);
         let mut updated_region = region.clone();
         updated_region.source_text = text.clone();
         updated_region.status = if updated_region.translated_text.trim().is_empty() {
@@ -119,6 +123,14 @@ pub fn run_page_ocr(
         } else {
             "translated".into()
         };
+        updated_region.ocr_status = "done".into();
+        updated_region.ocr_engine = Some(OCR_ENGINE_NAME.into());
+        updated_region.ocr_updated_at = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as i64)
+                .unwrap_or_default(),
+        );
         repository.upsert_region(updated_region)?;
 
         results.push(OcrRegionResult {

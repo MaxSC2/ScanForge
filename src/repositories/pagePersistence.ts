@@ -1,4 +1,5 @@
 import type { Page, ProjectMeta, ProjectRecord } from '../types';
+import { ensureProjectDomainDefaults } from './projectDefaults';
 import { pageRepository } from './pageRepository';
 import { projectRepository } from './projectRepository';
 import { regionRepository } from './regionRepository';
@@ -40,6 +41,7 @@ export async function syncPagesForProject(meta: ProjectMeta, pages: Page[]) {
   }
 
   await projectRepository.update(project);
+  await ensureProjectDomainDefaults(project.id);
 
   const existingPages = await pageRepository.listByProject(project.id);
   const incomingPageIds = new Set(pages.map((page) => page.id));
