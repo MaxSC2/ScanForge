@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -65,6 +65,68 @@ pub struct LocalProjectSummary {
 pub struct LocalProjectSaveResult {
     pub project: ProjectFile,
     pub summary: LocalProjectSummary,
+}
+
+#[derive(Debug, Clone)]
+struct DomainProjectRow {
+    id: String,
+    name: String,
+    created_at: i64,
+    updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+struct DomainPageRow {
+    id: String,
+    order: i64,
+    image_path: String,
+    width: i64,
+    height: i64,
+}
+
+#[derive(Debug, Clone)]
+struct DomainRegionRow {
+    id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    rotation: f64,
+    source_text: String,
+    translated_text: String,
+    status: String,
+    locked: bool,
+    visible: bool,
+    ocr_confidence: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SnapshotRegion {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    x: f64,
+    #[serde(default)]
+    y: f64,
+    #[serde(default)]
+    width: f64,
+    #[serde(default)]
+    height: f64,
+    #[serde(default)]
+    rotation: f64,
+    #[serde(default)]
+    source_text: String,
+    #[serde(default)]
+    translated_text: String,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    locked: bool,
+    #[serde(default = "default_true")]
+    visible: bool,
+    #[serde(default)]
+    ocr_confidence: Option<f64>,
 }
 
 impl ProjectRepository {
@@ -162,6 +224,7 @@ impl ProjectRepository {
             ))
             .map_err(|error| error.to_string())?;
 
+        migrate_snapshot_projects(&connection)?;
         Ok(())
     }
 
@@ -185,6 +248,27 @@ impl ProjectRepository {
         };
         let payload_json = serde_json::to_string(&project).map_err(|error| error.to_string())?;
         let connection = self.connect()?;
+
+        connection
+            .execute(
+                &format!(
+                    "
+                    INSERT INTO {PROJECTS_TABLE} (id, name, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4)
+                    ON CONFLICT(id) DO UPDATE SET
+                      name = excluded.name,
+                      created_at = excluded.created_at,
+                      updated_at = excluded.updated_at
+                    "
+                ),
+                params![
+                    project_id,
+                    project.meta.name,
+                    project.meta.created_at,
+                    project.meta.updated_at,
+                ],
+            )
+            .map_err(|error| error.to_string())?;
 
         connection
             .execute(
@@ -225,65 +309,74 @@ impl ProjectRepository {
 
     pub fn load_project(&self, id: String) -> Result<ProjectFile, String> {
         let connection = self.connect()?;
-        let payload_json = connection
-            .query_row(
-                &format!("SELECT payload_json FROM {PROJECT_SNAPSHOTS_TABLE} WHERE id = ?1"),
-                params![id.clone()],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())?;
+        migrate_snapshot_projects(&connection)?;
 
-        connection
-            .execute(
-                &format!("UPDATE {PROJECT_SNAPSHOTS_TABLE} SET last_opened_at = ?1 WHERE id = ?2"),
-                params![now_ms(), id],
-            )
-            .map_err(|error| error.to_string())?;
+        let project_row = get_project_row(&connection, id.clone())?
+            .ok_or_else(|| format!("Local project {id} was not found"))?;
 
-        serde_json::from_str(&payload_json).map_err(|error| error.to_string())
+        update_snapshot_last_opened(&connection, id.clone())?;
+
+        if let Some(mut snapshot) = load_snapshot_backup(&connection, id)? {
+            snapshot.meta = ProjectMeta {
+                local_project_id: Some(project_row.id),
+                name: project_row.name,
+                created_at: project_row.created_at,
+                updated_at: project_row.updated_at,
+            };
+            return Ok(snapshot);
+        }
+
+        build_project_from_domain(&connection, project_row)
     }
 
     pub fn load_latest_project(&self) -> Result<Option<ProjectFile>, String> {
         let connection = self.connect()?;
-        let row = connection
+        migrate_snapshot_projects(&connection)?;
+
+        let latest_project_id = connection
             .query_row(
                 &format!(
                     "
-                    SELECT id, payload_json
-                    FROM {PROJECT_SNAPSHOTS_TABLE}
-                    ORDER BY COALESCE(last_opened_at, updated_at) DESC
+                    SELECT p.id
+                    FROM {PROJECTS_TABLE} p
+                    LEFT JOIN {PROJECT_SNAPSHOTS_TABLE} s ON s.id = p.id
+                    ORDER BY COALESCE(s.last_opened_at, p.updated_at) DESC, p.updated_at DESC
                     LIMIT 1
                     "
                 ),
                 [],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| row.get::<_, String>(0),
             )
             .optional()
             .map_err(|error| error.to_string())?;
 
-        let Some((id, payload_json)) = row else {
-            return Ok(None);
-        };
-
-        connection
-            .execute(
-                &format!("UPDATE {PROJECT_SNAPSHOTS_TABLE} SET last_opened_at = ?1 WHERE id = ?2"),
-                params![now_ms(), id],
-            )
-            .map_err(|error| error.to_string())?;
-
-        let project = serde_json::from_str(&payload_json).map_err(|error| error.to_string())?;
-        Ok(Some(project))
+        match latest_project_id {
+            Some(id) => self.load_project(id).map(Some),
+            None => Ok(None),
+        }
     }
 
     pub fn list_projects(&self) -> Result<Vec<LocalProjectSummary>, String> {
         let connection = self.connect()?;
+        migrate_snapshot_projects(&connection)?;
         let mut statement = connection
             .prepare(&format!(
                 "
-                SELECT id, name, created_at, updated_at, page_count, last_opened_at
-                FROM {PROJECT_SNAPSHOTS_TABLE}
-                ORDER BY updated_at DESC
+                SELECT
+                  p.id,
+                  p.name,
+                  p.created_at,
+                  p.updated_at,
+                  COALESCE(page_counts.page_count, 0) AS page_count,
+                  s.last_opened_at
+                FROM {PROJECTS_TABLE} p
+                LEFT JOIN (
+                  SELECT project_id, COUNT(*) AS page_count
+                  FROM {PAGES_TABLE}
+                  GROUP BY project_id
+                ) page_counts ON page_counts.project_id = p.id
+                LEFT JOIN {PROJECT_SNAPSHOTS_TABLE} s ON s.id = p.id
+                ORDER BY COALESCE(s.last_opened_at, p.updated_at) DESC, p.updated_at DESC
                 "
             ))
             .map_err(|error| error.to_string())?;
@@ -304,6 +397,401 @@ impl ProjectRepository {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
     }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn normalize_snapshot_region_status(region: &SnapshotRegion) -> String {
+    if let Some(status) = region.status.clone() {
+        return status;
+    }
+
+    if !region.translated_text.trim().is_empty() {
+        return "translated".into();
+    }
+
+    if !region.source_text.trim().is_empty() {
+        return "ocr_done".into();
+    }
+
+    "idle".into()
+}
+
+fn derive_file_name(page_order: i64, image_path: &str) -> String {
+    if !image_path.starts_with("data:") {
+        let normalized = image_path.replace('\\', "/");
+        if let Some(segment) = normalized.rsplit('/').next() {
+            return segment.to_string();
+        }
+    }
+
+    format!("page-{page_order}.png")
+}
+
+fn build_project_from_domain(
+    connection: &Connection,
+    project: DomainProjectRow,
+) -> Result<ProjectFile, String> {
+    let pages = list_pages_by_project(connection, project.id.clone())?;
+
+    let project_pages = pages
+        .into_iter()
+        .map(|page| {
+            let regions = list_regions_by_page(connection, page.id.clone())?
+                .into_iter()
+                .enumerate()
+                .map(|(index, region)| {
+                    Ok(json!({
+                        "id": region.id,
+                        "label": format!("Region {}", index + 1),
+                        "x": region.x,
+                        "y": region.y,
+                        "width": region.width,
+                        "height": region.height,
+                        "rotation": region.rotation,
+                        "sourceText": region.source_text,
+                        "translatedText": region.translated_text,
+                        "status": region.status,
+                        "kind": "speech",
+                        "order": index + 1,
+                        "notes": "",
+                        "locked": region.locked,
+                        "visible": region.visible,
+                        "ocrConfidence": region.ocr_confidence
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+
+            Ok(ProjectFilePage {
+                id: page.id,
+                file_name: derive_file_name(page.order, &page.image_path),
+                image_data_url: page.image_path,
+                natural_width: page.width,
+                natural_height: page.height,
+                regions,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    let active_page_id = project_pages.first().map(|page| page.id.clone());
+
+    Ok(ProjectFile {
+        version: 1,
+        meta: ProjectMeta {
+            local_project_id: Some(project.id),
+            name: project.name,
+            created_at: project.created_at,
+            updated_at: project.updated_at,
+        },
+        pages: project_pages,
+        active_page_id,
+    })
+}
+
+fn migrate_snapshot_projects(connection: &Connection) -> Result<(), String> {
+    if !table_exists(connection, PROJECT_SNAPSHOTS_TABLE)? {
+        return Ok(());
+    }
+
+    let mut statement = connection
+        .prepare(&format!(
+            "
+            SELECT s.id, s.payload_json
+            FROM {PROJECT_SNAPSHOTS_TABLE} s
+            LEFT JOIN {PROJECTS_TABLE} p ON p.id = s.id
+            WHERE p.id IS NULL
+            ORDER BY s.updated_at ASC
+            "
+        ))
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .map_err(|error| error.to_string())?;
+
+    for row in rows {
+        let (snapshot_id, payload_json) = row.map_err(|error| error.to_string())?;
+        let mut project =
+            serde_json::from_str::<ProjectFile>(&payload_json).map_err(|error| error.to_string())?;
+        project.meta.local_project_id = Some(
+            project
+                .meta
+                .local_project_id
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or(snapshot_id),
+        );
+
+        import_snapshot_project_into_domain(connection, &project)?;
+    }
+
+    Ok(())
+}
+
+fn import_snapshot_project_into_domain(
+    connection: &Connection,
+    project: &ProjectFile,
+) -> Result<(), String> {
+    let project_id = project
+        .meta
+        .local_project_id
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "Snapshot project is missing localProjectId".to_string())?;
+
+    connection
+        .execute(
+            &format!(
+                "
+                INSERT INTO {PROJECTS_TABLE} (id, name, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4)
+                ON CONFLICT(id) DO UPDATE SET
+                  name = excluded.name,
+                  created_at = excluded.created_at,
+                  updated_at = excluded.updated_at
+                "
+            ),
+            params![
+                project_id.clone(),
+                project.meta.name,
+                project.meta.created_at,
+                project.meta.updated_at,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            &format!(
+                "
+                DELETE FROM {REGIONS_TABLE}
+                WHERE page_id IN (
+                  SELECT id FROM {PAGES_TABLE} WHERE project_id = ?1
+                )
+                "
+            ),
+            params![project_id.clone()],
+        )
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            &format!("DELETE FROM {PAGES_TABLE} WHERE project_id = ?1"),
+            params![project_id.clone()],
+        )
+        .map_err(|error| error.to_string())?;
+
+    for (page_index, page) in project.pages.iter().enumerate() {
+        connection
+            .execute(
+                &format!(
+                    "
+                    INSERT INTO {PAGES_TABLE} (id, project_id, page_order, image_path, width, height)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    "
+                ),
+                params![
+                    page.id,
+                    project_id.clone(),
+                    (page_index as i64) + 1,
+                    page.image_data_url,
+                    page.natural_width,
+                    page.natural_height,
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+
+        for raw_region in &page.regions {
+            let region = serde_json::from_value::<SnapshotRegion>(raw_region.clone())
+                .unwrap_or_else(|_| SnapshotRegion::default());
+
+            if region.id.trim().is_empty() {
+                continue;
+            }
+
+            connection
+                .execute(
+                    &format!(
+                        "
+                        INSERT INTO {REGIONS_TABLE} (
+                          id,
+                          page_id,
+                          x,
+                          y,
+                          width,
+                          height,
+                          rotation,
+                          source_text,
+                          translated_text,
+                          status,
+                          locked,
+                          visible,
+                          ocr_confidence
+                        )
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                        "
+                    ),
+                    params![
+                        region.id,
+                        page.id,
+                        region.x,
+                        region.y,
+                        region.width,
+                        region.height,
+                        region.rotation,
+                        region.source_text,
+                        region.translated_text,
+                        normalize_snapshot_region_status(&region),
+                        bool_to_sql(region.locked),
+                        bool_to_sql(region.visible),
+                        region.ocr_confidence,
+                    ],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+fn get_project_row(connection: &Connection, id: String) -> Result<Option<DomainProjectRow>, String> {
+    connection
+        .query_row(
+            &format!(
+                "
+                SELECT id, name, created_at, updated_at
+                FROM {PROJECTS_TABLE}
+                WHERE id = ?1
+                "
+            ),
+            params![id],
+            |row| {
+                Ok(DomainProjectRow {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    created_at: row.get(2)?,
+                    updated_at: row.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+fn list_pages_by_project(
+    connection: &Connection,
+    project_id: String,
+) -> Result<Vec<DomainPageRow>, String> {
+    let mut statement = connection
+        .prepare(&format!(
+            "
+            SELECT id, project_id, page_order, image_path, width, height
+            FROM {PAGES_TABLE}
+            WHERE project_id = ?1
+            ORDER BY page_order ASC, id ASC
+            "
+        ))
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map(params![project_id], |row| {
+            Ok(DomainPageRow {
+                id: row.get(0)?,
+                order: row.get(2)?,
+                image_path: row.get(3)?,
+                width: row.get(4)?,
+                height: row.get(5)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn list_regions_by_page(
+    connection: &Connection,
+    page_id: String,
+) -> Result<Vec<DomainRegionRow>, String> {
+    let mut statement = connection
+        .prepare(&format!(
+            "
+            SELECT
+              id,
+              page_id,
+              x,
+              y,
+              width,
+              height,
+              rotation,
+              source_text,
+              translated_text,
+              status,
+              locked,
+              visible,
+              ocr_confidence
+            FROM {REGIONS_TABLE}
+            WHERE page_id = ?1
+            ORDER BY rowid ASC
+            "
+        ))
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map(params![page_id], |row| {
+            Ok(DomainRegionRow {
+                id: row.get(0)?,
+                x: row.get(2)?,
+                y: row.get(3)?,
+                width: row.get(4)?,
+                height: row.get(5)?,
+                rotation: row.get(6)?,
+                source_text: row.get(7)?,
+                translated_text: row.get(8)?,
+                status: row.get(9)?,
+                locked: sql_to_bool(row.get::<_, i64>(10)?),
+                visible: sql_to_bool(row.get::<_, i64>(11)?),
+                ocr_confidence: row.get(12)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_snapshot_backup(connection: &Connection, id: String) -> Result<Option<ProjectFile>, String> {
+    let payload = connection
+        .query_row(
+            &format!("SELECT payload_json FROM {PROJECT_SNAPSHOTS_TABLE} WHERE id = ?1"),
+            params![id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    match payload {
+        Some(payload_json) => serde_json::from_str(&payload_json)
+            .map(Some)
+            .map_err(|error| error.to_string()),
+        None => Ok(None),
+    }
+}
+
+fn update_snapshot_last_opened(connection: &Connection, id: String) -> Result<(), String> {
+    if !table_exists(connection, PROJECT_SNAPSHOTS_TABLE)? {
+        return Ok(());
+    }
+
+    connection
+        .execute(
+            &format!("UPDATE {PROJECT_SNAPSHOTS_TABLE} SET last_opened_at = ?1 WHERE id = ?2"),
+            params![now_ms(), id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 fn migrate_legacy_snapshot_table(connection: &Connection) -> Result<(), String> {
@@ -369,6 +857,14 @@ fn table_has_column(
     }
 
     Ok(false)
+}
+
+fn bool_to_sql(value: bool) -> i64 {
+    if value { 1 } else { 0 }
+}
+
+fn sql_to_bool(value: i64) -> bool {
+    value != 0
 }
 
 fn now_ms() -> i64 {
