@@ -1,254 +1,359 @@
-import { useState } from 'react';
-import { useRegionStore } from '../../stores/useRegionStore';
-import { usePageStore } from '../../stores/usePageStore';
-import { REGION_KIND_OPTIONS, getRegionColor } from '../../types';
-import type { Region, RegionKind } from '../../types';
-import {
-  ChevronDown,
-  ChevronRight,
-  Settings2,
-  Type,
-  Box,
-  MessageSquare,
-  Languages,
-  StickyNote,
-  Trash2,
-  Copy,
-  Lock,
-  Unlock,
-  Eye,
-  EyeOff,
-  Layers,
-  Crosshair,
-  GripVertical,
-} from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   DragDropContext,
-  Droppable,
   Draggable,
+  Droppable,
   type DropResult,
 } from '@hello-pangea/dnd';
+import {
+  Box,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Crosshair,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Languages,
+  Layers,
+  Lock,
+  MessageSquare,
+  Settings2,
+  StickyNote,
+  Trash2,
+  Type,
+  Unlock,
+} from 'lucide-react';
+import { usePageStore } from '../../stores/usePageStore';
+import { useRegionStore } from '../../stores/useRegionStore';
+import { REGION_KIND_OPTIONS, getRegionColor } from '../../types';
+import type { Region, RegionKind } from '../../types';
+
+type InspectorView = 'details' | 'regions';
 
 export function RegionInspector() {
-  const selectedRegionId = useRegionStore((s) => s.selectedRegionId);
-  const updateRegion = useRegionStore((s) => s.updateRegion);
-  const deleteRegion = useRegionStore((s) => s.deleteRegion);
-  const duplicateRegion = useRegionStore((s) => s.duplicateRegion);
+  const [activeView, setActiveView] = useState<InspectorView>('details');
 
-  const activePage = usePageStore((s) => {
-    const id = s.activePageId;
-    return id ? s.pages.find((p) => p.id === id) : undefined;
+  const selectedRegionId = useRegionStore((state) => state.selectedRegionId);
+  const updateRegion = useRegionStore((state) => state.updateRegion);
+  const deleteRegion = useRegionStore((state) => state.deleteRegion);
+  const duplicateRegion = useRegionStore((state) => state.duplicateRegion);
+
+  const activePage = usePageStore((state) => {
+    const id = state.activePageId;
+    return id ? state.pages.find((page) => page.id === id) : undefined;
   });
 
-  const region = activePage?.regions.find((r) => r.id === selectedRegionId);
+  const region = activePage?.regions.find((item) => item.id === selectedRegionId);
+
+  useEffect(() => {
+    if (selectedRegionId) {
+      setActiveView('details');
+    }
+  }, [selectedRegionId]);
 
   if (!activePage) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
-        <div className="w-12 h-12 rounded-xl bg-zinc-800/60 flex items-center justify-center">
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800/60">
           <Settings2 size={20} className="text-zinc-600" />
         </div>
-        <p className="text-xs text-zinc-500 font-medium">Страница не открыта</p>
-      </div>
-    );
-  }
-
-  if (!region) {
-    return (
-      <div className="flex flex-col h-full">
-        <InspectorHeader count={activePage.regions.length} />
-
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
-          <div className="w-12 h-12 rounded-xl bg-zinc-800/60 flex items-center justify-center">
-            <Crosshair size={20} className="text-zinc-600" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-400 font-medium">Регион не выбран</p>
-            <p className="text-[11px] text-zinc-600 mt-1">
-              Кликни по региону на холсте или нарисуй новый
-            </p>
-          </div>
-        </div>
-
-        {/* Region list */}
-        {activePage.regions.length > 0 && (
-          <RegionListPanel
-            regions={activePage.regions}
-            selectedId={null}
-            pageId={activePage.id}
-          />
-        )}
+        <p className="text-xs font-medium text-zinc-500">Страница не открыта</p>
       </div>
     );
   }
 
   const pageId = activePage.id;
-  const update = (patch: Partial<Region>) =>
+  const update = (patch: Partial<Region>) => {
+    if (!region) return;
     updateRegion(pageId, region.id, patch);
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      <InspectorHeader count={activePage.regions.length} />
-
-      <div className="flex-1 overflow-y-auto">
-        {/* Quick actions bar */}
-        <div className="flex items-center gap-1 px-3 py-2 border-b border-zinc-800/60">
-          <button
-            onClick={() => update({ locked: !region.locked })}
-            className={`p-1.5 rounded transition-colors ${region.locked ? 'text-amber-400 bg-amber-500/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
-            title={region.locked ? 'Разблокировать' : 'Заблокировать'}
-          >
-            {region.locked ? <Lock size={13} /> : <Unlock size={13} />}
-          </button>
-          <button
-            onClick={() => update({ visible: !region.visible })}
-            className={`p-1.5 rounded transition-colors ${!region.visible ? 'text-zinc-600 bg-zinc-800' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
-            title={region.visible ? 'Скрыть' : 'Показать'}
-          >
-            {region.visible ? <Eye size={13} /> : <EyeOff size={13} />}
-          </button>
-          <button
-            onClick={() => duplicateRegion(pageId, region.id)}
-            className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-            title="Дублировать"
-          >
-            <Copy size={13} />
-          </button>
-          <div className="flex-1" />
-          <button
-            onClick={() => deleteRegion(pageId, region.id)}
-            className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            title="Удалить регион"
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
-
-        {/* Properties */}
-        <AccordionSection title="Свойства" icon={<Type size={12} />} defaultOpen>
-          <div className="flex flex-col gap-2.5">
-            {/* Label */}
-            <Field label="Название">
-              <input
-                type="text"
-                value={region.label}
-                onChange={(e) => update({ label: e.target.value })}
-                className="input-field"
-              />
-            </Field>
-
-            {/* Kind */}
-            <Field label="Тип">
-              <div className="flex gap-1">
-                {REGION_KIND_OPTIONS.map((o) => {
-                  const isActive = region.kind === o.value;
-                  return (
-                    <button
-                      key={o.value}
-                      onClick={() => update({ kind: o.value as RegionKind })}
-                      className={`flex-1 px-2 py-1.5 rounded text-[10px] font-medium transition-all border ${
-                        isActive
-                          ? 'border-current'
-                          : 'border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'
-                      }`}
-                      style={isActive ? { color: o.color, borderColor: o.color, backgroundColor: `${o.color}15` } : {}}
-                    >
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
-
-            {/* Order */}
-            <Field label="Порядок чтения">
-              <input
-                type="number"
-                value={region.order}
-                onChange={(e) => update({ order: Math.max(1, Number(e.target.value)) })}
-                className="input-field w-20 text-center tabular-nums"
-                min={1}
-              />
-            </Field>
-          </div>
-        </AccordionSection>
-
-        {/* Geometry */}
-        <AccordionSection title="Геометрия" icon={<Box size={12} />} defaultOpen>
-          <div className="grid grid-cols-2 gap-2">
-            <NumField label="X" value={region.x} onChange={(v) => update({ x: v })} />
-            <NumField label="Y" value={region.y} onChange={(v) => update({ y: v })} />
-            <NumField label="Ширина" value={region.width} onChange={(v) => update({ width: v })} />
-            <NumField label="Высота" value={region.height} onChange={(v) => update({ height: v })} />
-          </div>
-        </AccordionSection>
-
-        {/* Source Text */}
-        <AccordionSection title="Исходный текст" icon={<MessageSquare size={12} />} defaultOpen>
-          <textarea
-            rows={4}
-            value={region.sourceText}
-            onChange={(e) => update({ sourceText: e.target.value })}
-            className="input-field resize-none"
-            placeholder="Оригинальный текст (результат OCR)..."
-          />
-          {region.sourceText && (
-            <p className="text-[10px] text-zinc-600 mt-1">
-              Символов: {region.sourceText.length}
-            </p>
-          )}
-        </AccordionSection>
-
-        {/* Translation */}
-        <AccordionSection title="Перевод" icon={<Languages size={12} />} defaultOpen>
-          <textarea
-            rows={4}
-            value={region.translatedText}
-            onChange={(e) => update({ translatedText: e.target.value })}
-            className="input-field resize-none"
-            placeholder="Переведенный текст..."
-          />
-          {region.translatedText && (
-            <p className="text-[10px] text-zinc-600 mt-1">
-              Символов: {region.translatedText.length}
-            </p>
-          )}
-        </AccordionSection>
-
-        {/* Notes */}
-        <AccordionSection title="Заметки" icon={<StickyNote size={12} />}>
-          <textarea
-            rows={3}
-            value={region.notes}
-            onChange={(e) => update({ notes: e.target.value })}
-            className="input-field resize-none"
-            placeholder="Внутренние заметки..."
-          />
-        </AccordionSection>
-      </div>
-
-      {/* Region list */}
-      <RegionListPanel
-        regions={activePage.regions}
-        selectedId={region.id}
-        pageId={pageId}
+    <div className="flex h-full flex-col">
+      <InspectorHeader
+        count={activePage.regions.length}
+        activeView={activeView}
+        onChange={setActiveView}
       />
+
+      {activeView === 'regions' ? (
+        activePage.regions.length > 0 ? (
+          <RegionListPanel
+            regions={activePage.regions}
+            selectedId={region?.id ?? null}
+            pageId={pageId}
+            fullHeight
+          />
+        ) : (
+          <InspectorEmptyState
+            icon={<Layers size={20} className="text-zinc-600" />}
+            title="Регионов пока нет"
+            description="Нарисуй регион на холсте, и он появится в списке."
+          />
+        )
+      ) : region ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-1 border-b border-zinc-800/60 px-3 py-2">
+            <button
+              onClick={() => update({ locked: !region.locked })}
+              className={`rounded p-1.5 transition-colors ${
+                region.locked
+                  ? 'bg-amber-500/10 text-amber-400'
+                  : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+              }`}
+              title={region.locked ? 'Разблокировать' : 'Заблокировать'}
+            >
+              {region.locked ? <Lock size={13} /> : <Unlock size={13} />}
+            </button>
+
+            <button
+              onClick={() => update({ visible: !region.visible })}
+              className={`rounded p-1.5 transition-colors ${
+                !region.visible
+                  ? 'bg-zinc-800 text-zinc-500'
+                  : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+              }`}
+              title={region.visible ? 'Скрыть' : 'Показать'}
+            >
+              {region.visible ? <Eye size={13} /> : <EyeOff size={13} />}
+            </button>
+
+            <button
+              onClick={() => duplicateRegion(pageId, region.id)}
+              className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+              title="Дублировать"
+            >
+              <Copy size={13} />
+            </button>
+
+            <div className="flex-1" />
+
+            <button
+              onClick={() => deleteRegion(pageId, region.id)}
+              className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+              title="Удалить регион"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <AccordionSection title="Свойства" icon={<Type size={12} />} defaultOpen>
+              <div className="flex flex-col gap-2.5">
+                <Field label="Название">
+                  <input
+                    type="text"
+                    value={region.label}
+                    onChange={(event) => update({ label: event.target.value })}
+                    className="input-field"
+                  />
+                </Field>
+
+                <Field label="Тип">
+                  <div className="flex gap-1">
+                    {REGION_KIND_OPTIONS.map((option) => {
+                      const isActive = region.kind === option.value;
+
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => update({ kind: option.value as RegionKind })}
+                          className={`flex-1 rounded border px-2 py-1.5 text-[10px] font-medium transition-all ${
+                            isActive
+                              ? 'border-current'
+                              : 'border-zinc-700/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                          }`}
+                          style={
+                            isActive
+                              ? {
+                                  color: option.color,
+                                  borderColor: option.color,
+                                  backgroundColor: `${option.color}15`,
+                                }
+                              : {}
+                          }
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+
+                <Field label="Порядок чтения">
+                  <input
+                    type="number"
+                    value={region.order}
+                    onChange={(event) => update({ order: Math.max(1, Number(event.target.value)) })}
+                    className="input-field w-20 text-center tabular-nums"
+                    min={1}
+                  />
+                </Field>
+              </div>
+            </AccordionSection>
+
+            <AccordionSection title="Геометрия" icon={<Box size={12} />} defaultOpen>
+              <div className="grid grid-cols-2 gap-2">
+                <NumField label="X" value={region.x} onChange={(value) => update({ x: value })} />
+                <NumField label="Y" value={region.y} onChange={(value) => update({ y: value })} />
+                <NumField
+                  label="Ширина"
+                  value={region.width}
+                  onChange={(value) => update({ width: value })}
+                />
+                <NumField
+                  label="Высота"
+                  value={region.height}
+                  onChange={(value) => update({ height: value })}
+                />
+              </div>
+            </AccordionSection>
+
+            <AccordionSection title="Исходный текст" icon={<MessageSquare size={12} />} defaultOpen>
+              <textarea
+                rows={4}
+                value={region.sourceText}
+                onChange={(event) => update({ sourceText: event.target.value })}
+                className="input-field resize-none"
+                placeholder="Оригинальный текст или результат OCR..."
+              />
+              {region.sourceText && (
+                <p className="mt-1 text-[10px] text-zinc-600">Символов: {region.sourceText.length}</p>
+              )}
+            </AccordionSection>
+
+            <AccordionSection title="Перевод" icon={<Languages size={12} />} defaultOpen>
+              <textarea
+                rows={4}
+                value={region.translatedText}
+                onChange={(event) => update({ translatedText: event.target.value })}
+                className="input-field resize-none"
+                placeholder="Переведенный текст..."
+              />
+              {region.translatedText && (
+                <p className="mt-1 text-[10px] text-zinc-600">
+                  Символов: {region.translatedText.length}
+                </p>
+              )}
+            </AccordionSection>
+
+            <AccordionSection title="Заметки" icon={<StickyNote size={12} />}>
+              <textarea
+                rows={3}
+                value={region.notes}
+                onChange={(event) => update({ notes: event.target.value })}
+                className="input-field resize-none"
+                placeholder="Внутренние заметки..."
+              />
+            </AccordionSection>
+          </div>
+        </div>
+      ) : (
+        <InspectorEmptyState
+          icon={<Crosshair size={20} className="text-zinc-600" />}
+          title="Регион не выбран"
+          description="Кликни по региону на холсте или открой список регионов."
+          action={
+            activePage.regions.length > 0 ? (
+              <button
+                onClick={() => setActiveView('regions')}
+                className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
+              >
+                Открыть список регионов
+              </button>
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }
 
-/* ─── Sub-components ─── */
-
-function InspectorHeader({ count }: { count: number }) {
+function InspectorHeader({
+  count,
+  activeView,
+  onChange,
+}: {
+  count: number;
+  activeView: InspectorView;
+  onChange: (view: InspectorView) => void;
+}) {
   return (
-    <div className="flex items-center px-3 py-2 border-b border-zinc-800">
-      <Settings2 size={12} className="text-zinc-500 mr-1.5" />
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex-1">
+    <div className="border-b border-zinc-800 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Settings2 size={12} className="text-zinc-500" />
+        <h2 className="flex-1 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Инспектор
-      </h2>
-      <span className="text-[10px] text-zinc-600 tabular-nums">
-          Регионов: {count}
-      </span>
+        </h2>
+        <span className="text-[10px] tabular-nums text-zinc-600">Регионов: {count}</span>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-1">
+        <InspectorTabButton
+          active={activeView === 'details'}
+          icon={<Type size={12} />}
+          label="Детали"
+          onClick={() => onChange('details')}
+        />
+        <InspectorTabButton
+          active={activeView === 'regions'}
+          icon={<Layers size={12} />}
+          label="Регионы"
+          onClick={() => onChange('regions')}
+        />
+      </div>
+    </div>
+  );
+}
+
+function InspectorTabButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium transition-colors ${
+        active
+          ? 'bg-indigo-500/15 text-indigo-200 ring-1 ring-indigo-500/20'
+          : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function InspectorEmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800/60">
+        {icon}
+      </div>
+      <div>
+        <p className="text-xs font-medium text-zinc-400">{title}</p>
+        <p className="mt-1 text-[11px] text-zinc-600">{description}</p>
+      </div>
+      {action}
     </div>
   );
 }
@@ -260,8 +365,8 @@ function AccordionSection({
   defaultOpen = false,
 }: {
   title: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
+  icon?: ReactNode;
+  children: ReactNode;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -270,7 +375,7 @@ function AccordionSection({
     <div className="border-b border-zinc-800/60">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors"
+        className="flex w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-300"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         {icon}
@@ -281,10 +386,10 @@ function AccordionSection({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
         {label}
       </span>
       {children}
@@ -299,15 +404,15 @@ function NumField({
 }: {
   label: string;
   value: number;
-  onChange: (v: number) => void;
+  onChange: (value: number) => void;
 }) {
   return (
     <label className="flex flex-col gap-0.5">
-      <span className="text-[10px] text-zinc-500 font-medium">{label}</span>
+      <span className="text-[10px] font-medium text-zinc-500">{label}</span>
       <input
         type="number"
         value={value}
-        onChange={(e) => onChange(Math.round(Number(e.target.value)))}
+        onChange={(event) => onChange(Math.round(Number(event.target.value)))}
         className="input-field text-center tabular-nums"
       />
     </label>
@@ -318,18 +423,20 @@ function RegionListPanel({
   regions,
   selectedId,
   pageId,
+  fullHeight = false,
 }: {
   regions: Region[];
   selectedId: string | null;
   pageId: string;
+  fullHeight?: boolean;
 }) {
-  const selectRegion = useRegionStore((s) => s.selectRegion);
-  const updateRegion = useRegionStore((s) => s.updateRegion);
-  const reorderRegions = useRegionStore((s) => s.reorderRegions);
+  const selectRegion = useRegionStore((state) => state.selectRegion);
+  const updateRegion = useRegionStore((state) => state.updateRegion);
+  const reorderRegions = useRegionStore((state) => state.reorderRegions);
 
   if (regions.length === 0) return null;
 
-  const orderedRegions = [...regions].sort((a, b) => a.order - b.order);
+  const orderedRegions = [...regions].sort((first, second) => first.order - second.order);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -337,33 +444,39 @@ function RegionListPanel({
   };
 
   return (
-    <div className="border-t border-zinc-800 flex-none max-h-56">
-      <div className="flex items-center px-3 py-1.5">
-        <Layers size={10} className="text-zinc-600 mr-1.5" />
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold flex-1">
+    <div
+      className={`flex flex-col ${
+        fullHeight ? 'min-h-0 flex-1' : 'max-h-56 flex-none border-t border-zinc-800'
+      }`}
+    >
+      <div className="flex items-center px-3 py-2">
+        <Layers size={10} className="mr-1.5 text-zinc-600" />
+        <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
           Все регионы
         </span>
-        <span className="text-[10px] text-zinc-600 tabular-nums">{regions.length}</span>
+        <span className="text-[10px] tabular-nums text-zinc-600">{regions.length}</span>
       </div>
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId={`region-list-${pageId}`}>
           {(dropProvided) => (
             <ul
               ref={dropProvided.innerRef}
               {...dropProvided.droppableProps}
-              className="overflow-y-auto max-h-44 pb-1 px-1"
+              className={`min-h-0 overflow-y-auto px-1 pb-1 ${fullHeight ? 'flex-1' : 'max-h-44'}`}
             >
-              {orderedRegions.map((r, index) => {
-                const isSelected = r.id === selectedId;
-                const color = getRegionColor(r.kind);
+              {orderedRegions.map((region, index) => {
+                const isSelected = region.id === selectedId;
+                const color = getRegionColor(region.kind);
+
                 return (
-                  <Draggable key={r.id} draggableId={r.id} index={index}>
+                  <Draggable key={region.id} draggableId={region.id} index={index}>
                     {(dragProvided, snapshot) => (
                       <li
                         ref={dragProvided.innerRef}
                         {...dragProvided.draggableProps}
-                        onClick={() => selectRegion(r.id)}
-                        className={`group flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all duration-100 ${
+                        onClick={() => selectRegion(region.id)}
+                        className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-all duration-100 ${
                           snapshot.isDragging
                             ? 'bg-zinc-700 ring-1 ring-indigo-500/30'
                             : isSelected
@@ -372,26 +485,33 @@ function RegionListPanel({
                         }`}
                       >
                         <span {...dragProvided.dragHandleProps}>
-                          <GripVertical size={10} className="text-zinc-600 flex-none" />
+                          <GripVertical size={10} className="flex-none text-zinc-600" />
                         </span>
+
                         <span
-                          className="w-2 h-2 rounded-full flex-none"
+                          className="h-2 w-2 flex-none rounded-full"
                           style={{ backgroundColor: color }}
                         />
-                        <span className="truncate flex-1">{r.order}. {r.label}</span>
-                        {r.locked && <Lock size={10} className="text-amber-500/60 flex-none" />}
-                        {!r.visible && <EyeOff size={10} className="text-zinc-600 flex-none" />}
+
+                        <span className="flex-1 truncate">
+                          {region.order}. {region.label}
+                        </span>
+
+                        {region.locked && <Lock size={10} className="flex-none text-amber-500/60" />}
+                        {!region.visible && <EyeOff size={10} className="flex-none text-zinc-600" />}
+
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateRegion(pageId, r.id, { visible: !r.visible });
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            updateRegion(pageId, region.id, { visible: !region.visible });
                           }}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-600 hover:text-zinc-300 transition-opacity flex-none"
+                          className="flex-none p-0.5 text-zinc-600 opacity-0 transition-opacity hover:text-zinc-300 group-hover:opacity-100"
                         >
-                          {r.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+                          {region.visible ? <Eye size={10} /> : <EyeOff size={10} />}
                         </button>
-                        <span className="text-[10px] text-zinc-600 tabular-nums flex-none">
-                          {r.width}×{r.height}
+
+                        <span className="flex-none text-[10px] tabular-nums text-zinc-600">
+                          {region.width}×{region.height}
                         </span>
                       </li>
                     )}

@@ -15,6 +15,8 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
   const inspectorOpen = useEditorStore((s) => s.inspectorOpen);
   const toggleSidebar = useEditorStore((s) => s.toggleSidebar);
   const toggleInspector = useEditorStore((s) => s.toggleInspector);
+  const sidebarWidth = 224;
+  const inspectorWidth = 272;
 
   return (
     <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden select-none">
@@ -28,9 +30,9 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
         {/* Left sidebar */}
         <aside
           className="flex-none border-r border-zinc-800 bg-zinc-900 overflow-hidden transition-[width] duration-200 ease-out"
-          style={{ width: sidebarOpen ? 240 : 0 }}
+          style={{ width: sidebarOpen ? sidebarWidth : 0 }}
         >
-          <div className="w-60 h-full overflow-y-auto">
+          <div className="h-full overflow-y-auto" style={{ width: sidebarWidth }}>
             {sidebar}
           </div>
         </aside>
@@ -61,9 +63,9 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
         {/* Right inspector */}
         <aside
           className="flex-none border-l border-zinc-800 bg-zinc-900 overflow-hidden transition-[width] duration-200 ease-out"
-          style={{ width: inspectorOpen ? 296 : 0 }}
+          style={{ width: inspectorOpen ? inspectorWidth : 0 }}
         >
-          <div className="w-[296px] h-full overflow-y-auto">
+          <div className="h-full overflow-y-auto" style={{ width: inspectorWidth }}>
             {inspector}
           </div>
         </aside>
