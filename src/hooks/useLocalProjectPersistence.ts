@@ -4,6 +4,7 @@ import { getProjectRepository } from '../storage';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useHistoryStore } from '../stores/useHistoryStore';
 import { usePageStore } from '../stores/usePageStore';
+import { useProjectLibraryStore } from '../stores/useProjectLibraryStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { useToastStore } from '../stores/useToastStore';
 import { hydrateProjectFile } from '../utils/persistence';
@@ -58,6 +59,7 @@ export function useLocalProjectPersistence() {
           hydrated.pages.length,
           hydrated.activePageId,
         );
+        void useProjectLibraryStore.getState().refresh();
         requestFitToPage();
         pushToast('Восстановлен локальный снимок проекта', 'info');
       } catch (error) {
@@ -74,7 +76,7 @@ export function useLocalProjectPersistence() {
 
   useEffect(() => {
     const token = buildPersistenceToken(meta, pages.length, activePageId);
-    if (pages.length === 0) return;
+    if (pages.length === 0 && !meta.localProjectId) return;
     if (isRestoringRef.current) return;
     if (token === lastPersistedTokenRef.current) return;
 
@@ -97,6 +99,7 @@ export function useLocalProjectPersistence() {
           if (useProjectStore.getState().meta.localProjectId !== result.project.meta.localProjectId) {
             useProjectStore.getState().setMeta(result.project.meta);
           }
+          void useProjectLibraryStore.getState().refresh();
         } catch (error) {
           console.warn('Local project autosave failed:', error);
         }

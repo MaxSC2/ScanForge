@@ -8,15 +8,20 @@ interface ProjectState {
   setMeta: (meta: ProjectMeta) => void;
 }
 
+export function createProjectMeta(name = 'Новый проект'): ProjectMeta {
+  const now = Date.now();
+  return {
+    name,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export const useProjectStore = create<ProjectState>((set) => ({
-  meta: {
-    name: 'Новый проект',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  },
+  meta: createProjectMeta(),
   setName: (name) =>
-    set((s) => ({ meta: { ...s.meta, name, updatedAt: Date.now() } })),
+    set((state) => ({ meta: { ...state.meta, name, updatedAt: Date.now() } })),
   touch: () =>
-    set((s) => ({ meta: { ...s.meta, updatedAt: Date.now() } })),
+    set((state) => ({ meta: { ...state.meta, updatedAt: Date.now() } })),
   setMeta: (meta) => set({ meta }),
 }));
