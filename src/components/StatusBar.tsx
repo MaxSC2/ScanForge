@@ -3,6 +3,7 @@ import {
   EyeOff,
   Focus,
   Grid3X3,
+  Languages,
   Layers,
   Map,
   MousePointer2,
@@ -26,6 +27,16 @@ export function StatusBar() {
 
   const runningJobs = useJobStore((state) => state.jobs.filter((job) => job.status === 'running').length);
   const queuedJobs = useJobStore((state) => state.jobs.filter((job) => job.status === 'queued').length);
+  const translationQueued = useJobStore(
+    (state) =>
+      state.jobs.filter((job) => job.stage === 'translate' && job.status !== 'done' && job.status !== 'failed')
+        .length,
+  );
+  const ocrQueued = useJobStore(
+    (state) =>
+      state.jobs.filter((job) => job.stage === 'ocr' && job.status !== 'done' && job.status !== 'failed')
+        .length,
+  );
 
   const zoom = useEditorStore((state) => state.zoom);
   const cursorPos = useEditorStore((state) => state.cursorPosition);
@@ -98,8 +109,19 @@ export function StatusBar() {
         {(runningJobs > 0 || queuedJobs > 0) && (
           <span className="flex items-center gap-1 text-zinc-400">
             <ScanText size={11} />
-            OCR: {runningJobs} active / {queuedJobs} queued
+            Jobs: {runningJobs} active / {queuedJobs} queued
           </span>
+        )}
+
+        {translationQueued > 0 && (
+          <span className="flex items-center gap-1 text-zinc-400">
+            <Languages size={11} />
+            TR: {translationQueued}
+          </span>
+        )}
+
+        {ocrQueued > 0 && translationQueued === 0 && (
+          <span className="text-zinc-600">OCR queue: {ocrQueued}</span>
         )}
 
         {focusMode && (

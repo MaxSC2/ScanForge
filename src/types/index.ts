@@ -15,6 +15,12 @@ export type {
   JobStatus,
 } from './job';
 export type {
+  TranslationInputItem,
+  TranslationPagePayload,
+  TranslationPageResult,
+  TranslationRegionResult,
+} from './translation';
+export type {
   OcrPagePayload,
   OcrPageResult,
   OcrRegionInput,

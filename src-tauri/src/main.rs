@@ -1,6 +1,7 @@
 mod domain_storage;
 mod ocr;
 mod storage;
+mod translation;
 
 use domain_storage::{
     delete_job_entities_by_project, delete_job_entity, delete_page_record,
@@ -20,6 +21,7 @@ use storage::{
     save_project_snapshot, ProjectRepository,
 };
 use tauri::Manager;
+use translation::run_page_translation;
 
 fn main() {
     tauri::Builder::default()
@@ -66,7 +68,8 @@ fn main() {
             upsert_job_entity,
             delete_job_entity,
             delete_job_entities_by_project,
-            run_page_ocr
+            run_page_ocr,
+            run_page_translation
         ])
         .run(tauri::generate_context!())
         .expect("error while running ScanForge");

@@ -18,6 +18,7 @@ interface EditorState {
   gridVisible: boolean;
   labelsVisible: boolean;
   minimapVisible: boolean;
+  translationOverwrite: boolean;
   /** Cursor canvas coords (for status bar) */
   cursorPosition: { x: number; y: number };
   viewRequestNonce: number;
@@ -46,6 +47,8 @@ interface EditorState {
   toggleGrid: () => void;
   toggleLabels: () => void;
   toggleMinimap: () => void;
+  toggleTranslationOverwrite: () => void;
+  setTranslationOverwrite: (value: boolean) => void;
   setCursorPosition: (pos: { x: number; y: number }) => void;
   requestFitToPage: () => void;
 }
@@ -71,6 +74,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   gridVisible: false,
   labelsVisible: true,
   minimapVisible: true,
+  translationOverwrite: false,
   cursorPosition: { x: 0, y: 0 },
   viewRequestNonce: 0,
 
@@ -122,6 +126,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
   toggleLabels: () => set((s) => ({ labelsVisible: !s.labelsVisible })),
   toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),
+  toggleTranslationOverwrite: () =>
+    set((state) => ({
+      translationOverwrite: !state.translationOverwrite,
+    })),
+  setTranslationOverwrite: (value) => set({ translationOverwrite: value }),
   setCursorPosition: (cursorPosition) => set({ cursorPosition }),
   requestFitToPage: () =>
     set((s) => ({

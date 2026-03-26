@@ -24,6 +24,7 @@ import {
   Type,
   Unlock,
 } from 'lucide-react';
+import { ProjectSettingsPanel } from '../settings/ProjectSettingsPanel';
 import { usePageStore } from '../../stores/usePageStore';
 import { useRegionStore } from '../../stores/useRegionStore';
 import { REGION_KIND_OPTIONS, getRegionColor } from '../../types';
@@ -76,6 +77,8 @@ export function RegionInspector() {
         activeView={activeView}
         onChange={setActiveView}
       />
+
+      <ProjectSettingsPanel />
 
       {activeView === 'regions' ? (
         activePage.regions.length > 0 ? (
@@ -218,6 +221,13 @@ export function RegionInspector() {
                 className="input-field resize-none"
                 placeholder="Оригинальный текст или результат OCR..."
               />
+              <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-zinc-500">
+                <StatusPill label={`OCR ${region.ocrStatus}`} />
+                {region.ocrEngine ? <StatusPill label={region.ocrEngine} /> : null}
+                {typeof region.ocrConfidence === 'number' ? (
+                  <StatusPill label={`conf ${Math.round(region.ocrConfidence * 100)}%`} />
+                ) : null}
+              </div>
               {region.sourceText && (
                 <p className="mt-1 text-[10px] text-zinc-600">Символов: {region.sourceText.length}</p>
               )}
@@ -231,6 +241,13 @@ export function RegionInspector() {
                 className="input-field resize-none"
                 placeholder="Переведенный текст..."
               />
+              <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-zinc-500">
+                <StatusPill label={`TR ${region.translationStatus}`} />
+                {region.translationProvider ? (
+                  <StatusPill label={region.translationProvider} />
+                ) : null}
+                {region.targetLanguage ? <StatusPill label={region.targetLanguage} /> : null}
+              </div>
               {region.translatedText && (
                 <p className="mt-1 text-[10px] text-zinc-600">
                   Символов: {region.translatedText.length}
@@ -416,6 +433,14 @@ function NumField({
         className="input-field text-center tabular-nums"
       />
     </label>
+  );
+}
+
+function StatusPill({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-zinc-800 bg-zinc-950/70 px-2 py-0.5 text-[10px] text-zinc-400">
+      {label}
+    </span>
   );
 }
 

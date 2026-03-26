@@ -8,6 +8,7 @@ import {
   Focus,
   FolderOpen,
   Hand,
+  Languages,
   Maximize,
   MousePointer2,
   Redo2,
@@ -26,6 +27,7 @@ import { useHistoryStore } from '../../stores/useHistoryStore';
 import { useJobStore } from '../../stores/useJobStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useProjectStore } from '../../stores/useProjectStore';
+import { useRegionStore } from '../../stores/useRegionStore';
 import { useToastStore } from '../../stores/useToastStore';
 import {
   exportPageImage,
@@ -51,6 +53,7 @@ export function Toolbar() {
   const stitching = usePageStore((state) => state.stitching);
 
   const queueOcrJobs = useJobStore((state) => state.queueOcrJobs);
+  const queueTranslationJobs = useJobStore((state) => state.queueTranslationJobs);
 
   const undo = useHistoryStore((state) => state.undo);
   const redo = useHistoryStore((state) => state.redo);
@@ -62,8 +65,10 @@ export function Toolbar() {
   const setTool = useEditorStore((state) => state.setTool);
   const focusMode = useEditorStore((state) => state.focusMode);
   const cleanView = useEditorStore((state) => state.cleanView);
+  const translationOverwrite = useEditorStore((state) => state.translationOverwrite);
   const toggleFocusMode = useEditorStore((state) => state.toggleFocusMode);
   const toggleCleanView = useEditorStore((state) => state.toggleCleanView);
+  const toggleTranslationOverwrite = useEditorStore((state) => state.toggleTranslationOverwrite);
   const viewMode = useEditorStore((state) => state.viewMode);
   const regionOverlaysVisible = useEditorStore((state) => state.regionOverlaysVisible);
   const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
@@ -77,15 +82,23 @@ export function Toolbar() {
 
   const pushToast = useToastStore((state) => state.push);
   const setMeta = useProjectStore((state) => state.setMeta);
+  const selectedRegionId = useRegionStore((state) => state.selectedRegionId);
 
   const activePage = activePageId ? pages.find((page) => page.id === activePageId) : null;
   const selectedSet = new Set(selectedPageIds);
   const selectedPagesInOrder = pages.filter((page) => selectedSet.has(page.id));
   const ocrTargetPageIds =
     selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : [];
+  const translationTargets =
+    selectedRegionId && activePageId
+      ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
+      : (selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : []).map(
+          (pageId) => ({ pageId }),
+        );
 
   const canStitch = selectedPageIds.length >= 2 && !stitching;
   const canRunOcr = ocrTargetPageIds.length > 0;
+  const canRunTranslation = translationTargets.length > 0;
 
   const tools: { id: EditorTool; icon: ReactNode; label: string; shortcut: string }[] = [
     { id: 'select', icon: <MousePointer2 size={14} />, label: 'Выбор', shortcut: 'V' },
@@ -144,6 +157,13 @@ export function Toolbar() {
     const queued = queueOcrJobs(ocrTargetPageIds);
     if (queued === 0) {
       pushToast('OCR уже выполняется для выбранных страниц или страницы не выбраны', 'warning');
+    }
+  };
+
+  const handleTranslate = () => {
+    const queued = queueTranslationJobs(translationTargets);
+    if (queued === 0) {
+      pushToast('Translation already queued for the selected target or nothing is selected', 'warning');
     }
   };
 
@@ -243,6 +263,25 @@ export function Toolbar() {
       >
         <ScanText size={14} />
         <span className="hidden xl:inline">OCR</span>
+      </IconButton>
+
+      <IconButton
+        onClick={handleTranslate}
+        tooltip="Run translation for the selected page or region (Ctrl+Shift+T)"
+        disabled={!canRunTranslation}
+      >
+        <Languages size={14} />
+        <span className="hidden xl:inline">Translate</span>
+      </IconButton>
+
+      <IconButton
+        active={translationOverwrite}
+        onClick={toggleTranslationOverwrite}
+        tooltip="Overwrite existing translations when running translation"
+        variant="ghost"
+      >
+        <RotateCcw size={14} />
+        <span className="hidden 2xl:inline">Overwrite</span>
       </IconButton>
 
       <IconButton

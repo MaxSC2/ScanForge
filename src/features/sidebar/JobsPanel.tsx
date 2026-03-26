@@ -2,6 +2,7 @@ import {
   CircleAlert,
   CircleCheckBig,
   Eraser,
+  Languages,
   LoaderCircle,
   RotateCcw,
   ScanText,
@@ -61,7 +62,7 @@ export function JobsPanel() {
             ) : (
               <ScanText size={11} className="text-zinc-500" />
             )}
-            {processing ? 'OCR worker active' : 'OCR worker idle'}
+            {processing ? 'Pipeline worker active' : 'Pipeline worker idle'}
           </div>
 
           <button
@@ -79,12 +80,13 @@ export function JobsPanel() {
             <div className="px-3 py-4 text-center">
               <p className="text-[11px] font-medium text-zinc-400">Очередь jobs пуста</p>
               <p className="mt-1 text-[10px] text-zinc-600">
-                Запусти OCR по выбранным страницам из верхней панели.
+                Запусти OCR или translation по выбранной странице из верхней панели.
               </p>
             </div>
           ) : (
             <ul className="max-h-56 overflow-y-auto p-1">
               {jobs.map((job) => {
+                const stageLabel = job.stage === 'ocr' ? 'OCR' : 'TR';
                 const statusIcon =
                   job.status === 'running' ? (
                     <LoaderCircle size={12} className="animate-spin text-indigo-400" />
@@ -92,6 +94,8 @@ export function JobsPanel() {
                     <CircleCheckBig size={12} className="text-emerald-400" />
                   ) : job.status === 'failed' ? (
                     <CircleAlert size={12} className="text-amber-400" />
+                  ) : job.stage === 'translate' ? (
+                    <Languages size={12} className="text-zinc-500" />
                   ) : (
                     <ScanText size={12} className="text-zinc-500" />
                   );
@@ -102,7 +106,7 @@ export function JobsPanel() {
                       <div className="mt-0.5">{statusIcon}</div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[11px] font-medium text-zinc-200">
-                          OCR · {job.pageName}
+                          {stageLabel} · {job.pageName}
                         </div>
                         <div className="mt-1 text-[10px] text-zinc-500">{job.message}</div>
                         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">

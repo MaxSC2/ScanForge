@@ -8,8 +8,10 @@ import {
   syncRegionsForPages,
 } from '../repositories';
 import { runPageOcr } from '../services/ocr';
+import { runPageTranslation } from '../services/translation';
 import { getProjectRepository } from '../storage';
 import type { JobRecord, JobResultSummary } from '../types';
+import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
 import { usePageStore } from './usePageStore';
 import { useProjectStore } from './useProjectStore';
@@ -17,17 +19,24 @@ import { useToastStore } from './useToastStore';
 
 const MAX_JOBS = 30;
 
+interface TranslationJobTarget {
+  pageId: string;
+  regionIds?: string[];
+}
+
 interface JobState {
   jobs: JobRecord[];
   processing: boolean;
   queueOcrJobs: (pageIds: string[]) => number;
+  queueTranslationJobs: (targets: TranslationJobTarget[]) => number;
   retryJob: (jobId: string) => void;
   clearFinished: () => void;
   loadJobsForCurrentProject: () => Promise<void>;
 }
 
-function summarizeResult(result: JobResultSummary) {
-  return `${result.engine}: filled ${result.filledCount}/${result.regionsProcessed}, skipped ${result.skippedCount}`;
+function summarizeResult(stage: JobRecord['stage'], result: JobResultSummary) {
+  const action = stage === 'ocr' ? 'filled' : 'translated';
+  return `${result.provider}: ${action} ${result.appliedCount}/${result.regionsProcessed}, skipped ${result.skippedCount}`;
 }
 
 function trimJobs(jobs: JobRecord[]) {
@@ -39,7 +48,7 @@ function trimJobs(jobs: JobRecord[]) {
 
 const projectRepository = getProjectRepository();
 
-async function ensureProjectSyncedForOcr() {
+async function ensureProjectSyncedForPipeline() {
   let meta = useProjectStore.getState().meta;
   if (!meta.localProjectId) {
     const project = await usePageStore.getState().toProjectFile();
@@ -59,7 +68,7 @@ async function ensureProjectSyncedForOcr() {
 async function persistCurrentJobs() {
   let meta = useProjectStore.getState().meta;
   if (!meta.localProjectId && useJobStore.getState().jobs.length > 0) {
-    meta = await ensureProjectSyncedForOcr();
+    meta = await ensureProjectSyncedForPipeline();
   }
 
   await syncJobsForProject(meta, useJobStore.getState().jobs);
@@ -131,16 +140,16 @@ async function runOcrJob(job: JobRecord) {
   }
 
   try {
-    await ensureProjectSyncedForOcr();
+    await ensureProjectSyncedForPipeline();
     const ocrResult = await runPageOcr(page, (progress, message) => {
       updateJob(job.id, { progress, message });
     });
     await refreshPageRegionsFromRepository(page.id);
 
     const result: JobResultSummary = {
-      engine: ocrResult.engine,
+      provider: ocrResult.engine,
       regionsProcessed: ocrResult.regionsProcessed,
-      filledCount: ocrResult.filledCount,
+      appliedCount: ocrResult.filledCount,
       skippedCount: ocrResult.skippedCount,
     };
 
@@ -149,7 +158,7 @@ async function runOcrJob(job: JobRecord) {
       finishedAt: Date.now(),
       progress: 1,
       result,
-      message: summarizeResult(result),
+      message: summarizeResult(job.stage, result),
     });
   } catch (error) {
     updateJob(job.id, {
@@ -163,6 +172,94 @@ async function runOcrJob(job: JobRecord) {
   }
 }
 
+async function runTranslationJob(job: JobRecord) {
+  updateJob(job.id, {
+    status: 'running',
+    startedAt: Date.now(),
+    progress: 0.05,
+    message: 'Preparing translation job',
+    error: null,
+    result: null,
+  });
+
+  const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
+  if (!page) {
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: 'Page not found',
+      message: 'Translation job failed',
+    });
+    return;
+  }
+
+  const targetRegions =
+    job.regionIds?.length && job.regionIds.length > 0
+      ? page.regions.filter((region) => job.regionIds?.includes(region.id))
+      : page.regions;
+
+  if (targetRegions.length === 0) {
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: 'No regions selected for translation',
+      message: 'Translation skipped: empty selection',
+    });
+    return;
+  }
+
+  try {
+    await ensureProjectSyncedForPipeline();
+    const overwriteExisting = useEditorStore.getState().translationOverwrite;
+    const translationResult = await runPageTranslation(
+      page,
+      {
+        ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
+        overwriteExisting,
+      },
+      (progress, message) => {
+        updateJob(job.id, { progress, message });
+      },
+    );
+    await refreshPageRegionsFromRepository(page.id);
+
+    const result: JobResultSummary = {
+      provider: translationResult.provider,
+      regionsProcessed: translationResult.regionsProcessed,
+      appliedCount: translationResult.translatedCount,
+      skippedCount: translationResult.skippedCount,
+    };
+
+    updateJob(job.id, {
+      status: 'done',
+      finishedAt: Date.now(),
+      progress: 1,
+      result,
+      message: summarizeResult(job.stage, result),
+    });
+  } catch (error) {
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: error instanceof Error ? error.message : 'Translation backend error',
+      message: 'Translation job failed',
+      result: null,
+    });
+  }
+}
+
+async function runJob(job: JobRecord) {
+  if (job.stage === 'ocr') {
+    await runOcrJob(job);
+    return;
+  }
+
+  await runTranslationJob(job);
+}
+
 async function pumpQueue() {
   const currentState = useJobStore.getState();
   if (currentState.processing) return;
@@ -173,11 +270,15 @@ async function pumpQueue() {
     while (true) {
       const nextJob = useJobStore.getState().jobs.find((job) => job.status === 'queued');
       if (!nextJob) break;
-      await runOcrJob(nextJob);
+      await runJob(nextJob);
     }
   } finally {
     useJobStore.setState({ processing: false });
   }
+}
+
+function buildTranslationJobSignature(pageId: string, regionIds?: string[]) {
+  return `${pageId}:${(regionIds ?? []).slice().sort().join(',')}`;
 }
 
 export const useJobStore = create<JobState>((set, get) => ({
@@ -188,7 +289,9 @@ export const useJobStore = create<JobState>((set, get) => ({
     const uniqueIds = Array.from(new Set(pageIds));
     const activePageJobs = new Set(
       get()
-        .jobs.filter((job) => job.stage === 'ocr' && (job.status === 'queued' || job.status === 'running'))
+        .jobs.filter(
+          (job) => job.stage === 'ocr' && (job.status === 'queued' || job.status === 'running'),
+        )
         .map((job) => job.pageId),
     );
     const pages = usePageStore
@@ -222,9 +325,85 @@ export const useJobStore = create<JobState>((set, get) => ({
     return newJobs.length;
   },
 
+  queueTranslationJobs: (targets) => {
+    const normalizedTargets = targets
+      .filter((target) => target.pageId)
+      .map((target) => ({
+        pageId: target.pageId,
+        ...(target.regionIds?.length ? { regionIds: Array.from(new Set(target.regionIds)) } : {}),
+      }));
+    const activeSignatures = new Set(
+      get()
+        .jobs.filter(
+          (job) =>
+            job.stage === 'translate' && (job.status === 'queued' || job.status === 'running'),
+        )
+        .map((job) => buildTranslationJobSignature(job.pageId, job.regionIds)),
+    );
+    const pagesById = new Map(
+      usePageStore.getState().pages.map((page) => [page.id, page] as const),
+    );
+    const filteredTargets = normalizedTargets.filter(
+      (target) => !activeSignatures.has(buildTranslationJobSignature(target.pageId, target.regionIds)),
+    );
+
+    if (filteredTargets.length === 0) {
+      return 0;
+    }
+
+    const createdAt = Date.now();
+    const newJobs: JobRecord[] = filteredTargets
+      .map((target, index) => {
+        const page = pagesById.get(target.pageId);
+        if (!page) {
+          return null;
+        }
+
+        return {
+          id: uuid(),
+          stage: 'translate' as const,
+          status: 'queued' as const,
+          pageId: target.pageId,
+          pageName: page.fileName,
+          ...(target.regionIds?.length ? { regionIds: target.regionIds } : {}),
+          createdAt: createdAt + index,
+          startedAt: null,
+          finishedAt: null,
+          progress: 0,
+          message: target.regionIds?.length
+            ? `Queued translation for ${target.regionIds.length} region(s)`
+            : 'Queued for translation',
+          error: null,
+          result: null,
+        };
+      })
+      .filter((job): job is JobRecord => job !== null);
+
+    if (newJobs.length === 0) {
+      return 0;
+    }
+
+    setJobsAndPersist((jobs) => [...newJobs, ...jobs]);
+
+    useToastStore.getState().push(`Translation jobs queued: ${newJobs.length}`, 'info');
+    void pumpQueue();
+    return newJobs.length;
+  },
+
   retryJob: (jobId) => {
     const job = get().jobs.find((item) => item.id === jobId);
     if (!job) return;
+
+    if (job.stage === 'translate') {
+      get().queueTranslationJobs([
+        {
+          pageId: job.pageId,
+          ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
+        },
+      ]);
+      return;
+    }
+
     get().queueOcrJobs([job.pageId]);
   },
 

@@ -16,6 +16,7 @@ export async function ensureProjectDomainDefaults(projectId: string) {
   const runtimeDefaults = {
     ...DEFAULT_PROJECT_SETTINGS,
     ocrEngine: isTauri() ? 'windows' : DEFAULT_PROJECT_SETTINGS.ocrEngine,
+    translationProvider: 'local',
   } as const;
 
   const defaultStyle =
@@ -30,6 +31,9 @@ export async function ensureProjectDomainDefaults(projectId: string) {
     projectId,
     ...(existingSettings ?? runtimeDefaults),
     ...(existingSettings?.ocrEngine === 'mock' && isTauri() ? { ocrEngine: 'windows' } : {}),
+    ...(existingSettings?.translationProvider === 'mock'
+      ? { translationProvider: 'local' }
+      : {}),
     defaultTextStyleId: existingSettings?.defaultTextStyleId ?? defaultStyle.id,
   };
 

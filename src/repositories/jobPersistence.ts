@@ -12,8 +12,9 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
     status: job.status,
     projectId: meta.localProjectId,
     pageId: job.pageId,
+    ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
     summary: job.result
-      ? `${job.result.engine}: ${job.result.filledCount}/${job.result.regionsProcessed}`
+      ? `${job.result.provider}: ${job.result.appliedCount}/${job.result.regionsProcessed}`
       : job.message,
     progress: job.progress,
     createdAt: job.createdAt,
@@ -23,19 +24,21 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
 }
 
 function deriveMessage(job: JobEntity) {
+  const stageLabel = job.type === 'OCR' ? 'OCR' : 'Translation';
+
   if (job.status === 'queued') {
-    return job.type === 'OCR' ? 'Queued for OCR' : 'Queued';
+    return job.type === 'OCR' ? 'Queued for OCR' : 'Queued for translation';
   }
 
   if (job.status === 'running') {
-    return job.type === 'OCR' ? 'OCR in progress' : 'Job in progress';
+    return job.type === 'OCR' ? 'OCR in progress' : 'Translation in progress';
   }
 
   if (job.status === 'done') {
-    return job.type === 'OCR' ? 'OCR completed' : 'Job completed';
+    return `${stageLabel} completed`;
   }
 
-  return job.error ?? 'Job failed';
+  return job.error ?? `${stageLabel} failed`;
 }
 
 function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord {
@@ -44,10 +47,11 @@ function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord
 
   return {
     id: entity.id,
-    stage: 'ocr',
+    stage: entity.type === 'OCR' ? 'ocr' : 'translate',
     status: normalizedStatus,
     pageId: entity.pageId ?? '',
     pageName: page?.fileName ?? 'Unknown page',
+    ...(entity.regionIds?.length ? { regionIds: entity.regionIds } : {}),
     createdAt: entity.createdAt,
     startedAt:
       normalizedStatus === 'queued'
@@ -60,7 +64,9 @@ function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord
     progress: entity.status === 'running' ? Math.max(entity.progress, 0.05) : entity.progress,
     message:
       entity.status === 'running'
-        ? 'Recovered queued OCR job'
+        ? entity.type === 'OCR'
+          ? 'Recovered queued OCR job'
+          : 'Recovered queued translation job'
         : entity.summary ?? deriveMessage(entity),
     error: entity.error ?? null,
     result: null,

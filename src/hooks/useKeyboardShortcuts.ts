@@ -148,6 +148,26 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (ctrl && event.shiftKey && key === 't') {
+        const { activePageId, selectedPageIds } = usePageStore.getState();
+        const selectedRegionId = useRegionStore.getState().selectedRegionId;
+        const targets =
+          selectedRegionId && activePageId
+            ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
+            : (selectedPageIds.length > 0
+                ? selectedPageIds
+                : activePageId
+                  ? [activePageId]
+                  : []
+              ).map((pageId) => ({ pageId }));
+
+        if (targets.length > 0) {
+          event.preventDefault();
+          useJobStore.getState().queueTranslationJobs(targets);
+        }
+        return;
+      }
+
       if (ctrl && key === 'm') {
         const { selectedPageIds, stitchPages, stitchOptions } = usePageStore.getState();
         if (selectedPageIds.length >= 2) {

@@ -572,6 +572,10 @@ fn ensure_project_defaults(connection: &Connection, project_id: &str) -> Result<
                 WHEN project_settings.ocr_engine = 'mock' THEN excluded.ocr_engine
                 ELSE project_settings.ocr_engine
               END,
+              translation_provider = CASE
+                WHEN project_settings.translation_provider = 'mock' THEN excluded.translation_provider
+                ELSE project_settings.translation_provider
+              END,
               default_text_style_id = COALESCE(project_settings.default_text_style_id, excluded.default_text_style_id)
             ",
             params![
@@ -579,7 +583,7 @@ fn ensure_project_defaults(connection: &Connection, project_id: &str) -> Result<
                 "auto",
                 "ru",
                 "windows",
-                "mock",
+                "local",
                 default_text_style_id(project_id),
             ],
         )
