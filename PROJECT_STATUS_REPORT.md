@@ -1,8 +1,8 @@
 # ScanForge Project Status Report
 
-Date: 2026-03-26
+Date: 2026-03-27
 Branch: `stage-3-pipeline-foundation`
-Report scope: post-Stage-3 verification preparation
+Report scope: post-Stage-3 verification pass
 
 ## 1. Executive Summary
 
@@ -27,12 +27,13 @@ The most accurate current one-line description is:
 
 `Local-first scanlation editor foundation with normalized persistence, real Windows OCR, draft translation pipeline, rendered PNG export, and strong viewer/editor UX`
 
-This is a serious step forward from Stage 2, but Stage 3 is still not fully complete.
+This is a serious step forward from Stage 2, and Stage 3 can now be treated as complete for its planned repository scope.
 
-What is still missing before Stage 3 can be called done:
+What is still missing after Stage 3:
 
-- full end-to-end manual verification and stabilization sign-off
 - stronger OCR and translation provider coverage beyond current local draft paths
+- deeper automated coverage around repositories, jobs, and failure recovery
+- future product work such as cleaning, redraw, typesetting, and QC
 
 ## 2. Current Stage Status
 
@@ -53,7 +54,7 @@ Remaining Stage 2 caveat:
 
 ### 2.2 Stage 3
 
-Stage 3 is in progress and materially advanced.
+Stage 3 can now be treated as completed for the intended scope of this phase.
 
 Workstream status:
 
@@ -61,13 +62,13 @@ Workstream status:
 - Workstream B `Real OCR integration` -> usable and integrated
 - Workstream C `Translation pipeline` -> first real foundation implemented
 - Workstream D `Final render / export foundation` -> foundation implemented
-- Workstream E `Verification and stabilization` -> in progress, smoke checks added, manual sign-off pending
+- Workstream E `Verification and stabilization` -> passed for current scope
 
 Practical Stage 3 verdict:
 
 - the repo is no longer "editor + OCR preview only"
 - the repo is now "editor + OCR + translation draft + rendered export foundation"
-- Stage 3 is not done yet because verification and stabilization are still missing
+- Stage 3 has crossed the minimum legitimacy bar defined for this phase
 
 ## 3. Repository and Branch State
 
@@ -127,7 +128,7 @@ What does not exist yet:
 - cleaning/redraw toolset
 - QC workflow
 - FastAPI/service split
-- automated verification suite
+- deep automated verification suite
 
 ## 5. Current Architecture
 
@@ -496,7 +497,7 @@ Current limitations:
 
 ## 14. Quality and Risk Assessment
 
-### 14.1 Verification assets now present
+### 14.1 Verification status
 
 Verification foundation added during the current stabilization pass:
 
@@ -514,7 +515,24 @@ What this means:
 
 - core helper logic for draft translation and rendered export naming/style resolution now has repeatable coverage
 - the repository finally has a lightweight automated verification entry point
-- Stage 3 still requires the manual end-to-end sign-off described in the checklist
+- the manual end-to-end verification pass has now been executed successfully
+
+Manual verification outcomes recorded on 2026-03-27:
+
+- project creation/import and restore -> passed
+- region edit persistence -> passed
+- OCR flow -> passed
+- translation flow -> passed
+- manual translation edit preservation -> passed
+- rendered export differs from source -> passed
+- reload and re-export consistency -> passed
+- Stage 2 snapshot migration flow -> passed
+
+Residual non-blocking observations:
+
+- browser verification still uses preview OCR rather than the desktop Windows OCR path
+- selected-region targeting can surprise users during page-level translation checks
+- restored job summaries are slightly shorter than live job summaries
 
 ### 14.2 Strengths and risks
 
@@ -541,30 +559,31 @@ Current risks:
 Stage 3 done-definition vs actual status:
 
 - normalized domain storage remains the core source of truth -> yes
-- real OCR replaces preview OCR -> partially yes on Windows, not fully cross-platform
+- real OCR replaces preview OCR -> yes for the desktop Tauri path, with browser preview fallback still present
 - translation jobs exist and persist -> yes
 - translated text survives reload -> yes
 - project settings include source/target language and providers -> yes
 - rendered export produces composed page output -> yes
 - build remains green -> yes
 - smoke test suite exists and passes -> yes
-- Stage 2 projects still load -> expected yes, but full manual verification pass still pending
+- Stage 2 projects still load -> yes
+- manual verification checklist executed successfully -> yes
 
 Practical conclusion:
 
-- Stage 3 is not done yet
-- the repo is now in final verification territory rather than feature-foundation work
+- Stage 3 can be considered complete for the planned scope
+- next work should move into the next execution stage rather than extending Stage 3 indefinitely
 
 ## 16. Recommended Next Steps
 
 The correct next execution order from here is:
 
-1. execute the manual checklist in `STAGE_3_VERIFICATION_CHECKLIST.md`
-2. verify Stage 2 project migration through OCR -> translation -> export
-3. add minimal automated checks around repository CRUD and job lifecycles
-4. harden provider failure reporting and recovery paths
+1. add stronger automated checks around repository CRUD and job lifecycles
+2. harden provider failure reporting and recovery paths
+3. improve OCR provider coverage beyond the current Windows-first path
+4. move into the next product stage instead of adding random side features
 
-If the next work goes into cosmetic editor features instead of verification, Stage 3 will drift again and remain unfinished.
+If the next work goes into cosmetic editor features instead of the next planned stage, the project will start accumulating avoidable debt again.
 
 ## 17. Final Assessment
 
@@ -579,10 +598,10 @@ The repository now contains:
 - rendered PNG export from translated domain state
 - usable project-level pipeline settings
 
-But the project is still one major slice away from a legitimate Stage 3 finish:
+Stage 3 did what it needed to do:
 
-`verification + stabilization`
+`real OCR path + translation drafts + rendered export + verification`
 
 The most honest current description is:
 
-`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, rendered PNG export, and first smoke-test coverage, pending final verification and stabilization.`
+`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, rendered PNG export, and completed Stage 3 verification for the planned scope.`

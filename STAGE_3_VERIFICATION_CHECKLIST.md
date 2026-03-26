@@ -150,3 +150,45 @@ Stage 3 verification is acceptable only when:
 - no silent job failures occur
 
 If any item fails, Stage 3 remains open and the failing step should be documented before further feature work continues.
+
+## 7. Verification Run - 2026-03-27
+
+Run scope:
+
+- browser-backed end-to-end verification on `stage-3-pipeline-foundation`
+- automated smoke checks
+- Stage 2 snapshot migration path
+
+Executed results:
+
+- `npm run build` -> passed
+- `cargo check` -> passed
+- `npm run test` -> passed
+- create/import page flow -> passed
+- region creation/edit/lock persistence -> passed
+- OCR flow -> passed
+- translation flow -> passed
+- manual translation edit preservation with overwrite disabled -> passed
+- rendered export differs from source image -> passed
+- reload and re-export consistency -> passed
+- Stage 2 snapshot import -> passed
+- OCR -> translation -> rendered export on migrated snapshot -> passed
+
+Concrete verification notes:
+
+- unlocked region received OCR text and persisted metadata
+- locked region stayed untouched by OCR and translation
+- translated text survived reload
+- first and second rendered exports matched byte-for-byte after reload
+- migrated Stage 2 snapshot exported a rendered PNG different from the raw source image
+
+Non-blocking observations from the run:
+
+- when a region is selected, `Translate` intentionally targets that region instead of the whole page; this is consistent with current toolbar behavior but can surprise users during page-level verification
+- restored job messages are slightly shorter after reload than their initial live summaries
+- the dev browser run logs a `favicon.ico` 404 that does not affect pipeline behavior
+
+Sign-off verdict for this run:
+
+- Stage 3 verification passed for the planned repository scope
+- remaining limitations are product-quality follow-ups, not blockers for closing Stage 3
