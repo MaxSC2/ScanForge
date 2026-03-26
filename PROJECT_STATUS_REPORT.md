@@ -1,62 +1,91 @@
 # ScanForge Project Status Report
 
 Date: 2026-03-26
-Branch: `dev`
+Branch: `stage-2-domain-refactor`
+Report scope: post-Stage-2 repository state
 
 ## 1. Executive Summary
 
-ScanForge is no longer just a skeleton. The repository currently contains a working desktop-oriented editing MVP with:
+ScanForge is no longer a bare prototype. The repository now contains a working local-first desktop editing foundation with:
 
-- page import and page ordering
-- local project persistence
-- region drawing and editing
-- undo/redo
-- OCR job queue scaffold
-- Tauri backend shell
-- improved viewing modes for inspection and reading
-
-At the same time, the project is still significantly behind the original product plan in `CORE.md`, `ENGINEERING_SPEC.md`, and `UX_SPEC.md`. The biggest gap is that the app is currently an editor/viewer with OCR-preview scaffolding, not yet a full scanlation pipeline.
-
-The current state is best described as:
-
-`Local-first page and region editor + project library + OCR preview queue + viewer UX`
-
-It is **not yet**:
-
-- a full translation studio
-- a full cleaning/redraw/typesetting pipeline
-- a real OCR engine integration
-- a FastAPI-based multi-service architecture
-- a normalized SQLite domain model for pages/regions/jobs
-
-## 2. Planned Product vs Current Reality
-
-### 2.1 What the plan says
-
-From the project specs:
-
-- `CORE.md`: local-first scanlation studio, pipeline `RAW -> OCR -> Translation -> Cleaning -> Redraw -> Typesetting -> QC -> Export`
-- `ENGINEERING_SPEC.md`: architecture `UI -> API -> Services -> Storage`, region model `id, bbox, text, translation, style`, job states `queued -> running -> done/failed`, storage `SQLite + local FS`
-- `UX_SPEC.md`: layout `Sidebar | Canvas | Inspector`, flow from import to export, tools for OCR, translation, QC, editing
-
-### 2.2 What is actually implemented
-
-Implemented in practice:
-
-- React + TypeScript frontend
+- React + TypeScript editor UI
 - Tauri desktop shell
-- local persistence layer with SQLite in Tauri and `localStorage` fallback in browser
-- region-based canvas editor on Konva
-- page list with drag-and-drop reorder
-- region list with drag-and-drop reorder
-- inspector for region editing
-- undo/redo snapshots
-- OCR queue with sequential execution
-- Tauri OCR command returning preview OCR text
-- project library UI and autosave
-- advanced viewing UX: fit modes, focus mode, clean view, reader navigation
+- normalized SQLite domain tables for `projects`, `pages`, `regions`, and `jobs`
+- repository layer for domain access
+- local project library
+- page and region editing workflow
+- OCR preview pipeline wired through backend storage
+- persisted OCR job queue state
+- strong viewer and inspection UX
 
-Not implemented yet:
+The current product is best described as:
+
+`Local-first scanlation editor foundation with normalized persistence and OCR-preview backend`
+
+It is still not a full scanlation studio. Major pipeline stages such as translation, cleaning, redraw, typesetting, QC, and final composed export are not implemented yet.
+
+Most important reality check:
+
+- Stage 2 is substantially completed.
+- Core domain entities now live in normalized storage.
+- JSON snapshot storage is no longer the main domain source.
+- JSON is still retained as a compatibility and backup layer for import/export and for some UI-only metadata that the current domain schema does not yet store.
+
+## 2. Repository and Delivery Status
+
+Version-control and repo state:
+
+- Git is configured and used actively.
+- The current working branch is `stage-2-domain-refactor`.
+- The repository has a clean incremental history for Stage 2.
+
+Recent milestone commits:
+
+- `e3ffe03` `refactor: add normalized sqlite schema foundation`
+- `9cb48f9` `refactor: add domain repository layer`
+- `41b09e0` `refactor: connect pages to domain storage`
+- `f6a3e64` `refactor: connect regions to domain storage`
+- `3fd1ab8` `refactor: route ocr through domain storage`
+- `9e8a406` `refactor: persist jobs in domain storage`
+- `32fa130` `refactor: make local project storage db-first`
+
+Build health right now:
+
+- `npm run build` passes
+- `cargo check` passes
+
+Quality/process gaps:
+
+- no automated test suite
+- no lint step
+- no CI pipeline in the repo
+
+## 3. Planned Product vs Current Reality
+
+### 3.1 Planned product from specs
+
+From `CORE.md`, `ENGINEERING_SPEC.md`, and `UX_SPEC.md`, the target product is:
+
+- local-first scanlation studio
+- pipeline `RAW -> OCR -> Translation -> Cleaning -> Redraw -> Typesetting -> QC -> Export`
+- architecture `UI -> API -> Services -> Storage`
+- stack direction `React + Tauri + FastAPI + PaddleOCR + OpenCV`
+- strong region/job systems and explicit lifecycle handling
+
+### 3.2 Current reality in code
+
+What is implemented now:
+
+- desktop-first React/Tauri editor
+- page import, selection, reorder, and stitching
+- region draw/edit workflow
+- project autosave and restore
+- normalized local storage for project/page/region/job domain data
+- OCR preview backend through Tauri
+- persisted job queue core state
+- polished inspection and reading UX
+
+What is not implemented now:
 
 - FastAPI layer
 - translation pipeline
@@ -64,69 +93,71 @@ Not implemented yet:
 - redraw tools
 - typesetting engine
 - QC workflow
-- final rendered export pipeline
-- real OCR via PaddleOCR/Tesseract/OpenCV
-- structured domain storage for pages/regions/jobs in SQLite
+- final composed export renderer
+- real OCR engine integration
+- action-based undo/redo architecture
+- region/page lifecycle state machines
 
-## 3. Current Architecture
+## 4. Current Architecture
 
-Current practical architecture is closer to:
+Current practical architecture is:
 
-`React UI -> Zustand stores -> Tauri commands / browser adapters -> SQLite blob storage`
+`React UI -> Zustand stores -> repository helpers -> Tauri commands / browser adapters -> SQLite normalized tables + snapshot backup`
 
-This differs from the planned architecture:
-
-`UI -> API -> Services -> Storage`
+This is much closer to the planned direction than the old snapshot-only setup, but it is not yet the full target architecture from the engineering spec.
 
 What exists now:
 
-- UI layer is substantial and already usable
-- application state lives mostly in Zustand stores
-- backend communication exists only for Tauri commands
-- OCR is invoked through Tauri, but only as a preview engine
-- storage is project-snapshot based, not entity-based
+- frontend UI layer
+- state layer via Zustand stores
+- repository layer for `projects/pages/regions/jobs`
+- Tauri backend commands
+- normalized SQLite tables
+- browser fallback domain persistence in `localStorage`
+- snapshot compatibility layer
 
 What does not exist yet:
 
-- separate API layer
-- service orchestration layer
-- true job orchestration backend
-- persistent worker system
+- separate API boundary
+- separate service orchestration layer
+- worker subsystem outside the app process
+- FastAPI backend
+- external OCR/translation services
 
-## 4. Repository Overview
+## 5. Technology Stack in the Repo
 
-Top-level meaningful areas:
-
-- `src/`: frontend app
-- `src-tauri/`: desktop shell and backend commands
-- `CORE.md`, `ENGINEERING_SPEC.md`, `UX_SPEC.md`: project vision/specs
-- `README.md`: minimal project description
-
-Key technology stack currently in code:
+Frontend/runtime:
 
 - React 19
 - TypeScript
 - Zustand
 - Konva / react-konva
-- Tauri 2
-- rusqlite
-- Lucide icons
-- hello-pangea/dnd
-- Vite + singlefile build
+- `@hello-pangea/dnd`
+- Lucide React
+- Vite
+- `vite-plugin-singlefile`
 
-Not present in the repo today:
+Desktop/backend:
+
+- Tauri 2
+- `rusqlite`
+- `serde`
+- `serde_json`
+- Tauri dialog and fs plugins
+
+Not present:
 
 - FastAPI
-- Python services
+- Python backend services
 - PaddleOCR
 - OpenCV
-- automated test suite
+- Vitest/Jest/Playwright tests
 
-## 5. Frontend State
+## 6. Implemented Product Surface
 
-### 5.1 App shell
+### 6.1 App shell
 
-The app shell is already coherent:
+The app shell is coherent and already usable:
 
 - `Layout`
 - `Toolbar`
@@ -136,395 +167,292 @@ The app shell is already coherent:
 - `StatusBar`
 - `ToastContainer`
 
-The app starts keyboard shortcuts and local persistence automatically at boot.
+### 6.2 Page workflow
 
-### 5.2 Toolbar
+Implemented page operations:
 
-Current toolbar capabilities:
-
-- open images
-- open project file
-- save project file
-- export active page as PNG
-- run OCR
-- stitch selected pages
-- switch editor tools
-- undo/redo
-- zoom controls
-- focus mode
-- clean view
-- viewer presets: `1:1`, `Width`, `Page`
-- overlay visibility toggle
-
-This is already significantly beyond the original bare skeleton.
-
-### 5.3 Sidebar
-
-The left side is tabbed and now contains three practical workspaces:
-
-- Pages
-- Projects
-- Jobs
-
-Implemented behavior:
-
-- page list
-- batch page selection
-- page drag-and-drop reorder
+- import image files
+- page list view
+- drag-and-drop page reorder
+- multi-select pages
+- active page switching
 - page deletion
-- project library refresh/load/create
-- jobs dashboard with queue state and retry
+- page stitching
+- active page export as PNG
 
-### 5.4 Inspector
+### 6.3 Region workflow
 
-The right panel supports:
+Implemented region operations:
 
-- region details view
-- full region list view
-- region metadata editing
-- geometry editing
-- source text editing
-- translated text editing
-- notes editing
-- lock/visibility controls
-- duplicate/delete region
-- region reorder in list
+- draw rectangular regions
+- select region
+- move and resize region
+- duplicate region
+- delete region
+- reorder regions
+- edit geometry
+- edit source text
+- edit translated text
+- edit notes
+- toggle lock/visibility
 
-This means the region editor is already much more mature than the specs alone might suggest.
+### 6.4 Inspector and sidebar UX
 
-## 6. Canvas and Editing
+Current side panels include:
 
-### 6.1 What works
+- Projects tab
+- Pages tab
+- Jobs tab
+- region detail inspector
+- all-regions list inspector
 
-Canvas/editor capabilities currently include:
+### 6.5 Viewer UX
 
-- page rendering via Konva
-- draw new rectangular regions
-- select regions
-- move regions
-- resize regions
-- right-click context menu for regions
-- lock/unlock regions
-- show/hide individual regions
-- overlay labels
-- grid overlay
-- minimap
-- cursor coordinates in status bar
+This is one of the strongest implemented areas:
 
-### 6.2 Viewing and inspection UX
-
-Viewing UX is one of the strongest implemented areas right now:
-
-- manual zoom
+- zoom in/out
+- manual zoom reset
 - fit page
 - fit width
-- actual size (`1:1`)
+- actual size `1:1`
 - overlay visibility toggle
-- focus mode with overlay side panels
-- clean view that removes most UI
-- clean view HUD with auto-hide
-- cinematic page presentation in clean view
-- reader-like page navigation in clean view
+- focus mode
+- clean view
+- auto-hide clean-view HUD
+- reader-style page navigation in clean view
 
-This area is ahead of the rest of the product in terms of polish.
+## 7. Zustand Store Topology
 
-## 7. State Management
+Current state is split across:
 
-The application logic is centered around Zustand stores:
-
+- `useProjectStore`
 - `usePageStore`
 - `useRegionStore`
-- `useProjectStore`
+- `useJobStore`
 - `useProjectLibraryStore`
 - `useHistoryStore`
 - `useEditorStore`
-- `useJobStore`
 - `useToastStore`
 
-### 7.1 Strengths
+This is a meaningful improvement over the original single-snapshot shape, but the app is still not using a fully action-driven model.
 
-- state is split by concern
-- editor interactions are already usable
-- history snapshots cover pages, selection and project meta
-- project library and autosave are integrated
-- OCR jobs are isolated from editor logic
+Important current behavior:
 
-### 7.2 Limitations
+- `projectStore` carries project meta
+- `pageStore` carries current in-memory pages
+- `regionStore` mutates region data within active page state
+- `jobStore` carries UI-visible job queue state and now syncs its core fields into DB
+- `historyStore` is still snapshot-based
 
-- undo/redo is snapshot-based, not action-based as planned
-- no explicit page lifecycle or region lifecycle state machines
-- job state is in-memory only
-- no persisted job history in database
+## 8. Storage and Persistence Status
 
-## 8. Persistence and Storage
+### 8.1 Stage 2 outcome
 
-### 8.1 What exists now
+Stage 2 goal was:
 
-The app already has real local-first persistence:
+`Snapshot JSON storage -> normalized domain-driven storage`
 
-- Tauri repository backed by SQLite
-- browser fallback repository backed by `localStorage`
-- autosave of current local project
-- load latest project on startup
-- project library listing
+That goal is mostly achieved.
 
-### 8.2 Tauri storage design today
+What now exists in normalized storage:
 
-Current SQLite approach is simple:
+- `projects`
+- `pages`
+- `regions`
+- `jobs`
 
-- one `projects` table
-- one row per project
-- project payload stored as full JSON blob in `payload_json`
+What now persists in DB:
 
-Stored summary metadata:
+- project meta
+- page order and image path
+- region geometry and domain text/status fields
+- job type/status/progress/error timestamps
 
-- id
-- name
-- created/updated timestamps
-- last opened timestamp
-- page count
+### 8.2 Current local persistence behavior
 
-### 8.3 Important limitation
+Local persistence now works like this:
 
-This is **not** yet the planned `SQLite + local FS` domain model.
+1. The editor still serializes a project snapshot for backup and compatibility.
+2. The app syncs pages, regions, and jobs into normalized storage through repository helpers.
+3. On restore/load, the app hydrates a project payload and then overlays current domain data from repositories.
+4. Pages, regions, and jobs therefore come back from normalized storage, not only from raw snapshot JSON.
 
-What is missing:
+### 8.3 Important caveat
 
-- pages table
-- regions table
-- jobs table
-- assets/files on disk with references
-- normalized relationships
-- partial loading
-- selective updates
+The system is not yet a pure domain-only reconstruction.
 
-Today storage behaves as:
+Snapshot backup still matters for fields that are not present in the current normalized schema, especially:
 
-`entire project snapshot save/load`
+- region `label`
+- region `kind`
+- region `order` as editor metadata
+- region `notes`
+- `activePageId`
 
-not as:
+Because of that, the runtime is best described as:
 
-`structured project database`
+`DB-first for core domain state, snapshot-assisted for UI-only metadata`
 
-## 9. OCR and Jobs
+### 8.4 Asset storage reality
 
-### 9.1 What exists
+The engineering spec says `SQLite + local FS`.
 
-OCR is implemented as a working vertical slice:
+Current reality is:
 
-- queue OCR jobs for pages
-- sequential processing
-- statuses `queued`, `running`, `done`, `failed`
-- progress updates
-- result summary
-- retry failed jobs
-- skip locked and already-filled regions
+- page images are stored as data URLs
+- data URLs are written into snapshot backup
+- page `imagePath` in DB still points to data URLs, not filesystem assets
 
-### 9.2 Frontend OCR path
+So storage is normalized, but asset storage is not yet optimized.
 
-Frontend flow:
+## 9. Repository Layer Status
 
-- encode page image as data URL
-- serialize page + regions into OCR payload
-- call Tauri OCR backend or browser preview fallback
-- apply returned text into `sourceText`
+Implemented repositories:
 
-### 9.3 Backend OCR path
+- `projectRepository.ts`
+- `pageRepository.ts`
+- `regionRepository.ts`
+- `jobRepository.ts`
 
-Backend OCR currently exists only as preview logic:
+Implemented persistence bridges:
 
-- validates payload
-- iterates regions
-- skips invalid/locked/already-filled regions
-- generates synthetic preview text
+- `pagePersistence.ts`
+- `regionPersistence.ts`
+- `jobPersistence.ts`
 
-Important conclusion:
+What they now handle:
 
-OCR architecture is wired correctly enough for replacement later, but the engine is not real OCR yet.
+- domain CRUD access
+- merge of repository data back into UI state
+- sync of in-memory page/region/job changes into DB
+- browser fallback behavior
 
-### 9.4 What is missing in jobs
+This is a major architectural milestone because the editor is no longer built around one opaque blob.
 
-- translation jobs
-- job cancellation
-- concurrent worker strategy
-- persisted jobs
-- resumable jobs
-- background service manager
-- job dependency graph
+## 10. OCR and Job System Status
 
-## 10. Import, Save, Export
+### 10.1 OCR status
 
-### 10.1 Import
+OCR is now wired through backend storage, not through raw in-memory JSON regions.
 
-Current import capabilities:
+Current OCR flow:
 
-- load image files into pages
-- drag-and-drop images onto canvas
-- open `.scanforge.json` project file
-- restore local project snapshot
+1. sync current pages/regions into domain storage
+2. run OCR by page id
+3. backend reads page and region data from storage
+4. backend writes OCR result back into stored regions
+5. frontend reloads the updated regions from repository
 
-### 10.2 Save
+This is structurally the correct direction for the later pipeline.
 
-Two save paths exist:
+### 10.2 OCR limitation
 
-- manual export to `.scanforge.json`
-- background autosave to local repository
+The OCR engine is still a preview/mock engine.
 
-### 10.3 Export
+It does not do real image recognition. It currently generates preview text based on page/region context and writes that into `sourceText`.
 
-This is a major gap area.
+### 10.3 Jobs status
 
-Current export behavior:
+Jobs are no longer only transient UI state.
 
-- exporting a page saves the original page image blob
-- stitched export saves the stitched image produced from source page images
+Implemented now:
 
-What export does **not** do yet:
+- `queued`, `running`, `done`, `failed`
+- persisted core job state in `jobs` table
+- job restore on project load
+- running jobs normalized back to queued on recovery
+- retry and clear flow in the sidebar
 
-- render translated text
-- render cleaned/redrawn output
-- render final composition
-- export chapter package
-- export QC outputs
+What is still missing:
 
-So export exists technically, but not yet as final production export.
+- richer persisted job payloads
+- persisted result summaries/messages
+- multi-stage job orchestration beyond OCR
 
-## 11. What Has Been Implemented Well
+## 11. Stage 2 Plan Checkpoint
 
-Strongest parts of the current project:
+Stage 2 checklist versus actual repo state:
 
-1. Editor UX foundation
-2. Local-first persistence direction
-3. Region manipulation workflow
-4. OCR queue scaffolding
-5. Viewer and clean-view polish
-6. Clear Git progress with incremental commits
+- `1. create SQLite schema` -> done
+- `2. make repositories` -> done
+- `3. connect pages` -> done
+- `4. connect regions` -> done
+- `5. adapt OCR` -> done
+- `6. add jobs` -> done
+- `7. make migration` -> done
+- `8. remove JSON dependency as primary source` -> mostly done, with compatibility caveat
 
-The project already feels like a usable internal tool for:
+Practical Stage 2 verdict:
 
-- loading pages
-- marking regions
-- organizing projects
-- previewing OCR workflow
-- reviewing pages visually
+- the old snapshot-only architecture is gone as the main project backbone
+- normalized domain storage is now the main structural source of truth for core entities
+- snapshot backup still participates where the current domain model is intentionally incomplete
 
-## 12. Main Gaps Against the Original Vision
+## 12. Remaining Gaps Against Original Specs
 
-The biggest missing systems relative to the specs are:
+Still missing relative to `CORE.md`, `ENGINEERING_SPEC.md`, and `UX_SPEC.md`:
 
-### 12.1 Product pipeline gaps
+- translation pipeline
+- translation UI
+- cleaning workflow
+- redraw workflow
+- typesetting workflow
+- QC workflow
+- final composed export
+- real OCR engine
+- FastAPI/service architecture
+- page/region lifecycle machines
+- action-based history system
+- filesystem asset storage
+- automated tests
 
-- Translation
-- Cleaning
-- Redraw
-- Typesetting
-- QC
-- final Export
+## 13. Technical Debt and Risks
 
-### 12.2 Architecture gaps
+Important current risks:
 
-- no FastAPI
-- no UI/API/service split
-- no backend service orchestration
-- no separate OCR service process
+- UI metadata still depends on snapshot fallback because the domain schema does not yet store all region/editor fields.
+- `imagePath` currently holds data URLs, which is heavy and not scalable for large projects.
+- Undo/redo is still snapshot-based and not aligned with the long-term action-system plan.
+- The project still lacks automated tests, so regression risk is manual.
+- OCR is architecturally correct but functionally still mock-level.
+- Job persistence stores the core queue state, but not the full rich UI job presentation.
 
-### 12.3 Data model gaps
+## 14. What Is Strong Right Now
 
-- region has no `style` model
-- no text styling/typesetting schema
-- no lifecycle state machines
-- jobs not persisted
+Strongest areas in the project today:
 
-### 12.4 Production-readiness gaps
+- editor shell and viewing UX
+- page and region interaction model
+- local-first persistence foundation
+- normalized domain storage introduction
+- repository-layer architecture
+- OCR storage path design
+- project library and autosave behavior
 
-- no tests
-- no CI
-- no migration strategy
-- no error telemetry
-- no packaging/release workflow
+## 15. What Needs to Happen Next
 
-## 13. Risks and Technical Debt
+The next stage should no longer be another storage refactor. The foundation is good enough to move the product forward.
 
-### 13.1 Snapshot storage debt
+Best next priorities:
 
-Saving the full project JSON blob into SQLite is fine for MVP speed, but it will become limiting for:
-
-- large projects
-- partial updates
-- job persistence
-- future collaboration features
-- search/filter/reporting
-
-### 13.2 Undo/redo debt
-
-Snapshot-based history is easy to ship, but it becomes expensive and fragile as the data model grows.
-
-### 13.3 OCR replacement risk
-
-The current OCR interface is replaceable, which is good. But once real OCR lands, the project will also need:
-
-- region image cropping
-- language settings
-- confidence metadata
-- model configuration
-- better error handling
-
-### 13.4 Export debt
-
-Until export produces the final rendered page, the app remains an editor prototype rather than a full production studio.
-
-## 14. Suggested Priority Order From Here
-
-If development returns to the core plan, the most rational next sequence is:
-
-1. Replace snapshot-only storage with a clearer project repository/domain model
-2. Add translation jobs next to OCR jobs
-3. Define richer region schema including style/typesetting fields
-4. Build final rendered export pipeline
-5. Add cleaning/redraw/text tools after export path is real
-6. Only then consider FastAPI split if local Tauri-only architecture becomes limiting
-
-Short version:
-
-`Storage/domain model -> Translation -> Final export -> Production editing tools`
-
-## 15. Current Build and Tooling Status
-
-Confirmed on 2026-03-26:
-
-- `npm run build` passes
-- `cargo check` passes
-
-Current branch:
-
-- `dev`
-
-Recent feature progression shows consistent forward movement:
-
-- local persistence foundation
-- project library
-- OCR queue
-- Tauri OCR wiring
-- side panel streamlining
-- focus mode
-- viewer presets
-- clean view
-- clean view polish
-- clean view reader navigation
+1. Close the remaining domain gaps if full snapshot independence is required.
+2. Replace OCR preview with a real OCR engine.
+3. Build the translation pipeline on top of the normalized storage path.
+4. Add final rendered export so translated content can become real output.
+5. Introduce test coverage for repositories, persistence, and OCR/job flow.
 
 ## 16. Final Assessment
 
-ScanForge is currently in a strong **MVP editor foundation** phase.
+ScanForge has moved from "interesting prototype" to "serious local-first editor foundation".
 
-It is already valuable as:
+It is still not the full product from the original vision, but the project is now in a far better place architecturally:
 
-- a local page/region organizer
-- a region annotation editor
-- an OCR-preview workflow shell
-- a polished viewer for inspection
+- normalized domain storage exists
+- OCR and jobs already use it
+- the editor is usable
+- local project recovery works
+- Stage 2 technical debt reduction is real, not cosmetic
 
-It is not yet the full scanlation studio described in the specs.
+The most accurate one-line description of the repository today is:
 
-Best one-line assessment:
-
-`The project has a solid local-first editing core, but the main production pipeline from OCR to final translated export is still only partially built.`
+`A working local-first scanlation editor foundation with normalized persistence, OCR-preview backend, and strong viewer/editor UX, ready for real pipeline stages next.`
