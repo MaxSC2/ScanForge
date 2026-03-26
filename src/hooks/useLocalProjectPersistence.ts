@@ -3,6 +3,7 @@ import type { ProjectMeta } from '../types';
 import { getProjectRepository } from '../storage';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useHistoryStore } from '../stores/useHistoryStore';
+import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useProjectLibraryStore } from '../stores/useProjectLibraryStore';
 import { useProjectStore } from '../stores/useProjectStore';
@@ -64,6 +65,7 @@ export function useLocalProjectPersistence() {
           pages,
           activePageId,
         });
+        await useJobStore.getState().loadJobsForCurrentProject();
         clearHistory();
         lastPersistedTokenRef.current = buildPersistenceToken(
           hydrated.meta,

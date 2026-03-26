@@ -181,6 +181,7 @@ export function Toolbar() {
         pages: hydrated.pages,
         activePageId: hydrated.activePageId,
       });
+      await useJobStore.getState().loadJobsForCurrentProject();
       clearHistory();
       pushToast('Проект загружен', 'success');
       requestFitToPage();

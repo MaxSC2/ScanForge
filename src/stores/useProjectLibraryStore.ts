@@ -3,6 +3,7 @@ import type { LocalProjectSummary, ProjectFile } from '../types';
 import { getProjectRepository } from '../storage';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
+import { useJobStore } from './useJobStore';
 import { usePageStore } from './usePageStore';
 import { createProjectMeta, useProjectStore } from './useProjectStore';
 import { useRegionStore } from './useRegionStore';
@@ -34,6 +35,7 @@ async function applyProject(project: ProjectFile) {
     pages,
     activePageId,
   });
+  await useJobStore.getState().loadJobsForCurrentProject();
   useRegionStore.getState().selectRegion(null);
   useHistoryStore.getState().clear();
 

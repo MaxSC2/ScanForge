@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
-import { mergeRegionsForPage, syncPagesForProject, syncRegionsForPages } from '../repositories';
+import {
+  mergeJobsWithRepository,
+  mergeRegionsForPage,
+  syncJobsForProject,
+  syncPagesForProject,
+  syncRegionsForPages,
+} from '../repositories';
 import { runPageOcr } from '../services/ocr';
 import { getProjectRepository } from '../storage';
 import type { JobRecord, JobResultSummary } from '../types';
@@ -17,16 +23,18 @@ interface JobState {
   queueOcrJobs: (pageIds: string[]) => number;
   retryJob: (jobId: string) => void;
   clearFinished: () => void;
+  loadJobsForCurrentProject: () => Promise<void>;
 }
 
 function summarizeResult(result: JobResultSummary) {
   return `${result.engine}: filled ${result.filledCount}/${result.regionsProcessed}, skipped ${result.skippedCount}`;
 }
 
-function updateJob(jobId: string, patch: Partial<JobRecord>) {
-  useJobStore.setState((state) => ({
-    jobs: state.jobs.map((job) => (job.id === jobId ? { ...job, ...patch } : job)),
-  }));
+function trimJobs(jobs: JobRecord[]) {
+  return jobs
+    .slice()
+    .sort((left, right) => right.createdAt - left.createdAt)
+    .slice(0, MAX_JOBS);
 }
 
 const projectRepository = getProjectRepository();
@@ -45,6 +53,29 @@ async function ensureProjectSyncedForOcr() {
   const current = usePageStore.getState();
   await syncPagesForProject(meta, current.pages);
   await syncRegionsForPages(current.pages);
+  return useProjectStore.getState().meta;
+}
+
+async function persistCurrentJobs() {
+  let meta = useProjectStore.getState().meta;
+  if (!meta.localProjectId && useJobStore.getState().jobs.length > 0) {
+    meta = await ensureProjectSyncedForOcr();
+  }
+
+  await syncJobsForProject(meta, useJobStore.getState().jobs);
+}
+
+function setJobsAndPersist(recipe: (jobs: JobRecord[]) => JobRecord[]) {
+  useJobStore.setState((state) => ({
+    jobs: trimJobs(recipe(state.jobs)),
+  }));
+  void persistCurrentJobs();
+}
+
+function updateJob(jobId: string, patch: Partial<JobRecord>) {
+  setJobsAndPersist((jobs) =>
+    jobs.map((job) => (job.id === jobId ? { ...job, ...patch } : job)),
+  );
 }
 
 async function refreshPageRegionsFromRepository(pageId: string) {
@@ -54,13 +85,13 @@ async function refreshPageRegionsFromRepository(pageId: string) {
   const mergedPage = await mergeRegionsForPage(page);
   useHistoryStore.getState().capture();
   usePageStore.setState((state) => ({
-    pages: state.pages.map((page) =>
-      page.id === pageId
+    pages: state.pages.map((entry) =>
+      entry.id === pageId
         ? {
-            ...page,
+            ...entry,
             regions: mergedPage.regions,
           }
-        : page,
+        : entry,
     ),
   }));
   useProjectStore.getState().touch();
@@ -184,9 +215,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       result: null,
     }));
 
-    set((state) => ({
-      jobs: [...newJobs, ...state.jobs].slice(0, MAX_JOBS),
-    }));
+    setJobsAndPersist((jobs) => [...newJobs, ...jobs]);
 
     useToastStore.getState().push(`OCR jobs queued: ${newJobs.length}`, 'info');
     void pumpQueue();
@@ -200,7 +229,22 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   clearFinished: () =>
-    set((state) => ({
-      jobs: state.jobs.filter((job) => job.status === 'queued' || job.status === 'running'),
-    })),
+    setJobsAndPersist((jobs) =>
+      jobs.filter((job) => job.status === 'queued' || job.status === 'running'),
+    ),
+
+  loadJobsForCurrentProject: async () => {
+    const meta = useProjectStore.getState().meta;
+    const pages = usePageStore.getState().pages;
+    const jobs = await mergeJobsWithRepository(meta, pages);
+
+    set({
+      jobs: trimJobs(jobs),
+      processing: false,
+    });
+
+    if (jobs.some((job) => job.status === 'queued')) {
+      void pumpQueue();
+    }
+  },
 }));
