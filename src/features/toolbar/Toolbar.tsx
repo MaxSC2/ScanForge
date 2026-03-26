@@ -1,11 +1,29 @@
 import { useRef, useState } from 'react';
-import { usePageStore } from '../../stores/usePageStore';
-import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
-import { useToastStore } from '../../stores/useToastStore';
-import { useHistoryStore } from '../../stores/useHistoryStore';
-import { useProjectStore } from '../../stores/useProjectStore';
+import {
+  Combine,
+  Download,
+  FileJson,
+  FolderOpen,
+  Hand,
+  Maximize,
+  MousePointer2,
+  Redo2,
+  RotateCcw,
+  Save,
+  ScanText,
+  Square,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { IconButton } from '../../components/IconButton';
 import { StitchDialog } from '../../components/StitchDialog';
+import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
+import { useHistoryStore } from '../../stores/useHistoryStore';
+import { useJobStore } from '../../stores/useJobStore';
+import { usePageStore } from '../../stores/usePageStore';
+import { useProjectStore } from '../../stores/useProjectStore';
+import { useToastStore } from '../../stores/useToastStore';
 import {
   exportPageImage,
   hydrateProjectFile,
@@ -13,59 +31,49 @@ import {
   saveProjectFile,
 } from '../../utils/persistence';
 import { getStitchPreview, suggestSafeStitch } from '../../utils/stitch';
-import {
-  FolderOpen,
-  FileJson,
-  Save,
-  Download,
-  MousePointer2,
-  Square,
-  Hand,
-  Combine,
-  Undo2,
-  Redo2,
-  ZoomIn,
-  ZoomOut,
-  Maximize,
-  RotateCcw,
-} from 'lucide-react';
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [stitchDialogOpen, setStitchDialogOpen] = useState(false);
-  const addPages = usePageStore((s) => s.addPages);
-  const setProjectState = usePageStore((s) => s.setProjectState);
-  const toProjectFile = usePageStore((s) => s.toProjectFile);
-  const selectedPageIds = usePageStore((s) => s.selectedPageIds);
-  const activePageId = usePageStore((s) => s.activePageId);
-  const pages = usePageStore((s) => s.pages);
-  const stitchOptions = usePageStore((s) => s.stitchOptions);
-  const setStitchOptions = usePageStore((s) => s.setStitchOptions);
-  const stitchPages = usePageStore((s) => s.stitchPages);
-  const stitching = usePageStore((s) => s.stitching);
-  const undo = useHistoryStore((s) => s.undo);
-  const redo = useHistoryStore((s) => s.redo);
-  const canUndo = useHistoryStore((s) => s.canUndo);
-  const canRedo = useHistoryStore((s) => s.canRedo);
-  const clearHistory = useHistoryStore((s) => s.clear);
-  const tool = useEditorStore((s) => s.tool);
-  const setTool = useEditorStore((s) => s.setTool);
-  const zoom = useEditorStore((s) => s.zoom);
-  const zoomIn = useEditorStore((s) => s.zoomIn);
-  const zoomOut = useEditorStore((s) => s.zoomOut);
-  const resetZoom = useEditorStore((s) => s.resetZoom);
-  const requestFitToPage = useEditorStore((s) => s.requestFitToPage);
-  const pushToast = useToastStore((s) => s.push);
-  const setMeta = useProjectStore((s) => s.setMeta);
 
-  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length) {
-      addPages(files);
-      pushToast(`Загружено страниц: ${files.length}`, 'success');
-    }
-    e.target.value = '';
-  };
+  const addPages = usePageStore((state) => state.addPages);
+  const setProjectState = usePageStore((state) => state.setProjectState);
+  const toProjectFile = usePageStore((state) => state.toProjectFile);
+  const selectedPageIds = usePageStore((state) => state.selectedPageIds);
+  const activePageId = usePageStore((state) => state.activePageId);
+  const pages = usePageStore((state) => state.pages);
+  const stitchOptions = usePageStore((state) => state.stitchOptions);
+  const setStitchOptions = usePageStore((state) => state.setStitchOptions);
+  const stitchPages = usePageStore((state) => state.stitchPages);
+  const stitching = usePageStore((state) => state.stitching);
+
+  const queueOcrJobs = useJobStore((state) => state.queueOcrJobs);
+
+  const undo = useHistoryStore((state) => state.undo);
+  const redo = useHistoryStore((state) => state.redo);
+  const canUndo = useHistoryStore((state) => state.canUndo);
+  const canRedo = useHistoryStore((state) => state.canRedo);
+  const clearHistory = useHistoryStore((state) => state.clear);
+
+  const tool = useEditorStore((state) => state.tool);
+  const setTool = useEditorStore((state) => state.setTool);
+  const zoom = useEditorStore((state) => state.zoom);
+  const zoomIn = useEditorStore((state) => state.zoomIn);
+  const zoomOut = useEditorStore((state) => state.zoomOut);
+  const resetZoom = useEditorStore((state) => state.resetZoom);
+  const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
+
+  const pushToast = useToastStore((state) => state.push);
+  const setMeta = useProjectStore((state) => state.setMeta);
+
+  const activePage = activePageId ? pages.find((page) => page.id === activePageId) : null;
+  const selectedSet = new Set(selectedPageIds);
+  const selectedPagesInOrder = pages.filter((page) => selectedSet.has(page.id));
+  const ocrTargetPageIds =
+    selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : [];
+
+  const canStitch = selectedPageIds.length >= 2 && !stitching;
+  const canRunOcr = ocrTargetPageIds.length > 0;
 
   const tools: { id: EditorTool; icon: React.ReactNode; label: string; shortcut: string }[] = [
     { id: 'select', icon: <MousePointer2 size={14} />, label: 'Выбор', shortcut: 'V' },
@@ -73,10 +81,6 @@ export function Toolbar() {
     { id: 'pan', icon: <Hand size={14} />, label: 'Панорама', shortcut: 'H' },
   ];
 
-  const canStitch = selectedPageIds.length >= 2 && !stitching;
-  const activePage = activePageId ? pages.find((page) => page.id === activePageId) : null;
-  const selectedSet = new Set(selectedPageIds);
-  const selectedPagesInOrder = pages.filter((page) => selectedSet.has(page.id));
   const stitchPreview =
     selectedPagesInOrder.length >= 2
       ? getStitchPreview(
@@ -87,6 +91,7 @@ export function Toolbar() {
           stitchOptions,
         )
       : null;
+
   const safeSuggestion =
     selectedPagesInOrder.length >= 2
       ? suggestSafeStitch(
@@ -98,19 +103,35 @@ export function Toolbar() {
         )
       : null;
 
+  const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length > 0) {
+      void addPages(files);
+      pushToast(`Загружено страниц: ${files.length}`, 'success');
+    }
+    event.target.value = '';
+  };
+
   const handleStitch = async () => {
     if (!canStitch) return;
     const page = await stitchPages(selectedPageIds, stitchOptions);
-    if (page) {
-      if (stitchOptions.exportAfterStitch) {
-        await exportPageImage(page);
-      }
-      pushToast(
-        `Создано: ${page.fileName}. Страниц: ${selectedPageIds.length}`,
-        'success',
-      );
-    } else {
+
+    if (!page) {
       pushToast('Выбери минимум две страницы для склейки', 'info');
+      return;
+    }
+
+    if (stitchOptions.exportAfterStitch) {
+      await exportPageImage(page);
+    }
+
+    pushToast(`Создано: ${page.fileName}. Страниц: ${selectedPageIds.length}`, 'success');
+  };
+
+  const handleOcr = () => {
+    const queued = queueOcrJobs(ocrTargetPageIds);
+    if (queued === 0) {
+      pushToast('OCR уже выполняется для выбранных страниц или страницы не выбраны', 'warning');
     }
   };
 
@@ -118,7 +139,7 @@ export function Toolbar() {
     try {
       const data = await toProjectFile();
       await saveProjectFile(data);
-      pushToast('Проект сохранен', 'success');
+      pushToast('Проект сохранён', 'success');
     } catch {
       pushToast('Не удалось сохранить проект', 'error');
     }
@@ -126,6 +147,7 @@ export function Toolbar() {
 
   const handleExportActive = async () => {
     if (!activePage) return;
+
     try {
       const saved = await exportPageImage(activePage);
       if (saved) {
@@ -140,6 +162,7 @@ export function Toolbar() {
     try {
       const data = await openProjectFile();
       if (!data) return;
+
       const hydrated = await hydrateProjectFile(data);
       setMeta(hydrated.meta);
       setProjectState({
@@ -156,27 +179,22 @@ export function Toolbar() {
 
   return (
     <>
-      {/* Brand */}
-      <div className="flex items-center gap-2 mr-3">
-        <div className="w-6 h-6 rounded bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-black">
+      <div className="mr-3 flex items-center gap-2">
+        <div className="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-black text-white">
           SF
         </div>
-        <span className="text-sm font-bold tracking-wide text-zinc-200 hidden lg:inline">
+        <span className="hidden text-sm font-bold tracking-wide text-zinc-200 lg:inline">
           ScanForge
         </span>
       </div>
 
-      {/* Separator */}
-      <div className="w-px h-5 bg-zinc-700/60" />
+      <div className="h-5 w-px bg-zinc-700/60" />
 
-      {/* File loader */}
-      <IconButton
-        onClick={() => fileRef.current?.click()}
-        tooltip="Открыть изображения"
-      >
+      <IconButton onClick={() => fileRef.current?.click()} tooltip="Открыть изображения">
         <FolderOpen size={14} />
         <span className="hidden sm:inline">Открыть</span>
       </IconButton>
+
       <input
         ref={fileRef}
         type="file"
@@ -186,10 +204,7 @@ export function Toolbar() {
         onChange={handleFiles}
       />
 
-      <IconButton
-        onClick={handleOpenProject}
-        tooltip="Открыть файл проекта (.scanforge.json)"
-      >
+      <IconButton onClick={handleOpenProject} tooltip="Открыть файл проекта (.scanforge.json)">
         <FileJson size={14} />
         <span className="hidden xl:inline">Открыть проект</span>
       </IconButton>
@@ -209,6 +224,15 @@ export function Toolbar() {
       </IconButton>
 
       <IconButton
+        onClick={handleOcr}
+        tooltip="Запустить OCR по выбранным страницам (Ctrl+Shift+O)"
+        disabled={!canRunOcr}
+      >
+        <ScanText size={14} />
+        <span className="hidden xl:inline">OCR</span>
+      </IconButton>
+
+      <IconButton
         onClick={() => setStitchDialogOpen(true)}
         tooltip="Склеить выбранные страницы (Ctrl+M)"
         disabled={!canStitch}
@@ -217,45 +241,46 @@ export function Toolbar() {
         <span className="hidden xl:inline">Склеить</span>
       </IconButton>
 
-      {/* Separator */}
-      <div className="w-px h-5 bg-zinc-700/60" />
+      <div className="h-5 w-px bg-zinc-700/60" />
 
-      {/* Tools */}
-      <div className="flex items-center gap-0.5 bg-zinc-800/50 p-0.5 rounded-lg">
-        {tools.map((t) => (
+      <div className="flex items-center gap-0.5 rounded-lg bg-zinc-800/50 p-0.5">
+        {tools.map((item) => (
           <IconButton
-            key={t.id}
-            active={tool === t.id}
-            onClick={() => setTool(t.id)}
-            tooltip={`${t.label} (${t.shortcut})`}
+            key={item.id}
+            active={tool === item.id}
+            onClick={() => setTool(item.id)}
+            tooltip={`${item.label} (${item.shortcut})`}
             variant="ghost"
           >
-            {t.icon}
+            {item.icon}
           </IconButton>
         ))}
       </div>
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      <div className="flex items-center gap-0.5 mr-2">
+      <div className="mr-2 flex items-center gap-0.5">
         <IconButton onClick={undo} disabled={!canUndo} tooltip="Отменить (Ctrl+Z)" variant="ghost">
           <Undo2 size={14} />
         </IconButton>
-        <IconButton onClick={redo} disabled={!canRedo} tooltip="Повторить (Ctrl+Shift+Z)" variant="ghost">
+        <IconButton
+          onClick={redo}
+          disabled={!canRedo}
+          tooltip="Повторить (Ctrl+Shift+Z)"
+          variant="ghost"
+        >
           <Redo2 size={14} />
         </IconButton>
       </div>
 
-      {/* Zoom controls */}
       <div className="flex items-center gap-0.5">
-        <IconButton onClick={zoomOut} tooltip="Уменьшить (Ctrl+−)" variant="ghost">
+        <IconButton onClick={zoomOut} tooltip="Уменьшить (Ctrl+-)" variant="ghost">
           <ZoomOut size={14} />
         </IconButton>
 
         <button
           onClick={resetZoom}
-          className="h-7 px-2 rounded text-[11px] tabular-nums text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+          className="h-7 rounded px-2 text-[11px] tabular-nums text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           title="Сбросить масштаб (Ctrl+0)"
         >
           {Math.round(zoom * 100)}%
@@ -282,32 +307,34 @@ export function Toolbar() {
         onClose={() => setStitchDialogOpen(false)}
         onChange={setStitchOptions}
         onAutoFix={() => {
-          if (safeSuggestion) {
-            setStitchOptions(safeSuggestion.patch);
-              pushToast(`Применен безопасный размер: ${safeSuggestion.targetCrossAxis}px`, 'info');
-          }
+          if (!safeSuggestion) return;
+          setStitchOptions(safeSuggestion.patch);
+          pushToast(`Применён безопасный размер: ${safeSuggestion.targetCrossAxis}px`, 'info');
         }}
-          onAutoFixAndSubmit={async () => {
-            if (!safeSuggestion) return;
-            const nextOptions = { ...stitchOptions, ...safeSuggestion.patch };
-            setStitchOptions(safeSuggestion.patch);
-            const page = await stitchPages(selectedPageIds, nextOptions);
-            if (page) {
-              if (nextOptions.exportAfterStitch) {
-                await exportPageImage(page);
-              }
-              pushToast(
-                `Автофикс применен (${safeSuggestion.targetCrossAxis}px), склейка выполнена`,
-                'success',
-              );
-              setStitchDialogOpen(false);
-            }
-          }}
+        onAutoFixAndSubmit={async () => {
+          if (!safeSuggestion) return;
+
+          const nextOptions = { ...stitchOptions, ...safeSuggestion.patch };
+          setStitchOptions(safeSuggestion.patch);
+          const page = await stitchPages(selectedPageIds, nextOptions);
+
+          if (!page) return;
+          if (nextOptions.exportAfterStitch) {
+            await exportPageImage(page);
+          }
+
+          pushToast(
+            `Автофикс применён (${safeSuggestion.targetCrossAxis}px), склейка выполнена`,
+            'success',
+          );
+          setStitchDialogOpen(false);
+        }}
         onSubmit={async () => {
           if (stitchPreview?.safety.maxAreaExceeded || stitchPreview?.safety.maxDimensionExceeded) {
-              pushToast('Склейка заблокирована: превышены безопасные лимиты canvas', 'error');
+            pushToast('Склейка заблокирована: превышены безопасные лимиты canvas', 'error');
             return;
           }
+
           await handleStitch();
           setStitchDialogOpen(false);
         }}

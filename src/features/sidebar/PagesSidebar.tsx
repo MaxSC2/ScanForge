@@ -7,6 +7,7 @@ import {
 import { GripVertical, ImagePlus, Layers, Trash2 } from 'lucide-react';
 import { usePageStore } from '../../stores/usePageStore';
 import { useRegionStore } from '../../stores/useRegionStore';
+import { JobsPanel } from './JobsPanel';
 import { ProjectLibrary } from './ProjectLibrary';
 
 export function PagesSidebar() {
@@ -28,6 +29,7 @@ export function PagesSidebar() {
   return (
     <div className="flex h-full flex-col">
       <ProjectLibrary />
+      <JobsPanel />
 
       <section className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center border-b border-zinc-800 px-3 py-2">
