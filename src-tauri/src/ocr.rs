@@ -2,7 +2,13 @@ use crate::domain_storage::{DomainRepository, RegionRecord};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-const OCR_ENGINE_NAME: &str = "scanforge-tauri-preview";
+fn preview_engine_name(engine: &str) -> String {
+    if engine == "mock" {
+        "scanforge-preview".to_string()
+    } else {
+        format!("scanforge-{engine}-preview")
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +86,17 @@ pub fn run_page_ocr(
         return Err("OCR backend expects a data:image payload".into());
     }
 
+    let settings = repository.get_project_settings(page.project_id.clone())?;
+    let source_language = settings
+        .as_ref()
+        .and_then(|settings| (settings.source_language != "auto").then(|| settings.source_language.clone()));
+    let engine_name = preview_engine_name(
+        settings
+            .as_ref()
+            .map(|settings| settings.ocr_engine.as_str())
+            .unwrap_or("mock"),
+    );
+
     let page_name = page_label(&page.image_path, &page.id);
     let regions = repository.list_regions_by_page(page_id)?;
     let mut results = Vec::with_capacity(regions.len());
@@ -124,7 +141,8 @@ pub fn run_page_ocr(
             "translated".into()
         };
         updated_region.ocr_status = "done".into();
-        updated_region.ocr_engine = Some(OCR_ENGINE_NAME.into());
+        updated_region.ocr_engine = Some(engine_name.clone());
+        updated_region.source_language = source_language.clone();
         updated_region.ocr_updated_at = Some(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -148,7 +166,7 @@ pub fn run_page_ocr(
     let skipped_count = results.len().saturating_sub(filled_count);
 
     Ok(OcrPageResult {
-        engine: OCR_ENGINE_NAME.into(),
+        engine: engine_name,
         regions_processed: results.len(),
         filled_count,
         skipped_count,

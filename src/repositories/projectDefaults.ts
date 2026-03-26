@@ -2,6 +2,7 @@ import {
   createDefaultTextStyle,
   DEFAULT_PROJECT_SETTINGS,
   type ProjectSettingsRecord,
+  type TextStyleRecord,
 } from '../types';
 import { projectSettingsRepository } from './projectSettingsRepository';
 import { textStyleRepository } from './textStyleRepository';
@@ -28,4 +29,21 @@ export async function ensureProjectDomainDefaults(projectId: string) {
 
   await projectSettingsRepository.update(nextSettings);
   return nextSettings;
+}
+
+export interface ProjectDomainContext {
+  settings: ProjectSettingsRecord;
+  textStyles: TextStyleRecord[];
+}
+
+export async function loadProjectDomainContext(
+  projectId: string,
+): Promise<ProjectDomainContext> {
+  const settings = await ensureProjectDomainDefaults(projectId);
+  const textStyles = await textStyleRepository.listByProject(projectId);
+
+  return {
+    settings,
+    textStyles,
+  };
 }

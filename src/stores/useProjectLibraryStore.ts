@@ -3,6 +3,7 @@ import type { LocalProjectSummary, ProjectFile } from '../types';
 import { getProjectRepository } from '../storage';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
+import { useProjectDomainStore } from './useProjectDomainStore';
 import { useJobStore } from './useJobStore';
 import { usePageStore } from './usePageStore';
 import { createProjectMeta, useProjectStore } from './useProjectStore';
@@ -35,6 +36,7 @@ async function applyProject(project: ProjectFile) {
     pages,
     activePageId,
   });
+  await useProjectDomainStore.getState().hydrateProjectDomain(hydrated.meta.localProjectId);
   await useJobStore.getState().loadJobsForCurrentProject();
   useRegionStore.getState().selectRegion(null);
   useHistoryStore.getState().clear();

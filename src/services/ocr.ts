@@ -1,7 +1,8 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { pageRepository } from '../repositories/pageRepository';
+import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import { regionRepository } from '../repositories/regionRepository';
-import type { OcrPageResult, Page, RegionRecord } from '../types';
+import type { OcrEngineId, OcrPageResult, Page, RegionRecord } from '../types';
 
 type OcrProgressCallback = (progress: number, message: string) => void;
 
@@ -9,11 +10,17 @@ interface StoredOcrContext {
   fileName: string;
   naturalWidth: number;
   naturalHeight: number;
+  sourceLanguage?: string;
+  ocrEngine: OcrEngineId | string;
   regions: Array<{
     record: RegionRecord;
     order: number;
     label: string;
   }>;
+}
+
+function toPreviewEngineName(engine: string) {
+  return engine === 'mock' ? 'scanforge-preview' : `scanforge-${engine}-preview`;
 }
 
 function pageStem(fileName: string) {
@@ -50,6 +57,8 @@ function toFallbackContext(page: Page): StoredOcrContext {
     fileName: page.fileName,
     naturalWidth: page.naturalWidth,
     naturalHeight: page.naturalHeight,
+    sourceLanguage: undefined,
+    ocrEngine: 'mock',
     regions: page.regions.map((region, index) => ({
       record: {
         id: region.id,
@@ -102,10 +111,14 @@ async function loadStoredOcrContext(page: Page): Promise<StoredOcrContext> {
     return toFallbackContext(page);
   }
 
+  const settings = await ensureProjectDomainDefaults(pageRecord.projectId);
+
   return {
     fileName: deriveFileName(page, pageRecord.imagePath),
     naturalWidth: pageRecord.width,
     naturalHeight: pageRecord.height,
+    sourceLanguage: settings.sourceLanguage === 'auto' ? undefined : settings.sourceLanguage,
+    ocrEngine: settings.ocrEngine,
     regions: regionRecords.map((record, index) => ({
       record,
       order: record.order || index + 1,
@@ -115,6 +128,7 @@ async function loadStoredOcrContext(page: Page): Promise<StoredOcrContext> {
 }
 
 async function applyBrowserOcrResult(
+  context: StoredOcrContext,
   regions: StoredOcrContext['regions'],
   results: OcrPageResult['results'],
 ) {
@@ -130,9 +144,10 @@ async function applyBrowserOcrResult(
       await regionRepository.update({
         ...record,
         sourceText: result.text,
+        ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
         status: record.translatedText.trim() ? 'translated' : 'ocr_done',
         ocrStatus: 'done',
-        ocrEngine: 'scanforge-browser-preview',
+        ocrEngine: toPreviewEngineName(String(context.ocrEngine)),
         ocrUpdatedAt: Date.now(),
       });
     }),
@@ -189,10 +204,10 @@ async function runBrowserPreviewOcr(
   const filledCount = results.filter((item) => !item.skipped && item.text).length;
   const skippedCount = results.length - filledCount;
 
-  await applyBrowserOcrResult(context.regions, results);
+  await applyBrowserOcrResult(context, context.regions, results);
 
   return {
-    engine: 'scanforge-browser-preview',
+    engine: toPreviewEngineName(String(context.ocrEngine)),
     regionsProcessed: results.length,
     filledCount,
     skippedCount,

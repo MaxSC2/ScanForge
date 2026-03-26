@@ -5,6 +5,7 @@ import { useEditorStore } from '../stores/useEditorStore';
 import { useHistoryStore } from '../stores/useHistoryStore';
 import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
+import { useProjectDomainStore } from '../stores/useProjectDomainStore';
 import { useProjectLibraryStore } from '../stores/useProjectLibraryStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { useToastStore } from '../stores/useToastStore';
@@ -65,6 +66,9 @@ export function useLocalProjectPersistence() {
           pages,
           activePageId,
         });
+        await useProjectDomainStore.getState().hydrateProjectDomain(
+          hydrated.meta.localProjectId,
+        );
         await useJobStore.getState().loadJobsForCurrentProject();
         clearHistory();
         lastPersistedTokenRef.current = buildPersistenceToken(
@@ -114,6 +118,9 @@ export function useLocalProjectPersistence() {
           if (useProjectStore.getState().meta.localProjectId !== result.project.meta.localProjectId) {
             useProjectStore.getState().setMeta(result.project.meta);
           }
+          await useProjectDomainStore.getState().hydrateProjectDomain(
+            result.project.meta.localProjectId,
+          );
           void useProjectLibraryStore.getState().refresh();
         } catch (error) {
           console.warn('Local project autosave failed:', error);
