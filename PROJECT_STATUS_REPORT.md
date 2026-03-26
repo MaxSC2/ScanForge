@@ -2,7 +2,7 @@
 
 Date: 2026-03-26
 Branch: `stage-3-pipeline-foundation`
-Report scope: post-Stage-3 translation foundation
+Report scope: post-Stage-3 render/export foundation
 
 ## 1. Executive Summary
 
@@ -19,20 +19,20 @@ The repository now contains a working local-first desktop pipeline foundation wi
 - real local OCR path on Windows via WinRT OCR
 - persisted OCR and translation jobs
 - draft translation pipeline with provider abstraction
+- rendered PNG export from DB-backed translated page state
 - project pipeline settings and text style persistence
 - strong viewer and inspection UX
 
 The most accurate current one-line description is:
 
-`Local-first scanlation editor foundation with normalized persistence, real Windows OCR, draft translation pipeline, and strong viewer/editor UX`
+`Local-first scanlation editor foundation with normalized persistence, real Windows OCR, draft translation pipeline, rendered PNG export, and strong viewer/editor UX`
 
 This is a serious step forward from Stage 2, but Stage 3 is still not fully complete.
 
 What is still missing before Stage 3 can be called done:
 
-- final rendered export foundation
-- end-to-end verification/stabilization pass
-- stronger OCR/translation provider coverage beyond current local draft paths
+- end-to-end verification and stabilization pass
+- stronger OCR and translation provider coverage beyond current local draft paths
 
 ## 2. Current Stage Status
 
@@ -59,15 +59,15 @@ Workstream status:
 
 - Workstream A `Domain & schema completion` -> substantially done
 - Workstream B `Real OCR integration` -> usable and integrated
-- Workstream C `Translation pipeline` -> first real foundation is now implemented
-- Workstream D `Final render / export foundation` -> not done
+- Workstream C `Translation pipeline` -> first real foundation implemented
+- Workstream D `Final render / export foundation` -> foundation implemented
 - Workstream E `Verification and stabilization` -> not done
 
 Practical Stage 3 verdict:
 
 - the repo is no longer "editor + OCR preview only"
-- the repo is now "editor + OCR + translation draft foundation"
-- Stage 3 is not done yet because rendered export and verification are still missing
+- the repo is now "editor + OCR + translation draft + rendered export foundation"
+- Stage 3 is not done yet because verification and stabilization are still missing
 
 ## 3. Repository and Branch State
 
@@ -115,12 +115,12 @@ What exists now:
 - page and region editor workflows
 - OCR provider path with real Windows OCR on desktop
 - translation provider path with persisted draft translations
+- rendered export path using stored translated overlays and text styles
 - persisted OCR and translation jobs
 - strong viewer/focus/clean reading modes
 
 What does not exist yet:
 
-- final rendered export pipeline
 - full typesetting workflow
 - cleaning/redraw toolset
 - QC workflow
@@ -211,7 +211,7 @@ Implemented page operations:
 - active page switching
 - page deletion
 - page stitching
-- active page export of source PNG
+- active page rendered PNG export
 
 ### 7.3 Region workflow
 
@@ -259,6 +259,7 @@ Toolbar pipeline controls now include:
 - run OCR
 - run translation
 - overwrite-existing-translations toggle
+- rendered PNG export trigger
 
 ## 8. Domain Model and Persistence Status
 
@@ -302,7 +303,7 @@ Snapshot is still used for:
 - backup envelope behavior
 - some project file reconstruction concerns outside the DB core
 
-Snapshot is no longer required for core region metadata that matters to OCR/translation.
+Snapshot is no longer required for core region metadata that matters to OCR, translation, and rendered export.
 
 ### 8.4 Asset storage reality
 
@@ -321,7 +322,7 @@ OCR is now provider-based and storage-backed.
 
 Current OCR path:
 
-1. sync current page/region domain state into DB
+1. sync current page and region domain state into DB
 2. run OCR by page id through Tauri
 3. backend reads page and regions from domain storage
 4. backend processes region crops
@@ -360,7 +361,7 @@ Stage 3 translation foundation now exists as a real persisted pipeline.
 
 Current translation path:
 
-1. sync current page/region state into DB
+1. sync current page and region state into DB
 2. resolve project settings from normalized storage
 3. run translation by page or selected region target
 4. provider writes translated draft text into `regions`
@@ -400,7 +401,7 @@ What it means in practice:
 - translation architecture is now real
 - translation job persistence is real
 - output is draft-quality and deterministic
-- this is enough to unblock the next render/export layer
+- this is enough to support the first rendered export layer
 
 ### 10.3 Current translation limitations
 
@@ -465,20 +466,28 @@ Important current behavior:
 - repositories remain the persistence boundary
 - OCR and translation are not implemented directly in the UI layer
 - project settings and text styles are hydrated from repositories
+- render export syncs and reads from repository-backed domain state
 
 This is aligned with the Stage 3 architectural rule to avoid turning stores into mini-backends.
 
 ## 13. Export Status
 
-Export is still not where Stage 3 needs it to be.
+Rendered export foundation now exists.
 
-Current export reality:
+Current rendered export behavior:
 
-- active page export still behaves like source image export
+- export syncs current project state into domain storage before rendering
+- export reads page, regions, settings, and text styles from repository-backed storage
+- export composes the source image plus visible translated text overlays
+- style resolution follows region style -> project default style -> fallback style
+- output is written as rendered PNG, not raw source image
+
+Current limitations:
+
+- export is frontend canvas-based, not backend-renderer-based
 - stitched export is still source-image oriented
-- translated overlays are not yet rendered into exported PNG output
-
-This is the biggest remaining functional gap before Stage 3 can be considered complete.
+- text layout is basic Stage 3 auto-fit, not full typesetting
+- hidden-region and advanced render options are not exposed in UI yet
 
 ## 14. Quality and Risk Assessment
 
@@ -488,12 +497,12 @@ Current strengths:
 - normalized domain model
 - OCR repository path
 - translation repository path
+- rendered export path from domain state
 - project settings persistence
 - local-first recovery behavior
 
 Current risks:
 
-- rendered export is still missing
 - translation quality is draft-level
 - OCR provider coverage is platform-limited
 - image asset storage is still data-URL heavy
@@ -509,25 +518,25 @@ Stage 3 done-definition vs actual status:
 - translation jobs exist and persist -> yes
 - translated text survives reload -> yes
 - project settings include source/target language and providers -> yes
-- rendered export produces composed page output -> no
+- rendered export produces composed page output -> yes
 - build remains green -> yes
 - Stage 2 projects still load -> expected yes, but full verification pass still pending
 
 Practical conclusion:
 
 - Stage 3 is not done yet
-- the repo is now close enough that final render/export and verification are the right next targets
+- the repo is now close enough that verification and stabilization are the right next targets
 
 ## 16. Recommended Next Steps
 
 The correct next execution order from here is:
 
-1. build the rendered export foundation
-2. make export mean composed output, not source image dump
-3. add a repeatable manual verification checklist for OCR -> translation -> export
-4. add minimal automated checks around repository CRUD and job lifecycles
+1. add a repeatable manual verification checklist for OCR -> translation -> export
+2. verify Stage 2 project migration through OCR -> translation -> export
+3. add minimal automated checks around repository CRUD and job lifecycles
+4. harden provider failure reporting and recovery paths
 
-If the next work goes into cosmetic editor features instead of rendered export, Stage 3 will drift again and remain unfinished.
+If the next work goes into cosmetic editor features instead of verification, Stage 3 will drift again and remain unfinished.
 
 ## 17. Final Assessment
 
@@ -539,12 +548,13 @@ The repository now contains:
 - normalized domain-backed persistence
 - real Windows OCR
 - persisted translation draft pipeline
+- rendered PNG export from translated domain state
 - usable project-level pipeline settings
 
 But the project is still one major slice away from a legitimate Stage 3 finish:
 
-`rendered export + verification`
+`verification + stabilization`
 
 The most honest current description is:
 
-`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, and unfinished final render/export pipeline.`
+`A working local-first scanlation editor foundation with normalized persistence, real Windows OCR, persisted translation drafts, and first rendered PNG export, pending verification and stabilization.`
