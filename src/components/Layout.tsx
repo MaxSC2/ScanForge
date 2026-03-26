@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  ChevronLeft,
+  ChevronRight,
   Eye,
   EyeOff,
   PanelLeftClose,
@@ -9,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/useEditorStore';
+import { usePageStore } from '../stores/usePageStore';
 
 interface LayoutProps {
   sidebar: ReactNode;
@@ -23,6 +26,9 @@ const CLEAN_HUD_IDLE_MS = 1800;
 export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: LayoutProps) {
   const [cleanHudVisible, setCleanHudVisible] = useState(true);
 
+  const pages = usePageStore((state) => state.pages);
+  const activePageId = usePageStore((state) => state.activePageId);
+  const goToAdjacentPage = usePageStore((state) => state.goToAdjacentPage);
   const sidebarOpen = useEditorStore((state) => state.sidebarOpen);
   const inspectorOpen = useEditorStore((state) => state.inspectorOpen);
   const focusMode = useEditorStore((state) => state.focusMode);
@@ -38,6 +44,11 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
 
   const sidebarWidth = 224;
   const inspectorWidth = 272;
+  const activePageIndex = activePageId ? pages.findIndex((page) => page.id === activePageId) : -1;
+  const hasPreviousPage = activePageIndex > 0;
+  const hasNextPage = activePageIndex >= 0 && activePageIndex < pages.length - 1;
+  const pageCounterLabel =
+    pages.length === 0 || activePageIndex < 0 ? 'No pages' : `${activePageIndex + 1} / ${pages.length}`;
 
   const clearHideHudTimer = useCallback(() => {
     if (hideHudTimerRef.current !== null) {
@@ -175,6 +186,28 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
                 }`}
               >
                 <span className="px-2 uppercase tracking-[0.18em] text-zinc-500">Clean View</span>
+
+                <button
+                  onClick={() => goToAdjacentPage('previous')}
+                  disabled={!hasPreviousPage}
+                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-30"
+                  title="Предыдущая страница (Left / Up / PageUp)"
+                >
+                  <ChevronLeft size={13} />
+                </button>
+
+                <span className="min-w-16 px-1 text-center tabular-nums text-zinc-300">
+                  {pageCounterLabel}
+                </span>
+
+                <button
+                  onClick={() => goToAdjacentPage('next')}
+                  disabled={!hasNextPage}
+                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-30"
+                  title="Следующая страница (Right / Down / Space)"
+                >
+                  <ChevronRight size={13} />
+                </button>
 
                 <button
                   onClick={requestFitToPage}

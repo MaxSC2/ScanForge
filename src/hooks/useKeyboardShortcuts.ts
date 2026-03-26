@@ -100,6 +100,18 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (!ctrl && (event.key === ' ' || key === 'pagedown') && useEditorStore.getState().cleanView) {
+        event.preventDefault();
+        usePageStore.getState().goToAdjacentPage('next');
+        return;
+      }
+
+      if (!ctrl && key === 'pageup' && useEditorStore.getState().cleanView) {
+        event.preventDefault();
+        usePageStore.getState().goToAdjacentPage('previous');
+        return;
+      }
+
       if (ctrl && event.shiftKey && key === '1') {
         event.preventDefault();
         useEditorStore.getState().requestActualSize();
@@ -187,6 +199,14 @@ export function useKeyboardShortcuts() {
 
       const arrowKeys = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
       if (arrowKeys.includes(key)) {
+        if (useEditorStore.getState().cleanView) {
+          event.preventDefault();
+          usePageStore
+            .getState()
+            .goToAdjacentPage(key === 'arrowleft' || key === 'arrowup' ? 'previous' : 'next');
+          return;
+        }
+
         const pageId = usePageStore.getState().activePageId;
         const regionId = useRegionStore.getState().selectedRegionId;
         if (!pageId || !regionId) return;

@@ -27,6 +27,7 @@ interface PageState {
   addPages: (files: File[]) => Promise<void>;
   removePage: (id: string) => void;
   setActivePage: (id: string | null) => void;
+  goToAdjacentPage: (direction: 'previous' | 'next') => void;
   getActivePage: () => Page | undefined;
   reorderPage: (fromIndex: number, toIndex: number) => void;
   selectPage: (id: string, mode?: 'replace' | 'toggle' | 'range') => void;
@@ -121,6 +122,40 @@ export const usePageStore = create<PageState>((set, get) => ({
       selectedPageIds: id ? [id] : [],
       lastSelectedPageId: id,
     })),
+
+  goToAdjacentPage: (direction) =>
+    set((state) => {
+      if (state.pages.length === 0) {
+        return state;
+      }
+
+      const currentIndex = state.activePageId
+        ? state.pages.findIndex((page) => page.id === state.activePageId)
+        : -1;
+
+      const fallbackIndex = direction === 'next' ? 0 : state.pages.length - 1;
+      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : fallbackIndex;
+      const delta = direction === 'next' ? 1 : -1;
+      const nextIndex = Math.min(
+        state.pages.length - 1,
+        Math.max(0, safeCurrentIndex + delta),
+      );
+
+      if (nextIndex === safeCurrentIndex && currentIndex >= 0) {
+        return state;
+      }
+
+      const nextPage = state.pages[nextIndex];
+      if (!nextPage) {
+        return state;
+      }
+
+      return {
+        activePageId: nextPage.id,
+        selectedPageIds: [nextPage.id],
+        lastSelectedPageId: nextPage.id,
+      };
+    }),
 
   getActivePage: () => {
     const { pages, activePageId } = get();
