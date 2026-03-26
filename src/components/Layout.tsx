@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Eye,
   EyeOff,
@@ -18,7 +18,11 @@ interface LayoutProps {
   statusBar: ReactNode;
 }
 
+const CLEAN_HUD_IDLE_MS = 1800;
+
 export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: LayoutProps) {
+  const [cleanHudVisible, setCleanHudVisible] = useState(true);
+
   const sidebarOpen = useEditorStore((state) => state.sidebarOpen);
   const inspectorOpen = useEditorStore((state) => state.inspectorOpen);
   const focusMode = useEditorStore((state) => state.focusMode);
@@ -30,8 +34,56 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
   const toggleRegionOverlays = useEditorStore((state) => state.toggleRegionOverlays);
   const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
 
+  const hideHudTimerRef = useRef<number | null>(null);
+
   const sidebarWidth = 224;
   const inspectorWidth = 272;
+
+  const clearHideHudTimer = useCallback(() => {
+    if (hideHudTimerRef.current !== null) {
+      window.clearTimeout(hideHudTimerRef.current);
+      hideHudTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleCleanHudHide = useCallback(() => {
+    clearHideHudTimer();
+    if (!cleanView) {
+      setCleanHudVisible(true);
+      return;
+    }
+
+    hideHudTimerRef.current = window.setTimeout(() => {
+      setCleanHudVisible(false);
+    }, CLEAN_HUD_IDLE_MS);
+  }, [cleanView, clearHideHudTimer]);
+
+  const revealCleanHud = useCallback(() => {
+    setCleanHudVisible(true);
+    if (cleanView) {
+      scheduleCleanHudHide();
+    }
+  }, [cleanView, scheduleCleanHudHide]);
+
+  useEffect(() => {
+    if (!cleanView) {
+      clearHideHudTimer();
+      setCleanHudVisible(true);
+      return;
+    }
+
+    revealCleanHud();
+
+    const handleKeyboardActivity = () => {
+      revealCleanHud();
+    };
+
+    window.addEventListener('keydown', handleKeyboardActivity);
+    return () => {
+      window.removeEventListener('keydown', handleKeyboardActivity);
+      clearHideHudTimer();
+    };
+  }, [cleanView, clearHideHudTimer, revealCleanHud]);
 
   return (
     <div className="flex h-screen w-screen select-none flex-col overflow-hidden bg-zinc-950 text-zinc-100">
@@ -67,7 +119,21 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
           </button>
         )}
 
-        <main className={`group relative flex-1 overflow-hidden ${cleanView ? 'bg-black' : 'bg-zinc-950'}`}>
+        <main
+          className={`group relative flex-1 overflow-hidden ${cleanView ? 'bg-black' : 'bg-zinc-950'}`}
+          onPointerMove={cleanView ? revealCleanHud : undefined}
+          onPointerDown={cleanView ? revealCleanHud : undefined}
+          onWheel={cleanView ? revealCleanHud : undefined}
+        >
+          {cleanView && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(39,39,42,0.2)_0%,rgba(9,9,11,0.78)_56%,rgba(0,0,0,1)_100%)]" />
+              <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-indigo-950/15 via-transparent to-transparent" />
+              <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-cyan-950/10 via-transparent to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/65 to-transparent" />
+            </div>
+          )}
+
           {focusMode && !cleanView && (
             <>
               <button
@@ -101,7 +167,13 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
 
           {cleanView && (
             <div className="pointer-events-none absolute inset-x-0 top-3 z-50 flex justify-center px-4">
-              <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-zinc-800/80 bg-zinc-950/75 p-1 text-[11px] text-zinc-400 shadow-2xl shadow-black/40 backdrop-blur transition-opacity duration-200 opacity-35 hover:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
+              <div
+                className={`pointer-events-auto flex items-center gap-1 rounded-full border border-zinc-800/80 bg-zinc-950/78 p-1 text-[11px] text-zinc-400 shadow-2xl shadow-black/40 backdrop-blur transition-all duration-300 ${
+                  cleanHudVisible
+                    ? 'translate-y-0 opacity-100'
+                    : '-translate-y-3 opacity-0'
+                }`}
+              >
                 <span className="px-2 uppercase tracking-[0.18em] text-zinc-500">Clean View</span>
 
                 <button
@@ -131,7 +203,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
             </div>
           )}
 
-          {canvas}
+          <div className="relative z-10 h-full">{canvas}</div>
         </main>
 
         {!cleanView && !focusMode && (

@@ -41,6 +41,7 @@ export function EditorCanvas() {
   const stagePosition = useEditorStore((s) => s.stagePosition);
   const viewMode = useEditorStore((s) => s.viewMode);
   const tool = useEditorStore((s) => s.tool);
+  const cleanView = useEditorStore((s) => s.cleanView);
   const regionOverlaysVisible = useEditorStore((s) => s.regionOverlaysVisible);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const minimapVisible = useEditorStore((s) => s.minimapVisible);
@@ -317,12 +318,19 @@ export function EditorCanvas() {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative"
+      className={`relative h-full w-full ${cleanView ? 'bg-transparent' : ''}`}
       style={{ cursor: cursorMap[tool] }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {cleanView && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_0%,rgba(24,24,27,0.06)_42%,rgba(0,0,0,0)_70%)]" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent" />
+        </div>
+      )}
+
       {/* Drag overlay */}
       {isDragging && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-indigo-500/5 border-2 border-dashed border-indigo-500/30 rounded-lg pointer-events-none">
@@ -349,13 +357,29 @@ export function EditorCanvas() {
         onClick={handleStageClick}
       >
         <Layer>
-          {/* Checkerboard background placeholder */}
+          {cleanView && (
+            <Rect
+              x={-12}
+              y={-12}
+              width={activePage.naturalWidth + 24}
+              height={activePage.naturalHeight + 24}
+              fill="rgba(5,10,24,0.68)"
+              shadowColor="#000000"
+              shadowBlur={46}
+              shadowOpacity={0.6}
+              shadowOffsetX={0}
+              shadowOffsetY={18}
+              listening={false}
+            />
+          )}
+
+          {/* Page base */}
           <Rect
             x={0}
             y={0}
             width={activePage.naturalWidth}
             height={activePage.naturalHeight}
-            fill="#1a1a2e"
+            fill={cleanView ? '#09090b' : '#1a1a2e'}
             cornerRadius={0}
             listening={false}
           />
@@ -407,7 +431,7 @@ export function EditorCanvas() {
       </Stage>
 
       {/* Minimap */}
-      {minimapVisible && activePage && (
+      {minimapVisible && activePage && !cleanView && (
         <Minimap
           imageUrl={activePage.imageUrl}
           imageWidth={activePage.naturalWidth}
