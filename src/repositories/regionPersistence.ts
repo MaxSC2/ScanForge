@@ -64,6 +64,28 @@ function mergeRegionRecord(record: RegionRecord, fallback: Region | undefined, i
   });
 }
 
+export async function mergeRegionsForPage(page: Page) {
+  const fallbackRegions = page.regions.map((region) => normalizeRegion(region));
+  const records = await regionRepository.getByPage(page.id);
+
+  if (records.length === 0) {
+    return {
+      ...page,
+      regions: fallbackRegions,
+    } satisfies Page;
+  }
+
+  const fallbackMap = new Map(fallbackRegions.map((region) => [region.id, region] as const));
+  const mergedRegions = sortRegionRecords(records, fallbackMap).map((record, index) =>
+    mergeRegionRecord(record, fallbackMap.get(record.id), index),
+  );
+
+  return {
+    ...page,
+    regions: mergedRegions,
+  } satisfies Page;
+}
+
 export async function syncRegionsForPages(pages: Page[]) {
   await Promise.all(
     pages.map(async (page) => {
@@ -86,27 +108,5 @@ export async function syncRegionsForPages(pages: Page[]) {
 }
 
 export async function mergeRegionsWithRepository(pages: Page[]) {
-  return Promise.all(
-    pages.map(async (page) => {
-      const fallbackRegions = page.regions.map((region) => normalizeRegion(region));
-      const records = await regionRepository.getByPage(page.id);
-
-      if (records.length === 0) {
-        return {
-          ...page,
-          regions: fallbackRegions,
-        } satisfies Page;
-      }
-
-      const fallbackMap = new Map(fallbackRegions.map((region) => [region.id, region] as const));
-      const mergedRegions = sortRegionRecords(records, fallbackMap).map((record, index) =>
-        mergeRegionRecord(record, fallbackMap.get(record.id), index),
-      );
-
-      return {
-        ...page,
-        regions: mergedRegions,
-      } satisfies Page;
-    }),
-  );
+  return Promise.all(pages.map((page) => mergeRegionsForPage(page)));
 }

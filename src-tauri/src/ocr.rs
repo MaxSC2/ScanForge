@@ -1,32 +1,8 @@
+use crate::domain_storage::{DomainRepository, RegionRecord};
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 const OCR_ENGINE_NAME: &str = "scanforge-tauri-preview";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OcrRegionInput {
-    pub id: String,
-    pub label: String,
-    pub kind: String,
-    pub order: i64,
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-    pub source_text: String,
-    pub locked: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OcrPagePayload {
-    pub page_id: String,
-    pub file_name: String,
-    pub image_data_url: String,
-    pub natural_width: i64,
-    pub natural_height: i64,
-    pub regions: Vec<OcrRegionInput>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,47 +30,57 @@ fn file_stem(file_name: &str) -> &str {
         .unwrap_or(file_name)
 }
 
-fn region_kind_label(kind: &str) -> &str {
-    match kind {
-        "speech" => "speech",
-        "sfx" => "sfx",
-        "narration" => "narration",
-        _ => "text",
+fn page_label(image_path: &str, page_id: &str) -> String {
+    if image_path.starts_with("data:") {
+        return format!("page-{}", page_id.chars().take(8).collect::<String>());
     }
+
+    let normalized = image_path.replace('\\', "/");
+    let file_name = normalized.rsplit('/').next().unwrap_or(image_path);
+    file_stem(file_name).to_string()
 }
 
-fn build_preview_text(payload: &OcrPagePayload, region: &OcrRegionInput) -> String {
-    let page_area = (payload.natural_width.max(1) * payload.natural_height.max(1)) as f64;
+fn build_preview_text(
+    page_name: &str,
+    page_width: i64,
+    page_height: i64,
+    region_order: usize,
+    region: &RegionRecord,
+) -> String {
+    let page_area = (page_width.max(1) * page_height.max(1)) as f64;
     let region_area = (region.width.max(1.0) * region.height.max(1.0)).max(1.0);
     let coverage = ((region_area / page_area) * 1000.0).round() / 10.0;
-    let label = if region.label.trim().is_empty() {
-        format!("region {}", region.order.max(1))
-    } else {
-        region.label.trim().to_string()
-    };
 
     format!(
-        "OCR preview: {} / {} / {} / {:.1}%",
-        file_stem(&payload.file_name),
-        region_kind_label(&region.kind),
-        label,
+        "OCR preview: {} / text / region {} / {:.1}%",
+        page_name,
+        region_order.max(1),
         coverage.max(0.1)
     )
 }
 
 #[tauri::command]
-pub fn run_page_ocr(payload: OcrPagePayload) -> Result<OcrPageResult, String> {
-    if payload.natural_width <= 0 || payload.natural_height <= 0 {
+pub fn run_page_ocr(
+    page_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<OcrPageResult, String> {
+    let page = repository
+        .get_page(page_id.clone())?
+        .ok_or_else(|| "Page not found".to_string())?;
+
+    if page.width <= 0 || page.height <= 0 {
         return Err("Invalid page dimensions".into());
     }
 
-    if !payload.image_data_url.starts_with("data:image/") {
+    if !page.image_path.starts_with("data:image/") {
         return Err("OCR backend expects a data:image payload".into());
     }
 
-    let mut results = Vec::with_capacity(payload.regions.len());
+    let page_name = page_label(&page.image_path, &page.id);
+    let regions = repository.list_regions_by_page(page_id)?;
+    let mut results = Vec::with_capacity(regions.len());
 
-    for region in &payload.regions {
+    for (index, region) in regions.into_iter().enumerate() {
         if region.locked {
             results.push(OcrRegionResult {
                 region_id: region.id.clone(),
@@ -125,9 +111,19 @@ pub fn run_page_ocr(payload: OcrPagePayload) -> Result<OcrPageResult, String> {
             continue;
         }
 
+        let text = build_preview_text(&page_name, page.width, page.height, index + 1, &region);
+        let mut updated_region = region.clone();
+        updated_region.source_text = text.clone();
+        updated_region.status = if updated_region.translated_text.trim().is_empty() {
+            "ocr_done".into()
+        } else {
+            "translated".into()
+        };
+        repository.upsert_region(updated_region)?;
+
         results.push(OcrRegionResult {
-            region_id: region.id.clone(),
-            text: Some(build_preview_text(&payload, region)),
+            region_id: region.id,
+            text: Some(text),
             skipped: false,
             reason: None,
         });

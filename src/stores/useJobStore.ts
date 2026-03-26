@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
+import { mergeRegionsForPage, syncPagesForProject, syncRegionsForPages } from '../repositories';
 import { runPageOcr } from '../services/ocr';
+import { getProjectRepository } from '../storage';
 import type { JobRecord, JobResultSummary } from '../types';
 import { useHistoryStore } from './useHistoryStore';
 import { usePageStore } from './usePageStore';
@@ -27,24 +29,36 @@ function updateJob(jobId: string, patch: Partial<JobRecord>) {
   }));
 }
 
-function applyOcrResult(pageId: string, fillMap: Map<string, string>) {
-  if (fillMap.size === 0) return;
+const projectRepository = getProjectRepository();
 
+async function ensureProjectSyncedForOcr() {
+  let meta = useProjectStore.getState().meta;
+  if (!meta.localProjectId) {
+    const project = await usePageStore.getState().toProjectFile();
+    const result = await projectRepository.saveProject(project);
+    meta = result.project.meta;
+    if (useProjectStore.getState().meta.localProjectId !== meta.localProjectId) {
+      useProjectStore.getState().setMeta(meta);
+    }
+  }
+
+  const current = usePageStore.getState();
+  await syncPagesForProject(meta, current.pages);
+  await syncRegionsForPages(current.pages);
+}
+
+async function refreshPageRegionsFromRepository(pageId: string) {
+  const page = usePageStore.getState().pages.find((item) => item.id === pageId);
+  if (!page) return;
+
+  const mergedPage = await mergeRegionsForPage(page);
   useHistoryStore.getState().capture();
   usePageStore.setState((state) => ({
     pages: state.pages.map((page) =>
       page.id === pageId
         ? {
             ...page,
-            regions: page.regions.map((region) =>
-              fillMap.has(region.id)
-                ? {
-                    ...region,
-                    sourceText: fillMap.get(region.id) ?? region.sourceText,
-                    status: region.translatedText.trim() ? 'translated' : 'ocr_done',
-                  }
-                : region,
-            ),
+            regions: mergedPage.regions,
           }
         : page,
     ),
@@ -86,17 +100,11 @@ async function runOcrJob(job: JobRecord) {
   }
 
   try {
+    await ensureProjectSyncedForOcr();
     const ocrResult = await runPageOcr(page, (progress, message) => {
       updateJob(job.id, { progress, message });
     });
-
-    const fillMap = new Map(
-      ocrResult.results
-        .filter((item) => !item.skipped && item.text)
-        .map((item) => [item.regionId, item.text ?? ''] as const),
-    );
-
-    applyOcrResult(page.id, fillMap);
+    await refreshPageRegionsFromRepository(page.id);
 
     const result: JobResultSummary = {
       engine: ocrResult.engine,
