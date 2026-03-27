@@ -6,6 +6,7 @@ import { useHistoryStore } from './useHistoryStore';
 import { useProjectDomainStore } from './useProjectDomainStore';
 import { useJobStore } from './useJobStore';
 import { usePageStore } from './usePageStore';
+import { usePersistenceStore } from './usePersistenceStore';
 import { createProjectMeta, useProjectStore } from './useProjectStore';
 import { useRegionStore } from './useRegionStore';
 import { useToastStore } from './useToastStore';
@@ -78,6 +79,8 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
       await applyProject(result.project);
       const summaries = await repository.listProjects();
       set({ summaries, switchingProjectId: null });
+      usePersistenceStore.getState().markSaved(result.project.meta.updatedAt);
+      usePersistenceStore.getState().setRecoveryNotice(null);
       useToastStore.getState().push('Создан новый локальный проект', 'success');
     } catch (error) {
       set({ switchingProjectId: null });
@@ -94,6 +97,8 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
       await applyProject(loadResult.project);
       const summaries = await repository.listProjects();
       set({ summaries, switchingProjectId: null });
+      usePersistenceStore.getState().markSaved(loadResult.project.meta.updatedAt);
+      usePersistenceStore.getState().setRecoveryNotice(loadResult.warning ?? null);
       if (loadResult.warning) {
         useToastStore.getState().push(loadResult.warning, 'warning');
       }

@@ -1,12 +1,16 @@
 import {
+  AlertTriangle,
+  CheckCircle2,
   Eye,
   EyeOff,
   Focus,
   Grid3X3,
   Languages,
   Layers,
+  LoaderCircle,
   Map,
   MousePointer2,
+  Save,
   ScanText,
   Tag,
   ZoomIn,
@@ -14,7 +18,18 @@ import {
 import { useEditorStore } from '../stores/useEditorStore';
 import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
+import { usePersistenceStore } from '../stores/usePersistenceStore';
 import { useRegionStore } from '../stores/useRegionStore';
+
+function formatSavedAt(value: number | null) {
+  if (!value) return null;
+
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(value);
+}
 
 export function StatusBar() {
   const activePage = usePageStore((state) => {
@@ -55,6 +70,10 @@ export function StatusBar() {
   const selectedRegionId = useRegionStore((state) => state.selectedRegionId);
   const regionCount = activePage?.regions.length ?? 0;
   const selectedRegion = activePage?.regions.find((region) => region.id === selectedRegionId);
+  const saveState = usePersistenceStore((state) => state.saveState);
+  const lastSavedAt = usePersistenceStore((state) => state.lastSavedAt);
+  const lastError = usePersistenceStore((state) => state.lastError);
+  const recoveryNotice = usePersistenceStore((state) => state.recoveryNotice);
 
   const toolLabels = {
     select: 'Выбор',
@@ -68,6 +87,39 @@ export function StatusBar() {
     'fit-width': 'Fit width',
     actual: '1:1',
   } as const;
+
+  const savedAtLabel = formatSavedAt(lastSavedAt);
+
+  const persistencePresentation =
+    saveState === 'saving'
+      ? {
+          label: 'Saving...',
+          title: 'Local project autosave is in progress',
+          icon: <LoaderCircle size={11} className="animate-spin" />,
+          className: 'text-indigo-400',
+        }
+      : saveState === 'pending'
+        ? {
+            label: 'Autosave pending',
+            title: 'Local project changes are queued for autosave',
+            icon: <Save size={11} />,
+            className: 'text-zinc-400',
+          }
+        : saveState === 'error'
+          ? {
+              label: 'Autosave failed',
+              title: lastError ?? 'Local project autosave failed',
+              icon: <AlertTriangle size={11} />,
+              className: 'text-amber-400',
+            }
+          : {
+              label: savedAtLabel ? `Saved ${savedAtLabel}` : 'Autosave ready',
+              title: savedAtLabel
+                ? `Last local save completed at ${savedAtLabel}`
+                : 'Local project autosave is ready',
+              icon: <CheckCircle2 size={11} />,
+              className: 'text-emerald-400',
+            };
 
   return (
     <footer className="flex h-7 flex-none select-none items-center gap-0 border-t border-zinc-800 bg-zinc-900 px-1 text-[11px] text-zinc-500">
@@ -128,6 +180,21 @@ export function StatusBar() {
           <span className="flex items-center gap-1 text-zinc-400">
             <Focus size={11} />
             Focus mode
+          </span>
+        )}
+
+        <span
+          className={`flex items-center gap-1 ${persistencePresentation.className}`}
+          title={persistencePresentation.title}
+        >
+          {persistencePresentation.icon}
+          {persistencePresentation.label}
+        </span>
+
+        {recoveryNotice && (
+          <span className="flex items-center gap-1 text-amber-400" title={recoveryNotice}>
+            <AlertTriangle size={11} />
+            Recovery warning
           </span>
         )}
       </div>

@@ -7,6 +7,7 @@ import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useProjectDomainStore } from '../stores/useProjectDomainStore';
 import { useProjectLibraryStore } from '../stores/useProjectLibraryStore';
+import { usePersistenceStore } from '../stores/usePersistenceStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { useToastStore } from '../stores/useToastStore';
 import {
@@ -71,6 +72,8 @@ export function useLocalProjectPersistence() {
         );
         await useJobStore.getState().loadJobsForCurrentProject();
         clearHistory();
+        usePersistenceStore.getState().markSaved(hydrated.meta.updatedAt);
+        usePersistenceStore.getState().setRecoveryNotice(loadResult.warning ?? null);
         lastPersistedTokenRef.current = buildPersistenceToken(
           hydrated.meta,
           pages.length,
@@ -99,6 +102,7 @@ export function useLocalProjectPersistence() {
     if (pages.length === 0 && !meta.localProjectId) return;
     if (isRestoringRef.current) return;
     if (token === lastPersistedTokenRef.current) return;
+    usePersistenceStore.getState().markPending();
 
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
@@ -107,6 +111,7 @@ export function useLocalProjectPersistence() {
     saveTimerRef.current = window.setTimeout(() => {
       void (async () => {
         try {
+          usePersistenceStore.getState().markSaving();
           const project = await usePageStore.getState().toProjectFile();
           const result = await repository.saveProject(project);
           const current = usePageStore.getState();
@@ -125,8 +130,12 @@ export function useLocalProjectPersistence() {
             result.project.meta.localProjectId,
           );
           void useProjectLibraryStore.getState().refresh();
+          usePersistenceStore.getState().markSaved(result.project.meta.updatedAt);
         } catch (error) {
           console.warn('Local project autosave failed:', error);
+          usePersistenceStore
+            .getState()
+            .markError(error instanceof Error ? error.message : 'Local project autosave failed');
         }
       })();
     }, AUTOSAVE_DELAY_MS);
