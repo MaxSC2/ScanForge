@@ -90,10 +90,13 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
     if (get().switchingProjectId) return;
     set({ switchingProjectId: id });
     try {
-      const project = await repository.loadProject(id);
-      await applyProject(project);
+      const loadResult = await repository.loadProject(id);
+      await applyProject(loadResult.project);
       const summaries = await repository.listProjects();
       set({ summaries, switchingProjectId: null });
+      if (loadResult.warning) {
+        useToastStore.getState().push(loadResult.warning, 'warning');
+      }
       useToastStore.getState().push('Локальный проект загружен', 'success');
     } catch (error) {
       set({ switchingProjectId: null });

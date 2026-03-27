@@ -67,6 +67,14 @@ pub struct LocalProjectSaveResult {
     pub summary: LocalProjectSummary,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalProjectLoadResult {
+    pub project: ProjectFile,
+    pub source: String,
+    pub warning: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct DomainProjectRow {
     id: String,
@@ -355,9 +363,12 @@ impl ProjectRepository {
             last_opened_at: Some(now_ms()),
         };
         let payload_json = serde_json::to_string(&project).map_err(|error| error.to_string())?;
-        let connection = self.connect()?;
+        let mut connection = self.connect()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
 
-        connection
+        transaction
             .execute(
                 &format!(
                     "
@@ -377,9 +388,9 @@ impl ProjectRepository {
                 ],
             )
             .map_err(|error| error.to_string())?;
-        ensure_project_defaults(&connection, &summary.id)?;
+        ensure_project_defaults(&transaction, &summary.id)?;
 
-        connection
+        transaction
             .execute(
                 &format!(
                     "
@@ -412,11 +423,12 @@ impl ProjectRepository {
                 ],
             )
             .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
 
         Ok(LocalProjectSaveResult { project, summary })
     }
 
-    pub fn load_project(&self, id: String) -> Result<ProjectFile, String> {
+    pub fn load_project(&self, id: String) -> Result<LocalProjectLoadResult, String> {
         let connection = self.connect()?;
         migrate_snapshot_projects(&connection)?;
 
@@ -426,20 +438,66 @@ impl ProjectRepository {
 
         update_snapshot_last_opened(&connection, id.clone())?;
 
-        if let Some(mut snapshot) = load_snapshot_backup(&connection, id)? {
-            snapshot.meta = ProjectMeta {
-                local_project_id: Some(project_row.id),
-                name: project_row.name,
-                created_at: project_row.created_at,
-                updated_at: project_row.updated_at,
-            };
-            return Ok(snapshot);
+        match load_snapshot_backup(&connection, id.clone()) {
+            Ok(Some(mut snapshot)) => {
+                snapshot.meta = ProjectMeta {
+                    local_project_id: Some(project_row.id),
+                    name: project_row.name,
+                    created_at: project_row.created_at,
+                    updated_at: project_row.updated_at,
+                };
+                return Ok(LocalProjectLoadResult {
+                    project: snapshot,
+                    source: "snapshot".into(),
+                    warning: None,
+                });
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!(
+                    "[ScanForge][Recovery] snapshot backup unreadable for {}: {}",
+                    id, error
+                );
+                let project = build_project_from_domain(&connection, project_row.clone())?;
+                return Ok(LocalProjectLoadResult {
+                    project,
+                    source: "domain".into(),
+                    warning: Some("Backup snapshot was unreadable. Restored from domain state.".into()),
+                });
+            }
         }
 
-        build_project_from_domain(&connection, project_row)
+        match build_project_from_domain(&connection, project_row.clone()) {
+            Ok(project) => Ok(LocalProjectLoadResult {
+                project,
+                source: "domain".into(),
+                warning: None,
+            }),
+            Err(domain_error) => {
+                eprintln!(
+                    "[ScanForge][Recovery] domain restore failed for {}: {}",
+                    id, domain_error
+                );
+                if let Ok(Some(mut snapshot)) = load_snapshot_backup(&connection, id.clone()) {
+                    snapshot.meta = ProjectMeta {
+                        local_project_id: Some(project_row.id),
+                        name: project_row.name,
+                        created_at: project_row.created_at,
+                        updated_at: project_row.updated_at,
+                    };
+                    return Ok(LocalProjectLoadResult {
+                        project: snapshot,
+                        source: "snapshot".into(),
+                        warning: Some("Domain state was incomplete. Restored from backup snapshot.".into()),
+                    });
+                }
+
+                Err(domain_error)
+            }
+        }
     }
 
-    pub fn load_latest_project(&self) -> Result<Option<ProjectFile>, String> {
+    pub fn load_latest_project(&self) -> Result<Option<LocalProjectLoadResult>, String> {
         let connection = self.connect()?;
         migrate_snapshot_projects(&connection)?;
 
@@ -1211,14 +1269,14 @@ pub fn save_project_snapshot(
 pub fn load_project_snapshot(
     id: String,
     repository: State<'_, ProjectRepository>,
-) -> Result<ProjectFile, String> {
+) -> Result<LocalProjectLoadResult, String> {
     repository.load_project(id)
 }
 
 #[tauri::command]
 pub fn load_latest_project_snapshot(
     repository: State<'_, ProjectRepository>,
-) -> Result<Option<ProjectFile>, String> {
+) -> Result<Option<LocalProjectLoadResult>, String> {
     repository.load_latest_project()
 }
 

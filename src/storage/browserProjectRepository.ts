@@ -5,6 +5,7 @@ import {
 } from '../repositories/browserDomainState';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import type {
+  LocalProjectLoadResult,
   LocalProjectSaveResult,
   LocalProjectSummary,
   PageRecord,
@@ -341,7 +342,24 @@ export const browserProjectRepository: ProjectRepository = {
     }
     await ensureProjectDomainDefaults(id);
 
-    const project = buildProjectFromDomain(id, state, envelope);
+    let warning: string | null = null;
+    let source: LocalProjectLoadResult['source'] = 'domain';
+    let project: ProjectFile;
+
+    try {
+      project = buildProjectFromDomain(id, state, envelope);
+    } catch (error) {
+      const backupProject = envelope.projects[id];
+      if (!backupProject) {
+        throw error;
+      }
+
+      project = cloneProject(backupProject);
+      source = 'snapshot';
+      warning = 'Domain state was incomplete. Restored from backup snapshot.';
+      console.warn('Browser project restored from backup snapshot:', error);
+    }
+
     envelope.latestProjectId = id;
     const summary = envelope.summaries.find((item) => item.id === id);
     if (summary) {
@@ -349,7 +367,11 @@ export const browserProjectRepository: ProjectRepository = {
     }
     writeEnvelope(envelope);
 
-    return cloneProject(project);
+    return {
+      project: cloneProject(project),
+      source,
+      warning,
+    } satisfies LocalProjectLoadResult;
   },
 
   async loadLatestProject() {

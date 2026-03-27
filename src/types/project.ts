@@ -52,3 +52,11 @@ export interface LocalProjectSaveResult {
   project: ProjectFile;
   summary: LocalProjectSummary;
 }
+
+export type LocalProjectLoadSource = 'domain' | 'snapshot';
+
+export interface LocalProjectLoadResult {
+  project: ProjectFile;
+  source: LocalProjectLoadSource;
+  warning?: string | null;
+}

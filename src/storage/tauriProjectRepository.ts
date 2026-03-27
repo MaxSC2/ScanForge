@@ -1,5 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { LocalProjectSaveResult, LocalProjectSummary, ProjectFile } from '../types';
+import type {
+  LocalProjectLoadResult,
+  LocalProjectSaveResult,
+  LocalProjectSummary,
+  ProjectFile,
+} from '../types';
 import type { ProjectRepository } from './projectRepository';
 
 export const tauriProjectRepository: ProjectRepository = {
@@ -8,11 +13,11 @@ export const tauriProjectRepository: ProjectRepository = {
   },
 
   loadProject(id) {
-    return invoke<ProjectFile>('load_project_snapshot', { id });
+    return invoke<LocalProjectLoadResult>('load_project_snapshot', { id });
   },
 
   loadLatestProject() {
-    return invoke<ProjectFile | null>('load_latest_project_snapshot');
+    return invoke<LocalProjectLoadResult | null>('load_latest_project_snapshot');
   },
 
   listProjects() {

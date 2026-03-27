@@ -36,6 +36,8 @@ export type {
   ProjectFile,
   LocalProjectSummary,
   LocalProjectSaveResult,
+  LocalProjectLoadResult,
+  LocalProjectLoadSource,
 } from './project';
 export type {
   OcrEngineId,

@@ -1,8 +1,13 @@
-import type { LocalProjectSaveResult, LocalProjectSummary, ProjectFile } from '../types';
+import type {
+  LocalProjectLoadResult,
+  LocalProjectSaveResult,
+  LocalProjectSummary,
+  ProjectFile,
+} from '../types';
 
 export interface ProjectRepository {
   saveProject(project: ProjectFile): Promise<LocalProjectSaveResult>;
-  loadProject(id: string): Promise<ProjectFile>;
-  loadLatestProject(): Promise<ProjectFile | null>;
+  loadProject(id: string): Promise<LocalProjectLoadResult>;
+  loadLatestProject(): Promise<LocalProjectLoadResult | null>;
   listProjects(): Promise<LocalProjectSummary[]>;
 }

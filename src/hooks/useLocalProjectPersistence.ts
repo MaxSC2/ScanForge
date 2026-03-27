@@ -49,11 +49,11 @@ export function useLocalProjectPersistence() {
         const current = usePageStore.getState();
         if (current.pages.length > 0) return;
 
-        const project = await repository.loadLatestProject();
-        if (!project || cancelled) return;
+        const loadResult = await repository.loadLatestProject();
+        if (!loadResult || cancelled) return;
 
         isRestoringRef.current = true;
-        const hydrated = await hydrateProjectFile(project);
+        const hydrated = await hydrateProjectFile(loadResult.project);
         if (cancelled) return;
         const pagesWithDomainAssets = await mergePagesWithRepository(hydrated.meta, hydrated.pages);
         const pages = await mergeRegionsWithRepository(pagesWithDomainAssets);
@@ -78,6 +78,9 @@ export function useLocalProjectPersistence() {
         );
         void useProjectLibraryStore.getState().refresh();
         requestFitToPage();
+        if (loadResult.warning) {
+          pushToast(loadResult.warning, 'warning');
+        }
         pushToast('Восстановлен локальный снимок проекта', 'info');
       } catch (error) {
         console.warn('Local project restore skipped:', error);
