@@ -13,9 +13,7 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
     projectId: meta.localProjectId,
     pageId: job.pageId,
     ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
-    summary: job.result
-      ? `${job.result.provider}: ${job.result.appliedCount}/${job.result.regionsProcessed}`
-      : job.message,
+    summary: job.message,
     progress: job.progress,
     createdAt: job.createdAt,
     updatedAt: job.finishedAt ?? job.startedAt ?? job.createdAt,

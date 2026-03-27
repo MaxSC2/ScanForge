@@ -5,6 +5,7 @@ import {
   mergeRegionsForPage,
   syncJobsForProject,
 } from '../repositories';
+import { deriveOcrJobOutcome, formatJobResultSummary, summarizeOcrPageResult } from '../services/jobSummary';
 import { runPageOcr } from '../services/ocr';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
@@ -35,11 +36,6 @@ interface JobState {
   retryJob: (jobId: string) => void;
   clearFinished: () => void;
   loadJobsForCurrentProject: () => Promise<void>;
-}
-
-function summarizeResult(stage: JobRecord['stage'], result: JobResultSummary) {
-  const action = stage === 'ocr' ? 'applied' : 'translated';
-  return `${result.provider}: ${action} ${result.appliedCount}/${result.regionsProcessed}, skipped ${result.skippedCount}`;
 }
 
 function trimJobs(jobs: JobRecord[]) {
@@ -143,19 +139,24 @@ async function runOcrJob(job: JobRecord) {
     );
     await refreshPageRegionsFromRepository(page.id);
 
-    const result: JobResultSummary = {
-      provider: ocrResult.engine,
-      regionsProcessed: ocrResult.regionsProcessed,
-      appliedCount: ocrResult.filledCount,
-      skippedCount: ocrResult.skippedCount,
-    };
+    const result = summarizeOcrPageResult(ocrResult);
+    const outcome = deriveOcrJobOutcome(result);
+
+    if (result.failedCount > 0 || (result.appliedCount === 0 && result.skippedCount > 0)) {
+      console.warn('[ScanForge][OCR] job completed with issues', {
+        pageId: page.id,
+        regionIds: job.regionIds ?? [],
+        result,
+      });
+    }
 
     updateJob(job.id, {
-      status: 'done',
+      status: outcome.status,
       finishedAt: Date.now(),
       progress: 1,
       result,
-      message: summarizeResult(job.stage, result),
+      message: outcome.message,
+      error: outcome.error,
     });
   } catch (error) {
     updateJob(job.id, {
@@ -227,6 +228,7 @@ async function runTranslationJob(job: JobRecord) {
       regionsProcessed: translationResult.regionsProcessed,
       appliedCount: translationResult.translatedCount,
       skippedCount: translationResult.skippedCount,
+      failedCount: 0,
     };
 
     updateJob(job.id, {
@@ -234,7 +236,7 @@ async function runTranslationJob(job: JobRecord) {
       finishedAt: Date.now(),
       progress: 1,
       result,
-      message: summarizeResult(job.stage, result),
+      message: formatJobResultSummary(job.stage, result),
     });
   } catch (error) {
     updateJob(job.id, {

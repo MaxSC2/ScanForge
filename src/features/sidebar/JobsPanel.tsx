@@ -19,6 +19,27 @@ function formatClock(value: number | null) {
   }).format(value);
 }
 
+function formatTarget(job: { regionIds?: string[] }) {
+  if (!job.regionIds?.length) {
+    return 'page';
+  }
+
+  return job.regionIds.length === 1 ? '1 region' : `${job.regionIds.length} regions`;
+}
+
+function formatReason(reason: string) {
+  switch (reason) {
+    case 'already_filled':
+      return 'already filled';
+    case 'invalid_bounds':
+      return 'invalid bounds';
+    case 'no_text':
+      return 'no text';
+    default:
+      return reason.replace(/_/g, ' ');
+  }
+}
+
 export function JobsPanel() {
   const jobs = useJobStore((state) => state.jobs);
   const processing = useJobStore((state) => state.processing);
@@ -109,6 +130,25 @@ export function JobsPanel() {
                           {stageLabel} · {job.pageName}
                         </div>
                         <div className="mt-1 text-[10px] text-zinc-500">{job.message}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-wide text-zinc-600">
+                          {formatTarget(job)}
+                        </div>
+                        {job.result?.reasons?.length ? (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {job.result.reasons.map((reason) => (
+                              <span
+                                key={`${job.id}-${reason.reason}`}
+                                className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${
+                                  reason.kind === 'failure'
+                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                                    : 'border-zinc-700 bg-zinc-900/70 text-zinc-400'
+                                }`}
+                              >
+                                {formatReason(reason.reason)} x{reason.count}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
                           <div
                             className={`h-full rounded-full ${

@@ -10,6 +10,7 @@ export { REGION_KIND_OPTIONS, getRegionColor, normalizeRegion } from './region';
 export type { Page } from './page';
 export type {
   JobRecord,
+  JobResultReason,
   JobResultSummary,
   JobStage,
   JobStatus,
