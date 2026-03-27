@@ -22,6 +22,7 @@ pub struct OcrRegionResult {
 #[serde(rename_all = "camelCase")]
 pub struct OcrPageResult {
     pub engine: String,
+    pub provider_path: Vec<String>,
     pub regions_processed: usize,
     pub filled_count: usize,
     pub skipped_count: usize,
@@ -59,15 +60,10 @@ struct OcrProviderResponse {
     results: Vec<OcrRegionResult>,
 }
 
-enum OcrProviderMode {
-    #[cfg(target_os = "windows")]
-    Windows {
-        strict: bool,
-    },
-    #[cfg(not(target_os = "windows"))]
-    Preview {
-        engine: String,
-    },
+enum OcrProviderAttempt {
+    Windows { label: String },
+    Preview { label: String },
+    Unavailable { label: String, reason: String },
 }
 
 fn preview_engine_name(engine: &str) -> String {
@@ -120,30 +116,57 @@ fn build_preview_text(page_name: &str, page_width: i64, page_height: i64, region
     )
 }
 
-#[cfg(target_os = "windows")]
-fn resolve_provider(requested_engine: &str) -> Result<OcrProviderMode, String> {
-    match requested_engine {
-        "windows" => Ok(OcrProviderMode::Windows { strict: true }),
-        "mock" => Ok(OcrProviderMode::Windows { strict: false }),
-        "tesseract" | "paddle" | "manga-ocr" => Err(format!(
-            "OCR engine '{}' is not implemented yet in Stage 3.",
-            requested_engine
-        )),
-        other => Err(format!("Unsupported OCR engine '{}'.", other)),
-    }
-}
+fn build_provider_chain(requested_engine: &str) -> Vec<OcrProviderAttempt> {
+    let preview = || OcrProviderAttempt::Preview {
+        label: preview_engine_name("mock"),
+    };
+    let windows = || OcrProviderAttempt::Windows {
+        label: "windows".into(),
+    };
+    let unavailable = |label: &str, reason: String| OcrProviderAttempt::Unavailable {
+        label: label.into(),
+        reason,
+    };
 
-#[cfg(not(target_os = "windows"))]
-fn resolve_provider(requested_engine: &str) -> Result<OcrProviderMode, String> {
     match requested_engine {
-        "mock" | "windows" => Ok(OcrProviderMode::Preview {
-            engine: preview_engine_name(requested_engine),
-        }),
-        "tesseract" | "paddle" | "manga-ocr" => Err(format!(
-            "OCR engine '{}' is not implemented yet in Stage 3.",
-            requested_engine
-        )),
-        other => Err(format!("Unsupported OCR engine '{}'.", other)),
+        "mock" => vec![preview()],
+        "windows" => vec![windows(), preview()],
+        "tesseract" => vec![
+            unavailable(
+                "tesseract",
+                "Tesseract OCR is not implemented yet, falling back.".into(),
+            ),
+            windows(),
+            preview(),
+        ],
+        "paddle" => vec![
+            unavailable(
+                "paddle",
+                "Paddle OCR is not implemented yet, falling back.".into(),
+            ),
+            windows(),
+            preview(),
+        ],
+        "manga-ocr" => vec![
+            unavailable(
+                "manga-ocr",
+                "Manga OCR is not implemented yet, falling back.".into(),
+            ),
+            unavailable(
+                "paddle",
+                "Paddle OCR is not implemented yet, falling back.".into(),
+            ),
+            windows(),
+            preview(),
+        ],
+        other => vec![
+            unavailable(
+                other,
+                format!("Unsupported OCR engine '{}', falling back.", other),
+            ),
+            windows(),
+            preview(),
+        ],
     }
 }
 
@@ -282,6 +305,69 @@ fn run_windows_provider(_request: &OcrProviderRequest) -> Result<OcrProviderResp
     Err("Windows OCR provider is only available on Windows.".into())
 }
 
+fn run_provider_chain(
+    requested_engine: &str,
+    request: &OcrProviderRequest,
+    page_name: &str,
+    page_width: i64,
+    page_height: i64,
+    regions: &[RegionRecord],
+    overwrite_existing: bool,
+) -> Result<(OcrProviderResponse, Vec<String>), String> {
+    let chain = build_provider_chain(requested_engine);
+    let mut provider_path = Vec::new();
+    let mut failures = Vec::new();
+
+    for attempt in chain {
+        match attempt {
+            OcrProviderAttempt::Unavailable { label, reason } => {
+                provider_path.push(label.clone());
+                eprintln!("[ScanForge][OCR] provider unavailable: {}", reason);
+                failures.push(reason);
+            }
+            OcrProviderAttempt::Windows { label } => {
+                provider_path.push(label);
+                match run_windows_provider(request) {
+                    Ok(response) => {
+                        if let Some(last) = provider_path.last_mut() {
+                            *last = response.engine.clone();
+                        }
+                        return Ok((response, provider_path));
+                    }
+                    Err(error) => {
+                        eprintln!("[ScanForge][OCR] windows provider failed: {}", error);
+                        failures.push(error);
+                    }
+                }
+            }
+            OcrProviderAttempt::Preview { label } => {
+                provider_path.push(label.clone());
+                if provider_path.len() > 1 {
+                    eprintln!(
+                        "[ScanForge][OCR] using preview fallback after: {}",
+                        provider_path[..provider_path.len() - 1].join(" -> ")
+                    );
+                }
+                let response = run_preview_provider(
+                    page_name,
+                    page_width,
+                    page_height,
+                    regions,
+                    label,
+                    overwrite_existing,
+                );
+                return Ok((response, provider_path));
+            }
+        }
+    }
+
+    Err(if failures.is_empty() {
+        "No OCR providers available".into()
+    } else {
+        failures.join(" | ")
+    })
+}
+
 fn apply_ocr_result_to_region(
     repository: &DomainRepository,
     region: &RegionRecord,
@@ -348,7 +434,6 @@ pub fn run_page_ocr(
         .as_ref()
         .and_then(|settings| (settings.source_language != "auto").then(|| settings.source_language.clone()));
 
-    let provider = resolve_provider(requested_engine)?;
     let page_name = page_label(&page.image_path, &page.id);
     let all_regions = repository.list_regions_by_page(page_id)?;
     let regions = if let Some(region_ids) = region_ids {
@@ -373,35 +458,15 @@ pub fn run_page_ocr(
         overwrite_existing,
     );
 
-    #[cfg(target_os = "windows")]
-    let provider_output = match provider {
-        OcrProviderMode::Windows { strict } => match run_windows_provider(&provider_request) {
-            Ok(response) => response,
-            Err(_error) if !strict => run_preview_provider(
-                &page_name,
-                page.width,
-                page.height,
-                &regions,
-                preview_engine_name("mock"),
-                overwrite_existing,
-            ),
-            Err(error) => return Err(error),
-        },
-    };
-
-    #[cfg(not(target_os = "windows"))]
-    let provider_output = match provider {
-        OcrProviderMode::Preview { engine } => {
-            run_preview_provider(
-                &page_name,
-                page.width,
-                page.height,
-                &regions,
-                engine,
-                overwrite_existing,
-            )
-        }
-    };
+    let (provider_output, provider_path) = run_provider_chain(
+        requested_engine,
+        &provider_request,
+        &page_name,
+        page.width,
+        page.height,
+        &regions,
+        overwrite_existing,
+    )?;
 
     let processed_at = now_ms();
     let result_by_id = provider_output
@@ -435,6 +500,7 @@ pub fn run_page_ocr(
 
     Ok(OcrPageResult {
         engine: provider_output.engine,
+        provider_path,
         regions_processed: provider_output.results.len(),
         filled_count,
         skipped_count,

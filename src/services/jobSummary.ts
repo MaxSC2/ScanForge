@@ -15,6 +15,14 @@ function normalizeReasonLabel(reason: string) {
   }
 }
 
+function describeOcrProvider(result: OcrPageResult) {
+  if (result.providerPath && result.providerPath.length > 1) {
+    return `${result.engine} via ${result.providerPath.slice(0, -1).join(' -> ')}`;
+  }
+
+  return result.engine;
+}
+
 function sortReasons(reasons: JobResultReason[]) {
   return reasons.slice().sort((left, right) => {
     if (right.count !== left.count) {
@@ -48,7 +56,7 @@ export function summarizeOcrPageResult(result: OcrPageResult): JobResultSummary 
     .reduce((total, reason) => total + reason.count, 0);
 
   return {
-    provider: result.engine,
+    provider: describeOcrProvider(result),
     regionsProcessed: result.regionsProcessed,
     appliedCount: result.filledCount,
     skippedCount: result.skippedCount,

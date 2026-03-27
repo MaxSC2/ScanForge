@@ -148,6 +148,7 @@ async function applyBrowserOcrResult(
 ) {
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
+  const engineName = toPreviewEngineName(String(context.ocrEngine));
 
   await Promise.all(
     regions.map(async ({ record }) => {
@@ -163,7 +164,7 @@ async function applyBrowserOcrResult(
           ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
           status: record.translatedText.trim() ? 'translated' : 'ocr_done',
           ocrStatus: 'done',
-          ocrEngine: toPreviewEngineName(String(context.ocrEngine)),
+          ocrEngine: engineName,
           ocrUpdatedAt: updatedAt,
           ...(typeof result.confidence === 'number'
             ? { ocrConfidence: result.confidence }
@@ -177,7 +178,7 @@ async function applyBrowserOcrResult(
           ...record,
           ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
           ocrStatus: 'failed',
-          ocrEngine: toPreviewEngineName(String(context.ocrEngine)),
+          ocrEngine: engineName,
           ocrUpdatedAt: updatedAt,
           ...(typeof result.confidence === 'number'
             ? { ocrConfidence: result.confidence }
@@ -199,6 +200,16 @@ async function runBrowserPreviewOcr(
   }
 
   const overwriteExisting = options.overwriteExisting ?? false;
+  const engineName = toPreviewEngineName(String(context.ocrEngine));
+  const providerPath =
+    context.ocrEngine === 'mock' ? [engineName] : [String(context.ocrEngine), engineName];
+
+  if (providerPath.length > 1) {
+    console.warn('[ScanForge][OCR] browser preview fallback used', {
+      pageId: page.id,
+      providerPath,
+    });
+  }
   const results: OcrPageResult['results'] = [];
 
   for (let index = 0; index < context.regions.length; index += 1) {
@@ -247,7 +258,8 @@ async function runBrowserPreviewOcr(
   await applyBrowserOcrResult(context, context.regions, results);
 
   return {
-    engine: toPreviewEngineName(String(context.ocrEngine)),
+    engine: engineName,
+    providerPath,
     regionsProcessed: results.length,
     filledCount,
     skippedCount,

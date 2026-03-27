@@ -32,6 +32,7 @@ export interface OcrRegionResult {
 
 export interface OcrPageResult {
   engine: string;
+  providerPath?: string[];
   regionsProcessed: number;
   filledCount: number;
   skippedCount: number;

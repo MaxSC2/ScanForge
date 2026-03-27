@@ -10,6 +10,7 @@ describe('jobSummary', () => {
   it('aggregates OCR skip and failure reasons', () => {
     const result: OcrPageResult = {
       engine: 'windows-winrt',
+      providerPath: ['manga-ocr', 'paddle', 'windows-winrt'],
       regionsProcessed: 4,
       filledCount: 1,
       skippedCount: 3,
@@ -23,7 +24,7 @@ describe('jobSummary', () => {
 
     const summary = summarizeOcrPageResult(result);
 
-    expect(summary.provider).toBe('windows-winrt');
+    expect(summary.provider).toBe('windows-winrt via manga-ocr -> paddle');
     expect(summary.appliedCount).toBe(1);
     expect(summary.skippedCount).toBe(3);
     expect(summary.failedCount).toBe(2);
