@@ -18,6 +18,7 @@ interface EditorState {
   gridVisible: boolean;
   labelsVisible: boolean;
   minimapVisible: boolean;
+  ocrOverwrite: boolean;
   translationOverwrite: boolean;
   /** Cursor canvas coords (for status bar) */
   cursorPosition: { x: number; y: number };
@@ -47,6 +48,8 @@ interface EditorState {
   toggleGrid: () => void;
   toggleLabels: () => void;
   toggleMinimap: () => void;
+  toggleOcrOverwrite: () => void;
+  setOcrOverwrite: (value: boolean) => void;
   toggleTranslationOverwrite: () => void;
   setTranslationOverwrite: (value: boolean) => void;
   setCursorPosition: (pos: { x: number; y: number }) => void;
@@ -74,6 +77,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   gridVisible: false,
   labelsVisible: true,
   minimapVisible: true,
+  ocrOverwrite: false,
   translationOverwrite: false,
   cursorPosition: { x: 0, y: 0 },
   viewRequestNonce: 0,
@@ -126,6 +130,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
   toggleLabels: () => set((s) => ({ labelsVisible: !s.labelsVisible })),
   toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),
+  toggleOcrOverwrite: () =>
+    set((state) => ({
+      ocrOverwrite: !state.ocrOverwrite,
+    })),
+  setOcrOverwrite: (value) => set({ ocrOverwrite: value }),
   toggleTranslationOverwrite: () =>
     set((state) => ({
       translationOverwrite: !state.translationOverwrite,

@@ -33,6 +33,7 @@ pub struct OcrPageResult {
 struct OcrProviderRequest {
     image_data_url: String,
     source_language: Option<String>,
+    overwrite_existing: bool,
     regions: Vec<OcrProviderRegionInput>,
 }
 
@@ -150,10 +151,12 @@ fn build_provider_request(
     page_image_data_url: String,
     source_language: Option<String>,
     regions: &[RegionRecord],
+    overwrite_existing: bool,
 ) -> OcrProviderRequest {
     OcrProviderRequest {
         image_data_url: page_image_data_url,
         source_language,
+        overwrite_existing,
         regions: regions
             .iter()
             .map(|region| OcrProviderRegionInput {
@@ -178,6 +181,7 @@ fn run_preview_provider(
     page_height: i64,
     regions: &[RegionRecord],
     engine_name: String,
+    overwrite_existing: bool,
 ) -> OcrProviderResponse {
     let results = regions
         .iter()
@@ -192,7 +196,7 @@ fn run_preview_provider(
                 };
             }
 
-            if !region.source_text.trim().is_empty() {
+            if !overwrite_existing && !region.source_text.trim().is_empty() {
                 return OcrRegionResult {
                     region_id: region.id.clone(),
                     text: None,
@@ -319,6 +323,8 @@ fn apply_ocr_result_to_region(
 #[tauri::command]
 pub fn run_page_ocr(
     page_id: String,
+    region_ids: Option<Vec<String>>,
+    overwrite_existing: Option<bool>,
     repository: State<'_, DomainRepository>,
 ) -> Result<OcrPageResult, String> {
     let page = repository
@@ -344,8 +350,28 @@ pub fn run_page_ocr(
 
     let provider = resolve_provider(requested_engine)?;
     let page_name = page_label(&page.image_path, &page.id);
-    let regions = repository.list_regions_by_page(page_id)?;
-    let provider_request = build_provider_request(page.image_path.clone(), source_language.clone(), &regions);
+    let all_regions = repository.list_regions_by_page(page_id)?;
+    let regions = if let Some(region_ids) = region_ids {
+        let target_ids = region_ids.into_iter().collect::<std::collections::HashSet<_>>();
+        all_regions
+            .into_iter()
+            .filter(|region| target_ids.contains(&region.id))
+            .collect::<Vec<_>>()
+    } else {
+        all_regions
+    };
+
+    if regions.is_empty() {
+        return Err("No regions selected for OCR".into());
+    }
+
+    let overwrite_existing = overwrite_existing.unwrap_or(false);
+    let provider_request = build_provider_request(
+        page.image_path.clone(),
+        source_language.clone(),
+        &regions,
+        overwrite_existing,
+    );
 
     #[cfg(target_os = "windows")]
     let provider_output = match provider {
@@ -357,6 +383,7 @@ pub fn run_page_ocr(
                 page.height,
                 &regions,
                 preview_engine_name("mock"),
+                overwrite_existing,
             ),
             Err(error) => return Err(error),
         },
@@ -365,7 +392,14 @@ pub fn run_page_ocr(
     #[cfg(not(target_os = "windows"))]
     let provider_output = match provider {
         OcrProviderMode::Preview { engine } => {
-            run_preview_provider(&page_name, page.width, page.height, &regions, engine)
+            run_preview_provider(
+                &page_name,
+                page.width,
+                page.height,
+                &regions,
+                engine,
+                overwrite_existing,
+            )
         }
     };
 

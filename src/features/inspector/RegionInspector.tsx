@@ -18,6 +18,7 @@ import {
   Layers,
   Lock,
   MessageSquare,
+  ScanText,
   Settings2,
   StickyNote,
   Trash2,
@@ -25,8 +26,10 @@ import {
   Unlock,
 } from 'lucide-react';
 import { ProjectSettingsPanel } from '../settings/ProjectSettingsPanel';
+import { useJobStore } from '../../stores/useJobStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useRegionStore } from '../../stores/useRegionStore';
+import { useToastStore } from '../../stores/useToastStore';
 import { REGION_KIND_OPTIONS, getRegionColor } from '../../types';
 import type { Region, RegionKind } from '../../types';
 
@@ -39,6 +42,8 @@ export function RegionInspector() {
   const updateRegion = useRegionStore((state) => state.updateRegion);
   const deleteRegion = useRegionStore((state) => state.deleteRegion);
   const duplicateRegion = useRegionStore((state) => state.duplicateRegion);
+  const queueOcrJobs = useJobStore((state) => state.queueOcrJobs);
+  const pushToast = useToastStore((state) => state.push);
 
   const activePage = usePageStore((state) => {
     const id = state.activePageId;
@@ -68,6 +73,15 @@ export function RegionInspector() {
   const update = (patch: Partial<Region>) => {
     if (!region) return;
     updateRegion(pageId, region.id, patch);
+  };
+
+  const rerunOcr = () => {
+    if (!region) return;
+
+    const queued = queueOcrJobs([{ pageId, regionIds: [region.id] }]);
+    if (queued === 0) {
+      pushToast('OCR already queued for this region', 'info');
+    }
   };
 
   return (
@@ -227,6 +241,16 @@ export function RegionInspector() {
                 {typeof region.ocrConfidence === 'number' ? (
                   <StatusPill label={`conf ${Math.round(region.ocrConfidence * 100)}%`} />
                 ) : null}
+              </div>
+              <div className="mt-2 flex">
+                <button
+                  onClick={rerunOcr}
+                  className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
+                  title="Run OCR again for this region"
+                >
+                  <ScanText size={12} />
+                  <span>Re-run OCR</span>
+                </button>
               </div>
               {region.sourceText && (
                 <p className="mt-1 text-[10px] text-zinc-600">Символов: {region.sourceText.length}</p>

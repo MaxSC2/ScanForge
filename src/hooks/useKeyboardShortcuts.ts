@@ -138,12 +138,20 @@ export function useKeyboardShortcuts() {
 
       if (ctrl && event.shiftKey && key === 'o') {
         const { activePageId, selectedPageIds } = usePageStore.getState();
-        const pageIds =
-          selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : [];
+        const selectedRegionId = useRegionStore.getState().selectedRegionId;
+        const targets =
+          selectedRegionId && activePageId
+            ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
+            : (selectedPageIds.length > 0
+                ? selectedPageIds
+                : activePageId
+                  ? [activePageId]
+                  : []
+              ).map((pageId) => ({ pageId }));
 
-        if (pageIds.length > 0) {
+        if (targets.length > 0) {
           event.preventDefault();
-          useJobStore.getState().queueOcrJobs(pageIds);
+          useJobStore.getState().queueOcrJobs(targets);
         }
         return;
       }

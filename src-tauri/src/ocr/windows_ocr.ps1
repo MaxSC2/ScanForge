@@ -125,7 +125,10 @@ function Invoke-RegionOcr {
     }
   }
 
-  if (-not [string]::IsNullOrWhiteSpace([string]$Region.sourceText)) {
+  if (
+    -not $request.overwriteExisting -and
+    -not [string]::IsNullOrWhiteSpace([string]$Region.sourceText)
+  ) {
     return @{
       regionId = [string]$Region.id
       text = $null

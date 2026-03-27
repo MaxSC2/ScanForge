@@ -66,9 +66,11 @@ export function Toolbar() {
   const setTool = useEditorStore((state) => state.setTool);
   const focusMode = useEditorStore((state) => state.focusMode);
   const cleanView = useEditorStore((state) => state.cleanView);
+  const ocrOverwrite = useEditorStore((state) => state.ocrOverwrite);
   const translationOverwrite = useEditorStore((state) => state.translationOverwrite);
   const toggleFocusMode = useEditorStore((state) => state.toggleFocusMode);
   const toggleCleanView = useEditorStore((state) => state.toggleCleanView);
+  const toggleOcrOverwrite = useEditorStore((state) => state.toggleOcrOverwrite);
   const toggleTranslationOverwrite = useEditorStore((state) => state.toggleTranslationOverwrite);
   const viewMode = useEditorStore((state) => state.viewMode);
   const regionOverlaysVisible = useEditorStore((state) => state.regionOverlaysVisible);
@@ -88,8 +90,12 @@ export function Toolbar() {
   const activePage = activePageId ? pages.find((page) => page.id === activePageId) : null;
   const selectedSet = new Set(selectedPageIds);
   const selectedPagesInOrder = pages.filter((page) => selectedSet.has(page.id));
-  const ocrTargetPageIds =
-    selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : [];
+  const ocrTargets =
+    selectedRegionId && activePageId
+      ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
+      : (selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : []).map(
+          (pageId) => ({ pageId }),
+        );
   const translationTargets =
     selectedRegionId && activePageId
       ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
@@ -98,7 +104,7 @@ export function Toolbar() {
         );
 
   const canStitch = selectedPageIds.length >= 2 && !stitching;
-  const canRunOcr = ocrTargetPageIds.length > 0;
+  const canRunOcr = ocrTargets.length > 0;
   const canRunTranslation = translationTargets.length > 0;
 
   const tools: { id: EditorTool; icon: ReactNode; label: string; shortcut: string }[] = [
@@ -155,7 +161,7 @@ export function Toolbar() {
   };
 
   const handleOcr = () => {
-    const queued = queueOcrJobs(ocrTargetPageIds);
+    const queued = queueOcrJobs(ocrTargets);
     if (queued === 0) {
       pushToast('OCR уже выполняется для выбранных страниц или страницы не выбраны', 'warning');
     }
@@ -264,6 +270,16 @@ export function Toolbar() {
       >
         <ScanText size={14} />
         <span className="hidden xl:inline">OCR</span>
+      </IconButton>
+
+      <IconButton
+        active={ocrOverwrite}
+        onClick={toggleOcrOverwrite}
+        tooltip="Overwrite existing source text when running OCR"
+        variant="ghost"
+      >
+        <RotateCcw size={14} />
+        <span className="hidden 2xl:inline">OCR overwrite</span>
       </IconButton>
 
       <IconButton

@@ -17,6 +17,11 @@ import { useToastStore } from './useToastStore';
 
 const MAX_JOBS = 30;
 
+interface OcrJobTarget {
+  pageId: string;
+  regionIds?: string[];
+}
+
 interface TranslationJobTarget {
   pageId: string;
   regionIds?: string[];
@@ -25,7 +30,7 @@ interface TranslationJobTarget {
 interface JobState {
   jobs: JobRecord[];
   processing: boolean;
-  queueOcrJobs: (pageIds: string[]) => number;
+  queueOcrJobs: (targets: OcrJobTarget[]) => number;
   queueTranslationJobs: (targets: TranslationJobTarget[]) => number;
   retryJob: (jobId: string) => void;
   clearFinished: () => void;
@@ -33,7 +38,7 @@ interface JobState {
 }
 
 function summarizeResult(stage: JobRecord['stage'], result: JobResultSummary) {
-  const action = stage === 'ocr' ? 'filled' : 'translated';
+  const action = stage === 'ocr' ? 'applied' : 'translated';
   return `${result.provider}: ${action} ${result.appliedCount}/${result.regionsProcessed}, skipped ${result.skippedCount}`;
 }
 
@@ -107,22 +112,35 @@ async function runOcrJob(job: JobRecord) {
     return;
   }
 
-  if (page.regions.length === 0) {
+  const targetRegions =
+    job.regionIds?.length && job.regionIds.length > 0
+      ? page.regions.filter((region) => job.regionIds?.includes(region.id))
+      : page.regions;
+
+  if (targetRegions.length === 0) {
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),
       progress: 1,
-      error: 'No regions on page',
-      message: 'OCR skipped: empty page',
+      error: 'No regions selected for OCR',
+      message: 'OCR skipped: empty selection',
     });
     return;
   }
 
   try {
     await ensureProjectDomainStatePersisted();
-    const ocrResult = await runPageOcr(page, (progress, message) => {
-      updateJob(job.id, { progress, message });
-    });
+    const overwriteExisting = useEditorStore.getState().ocrOverwrite;
+    const ocrResult = await runPageOcr(
+      page,
+      {
+        ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
+        overwriteExisting,
+      },
+      (progress, message) => {
+        updateJob(job.id, { progress, message });
+      },
+    );
     await refreshPageRegionsFromRepository(page.id);
 
     const result: JobResultSummary = {
@@ -260,42 +278,70 @@ function buildTranslationJobSignature(pageId: string, regionIds?: string[]) {
   return `${pageId}:${(regionIds ?? []).slice().sort().join(',')}`;
 }
 
+function buildOcrJobSignature(pageId: string, regionIds?: string[]) {
+  return `${pageId}:${(regionIds ?? []).slice().sort().join(',')}`;
+}
+
 export const useJobStore = create<JobState>((set, get) => ({
   jobs: [],
   processing: false,
 
-  queueOcrJobs: (pageIds) => {
-    const uniqueIds = Array.from(new Set(pageIds));
-    const activePageJobs = new Set(
+  queueOcrJobs: (targets) => {
+    const normalizedTargets = targets
+      .filter((target) => target.pageId)
+      .map((target) => ({
+        pageId: target.pageId,
+        ...(target.regionIds?.length ? { regionIds: Array.from(new Set(target.regionIds)) } : {}),
+      }));
+    const activeSignatures = new Set(
       get()
         .jobs.filter(
           (job) => job.stage === 'ocr' && (job.status === 'queued' || job.status === 'running'),
         )
-        .map((job) => job.pageId),
+        .map((job) => buildOcrJobSignature(job.pageId, job.regionIds)),
     );
-    const pages = usePageStore
-      .getState()
-      .pages.filter((page) => uniqueIds.includes(page.id) && !activePageJobs.has(page.id));
+    const pagesById = new Map(
+      usePageStore.getState().pages.map((page) => [page.id, page] as const),
+    );
+    const filteredTargets = normalizedTargets.filter(
+      (target) => !activeSignatures.has(buildOcrJobSignature(target.pageId, target.regionIds)),
+    );
 
-    if (pages.length === 0) {
+    if (filteredTargets.length === 0) {
       return 0;
     }
 
     const createdAt = Date.now();
-    const newJobs: JobRecord[] = pages.map((page, index) => ({
-      id: uuid(),
-      stage: 'ocr',
-      status: 'queued',
-      pageId: page.id,
-      pageName: page.fileName,
-      createdAt: createdAt + index,
-      startedAt: null,
-      finishedAt: null,
-      progress: 0,
-      message: 'Queued for OCR',
-      error: null,
-      result: null,
-    }));
+    const newJobs: JobRecord[] = filteredTargets
+      .map((target, index) => {
+        const page = pagesById.get(target.pageId);
+        if (!page) {
+          return null;
+        }
+
+        return {
+          id: uuid(),
+          stage: 'ocr' as const,
+          status: 'queued' as const,
+          pageId: target.pageId,
+          pageName: page.fileName,
+          ...(target.regionIds?.length ? { regionIds: target.regionIds } : {}),
+          createdAt: createdAt + index,
+          startedAt: null,
+          finishedAt: null,
+          progress: 0,
+          message: target.regionIds?.length
+            ? `Queued OCR for ${target.regionIds.length} region(s)`
+            : 'Queued for OCR',
+          error: null,
+          result: null,
+        };
+      })
+      .filter((job): job is JobRecord => job !== null);
+
+    if (newJobs.length === 0) {
+      return 0;
+    }
 
     setJobsAndPersist((jobs) => [...newJobs, ...jobs]);
 
@@ -383,7 +429,12 @@ export const useJobStore = create<JobState>((set, get) => ({
       return;
     }
 
-    get().queueOcrJobs([job.pageId]);
+    get().queueOcrJobs([
+      {
+        pageId: job.pageId,
+        ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
+      },
+    ]);
   },
 
   clearFinished: () =>
