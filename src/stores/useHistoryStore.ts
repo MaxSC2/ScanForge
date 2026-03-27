@@ -12,17 +12,26 @@ interface HistorySnapshot {
   meta: ProjectMeta;
 }
 
+export interface HistoryCaptureOptions {
+  coalesceKey?: string;
+  windowMs?: number;
+  force?: boolean;
+}
+
 interface HistoryState {
   past: HistorySnapshot[];
   future: HistorySnapshot[];
   isRestoring: boolean;
   canUndo: boolean;
   canRedo: boolean;
-  capture: () => void;
+  capture: (options?: HistoryCaptureOptions) => void;
   undo: () => void;
   redo: () => void;
   clear: () => void;
 }
+
+const DEFAULT_COALESCE_MS = 700;
+const activeCaptureWindows = new Map<string, number>();
 
 function cloneSnapshot(): HistorySnapshot {
   const pageState = usePageStore.getState();
@@ -47,6 +56,17 @@ function applySnapshot(snapshot: HistorySnapshot) {
   useProjectStore.setState({ meta: structuredClone(snapshot.meta) });
 }
 
+function buildSnapshotSignature(snapshot: HistorySnapshot) {
+  return JSON.stringify(snapshot);
+}
+
+function clearCaptureWindows() {
+  for (const timeoutId of activeCaptureWindows.values()) {
+    globalThis.clearTimeout(timeoutId);
+  }
+  activeCaptureWindows.clear();
+}
+
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   past: [],
   future: [],
@@ -54,10 +74,28 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   canUndo: false,
   canRedo: false,
 
-  capture: () => {
+  capture: (options) => {
     if (get().isRestoring) return;
+    if (options?.coalesceKey && activeCaptureWindows.has(options.coalesceKey)) {
+      return;
+    }
+
     const snapshot = cloneSnapshot();
+    const signature = buildSnapshotSignature(snapshot);
+
+    if (options?.coalesceKey) {
+      const timeoutId = globalThis.setTimeout(() => {
+        activeCaptureWindows.delete(options.coalesceKey!);
+      }, options.windowMs ?? DEFAULT_COALESCE_MS);
+      activeCaptureWindows.set(options.coalesceKey, timeoutId);
+    }
+
     set((s) => {
+      const last = s.past[s.past.length - 1];
+      if (!options?.force && last && buildSnapshotSignature(last) === signature) {
+        return s;
+      }
+
       const past = [...s.past, snapshot].slice(-100);
       return { past, future: [], canUndo: past.length > 0, canRedo: false };
     });
@@ -66,6 +104,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   undo: () => {
     const state = get();
     if (state.past.length === 0) return;
+    clearCaptureWindows();
     const current = cloneSnapshot();
     const previous = state.past[state.past.length - 1];
     set({ isRestoring: true });
@@ -82,6 +121,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   redo: () => {
     const state = get();
     if (state.future.length === 0) return;
+    clearCaptureWindows();
     const current = cloneSnapshot();
     const next = state.future[0];
     set({ isRestoring: true });
@@ -97,5 +137,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     });
   },
 
-  clear: () => set({ past: [], future: [], canUndo: false, canRedo: false }),
+  clear: () => {
+    clearCaptureWindows();
+    set({ past: [], future: [], canUndo: false, canRedo: false });
+  },
 }));

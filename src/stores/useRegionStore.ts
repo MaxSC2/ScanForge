@@ -5,6 +5,7 @@ import { normalizeRegion } from '../types/region';
 import { usePageStore } from './usePageStore';
 import { useHistoryStore } from './useHistoryStore';
 import { useEditorStore } from './useEditorStore';
+import { resolveRegionHistoryCaptureOptions } from './regionHistoryPolicy';
 import { useProjectStore } from './useProjectStore';
 
 interface RegionState {
@@ -70,7 +71,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
   },
 
   updateRegion: (pageId, regionId, patch) => {
-    useHistoryStore.getState().capture();
+    useHistoryStore.getState().capture(resolveRegionHistoryCaptureOptions(pageId, regionId, patch));
     mutatePage(pageId, (regions) =>
       regions
         .map((r) => (r.id === regionId ? normalizeRegion({ ...r, ...patch }) : r))
