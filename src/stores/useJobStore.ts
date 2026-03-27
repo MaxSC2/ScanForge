@@ -5,11 +5,13 @@ import {
   mergeRegionsForPage,
   syncJobsForProject,
 } from '../repositories';
+import { formatDiagnosticError } from '../services/diagnostics';
 import { deriveOcrJobOutcome, formatJobResultSummary, summarizeOcrPageResult } from '../services/jobSummary';
 import { runPageOcr } from '../services/ocr';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
 import type { JobRecord, JobResultSummary } from '../types';
+import { useDiagnosticsStore } from './useDiagnosticsStore';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
 import { usePageStore } from './usePageStore';
@@ -67,6 +69,26 @@ function updateJob(jobId: string, patch: Partial<JobRecord>) {
   );
 }
 
+function recordJobDiagnostic(
+  job: JobRecord,
+  level: 'warning' | 'error',
+  message: string,
+  detail?: string,
+) {
+  useDiagnosticsStore.getState().record({
+    scope: job.stage === 'ocr' ? 'ocr' : 'translation',
+    level,
+    message,
+    ...(detail ? { detail } : {}),
+    ...(useProjectStore.getState().meta.localProjectId
+      ? { projectId: useProjectStore.getState().meta.localProjectId }
+      : {}),
+    pageId: job.pageId,
+    ...(job.regionIds?.length === 1 ? { regionId: job.regionIds[0] } : {}),
+    jobId: job.id,
+  });
+}
+
 async function refreshPageRegionsFromRepository(pageId: string) {
   const page = usePageStore.getState().pages.find((item) => item.id === pageId);
   if (!page) return;
@@ -98,6 +120,7 @@ async function runOcrJob(job: JobRecord) {
 
   const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
   if (!page) {
+    recordJobDiagnostic(job, 'error', 'OCR job failed', 'Page not found');
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),
@@ -114,6 +137,12 @@ async function runOcrJob(job: JobRecord) {
       : page.regions;
 
   if (targetRegions.length === 0) {
+    recordJobDiagnostic(
+      job,
+      'warning',
+      'OCR skipped: empty selection',
+      'No regions selected for OCR',
+    );
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),
@@ -148,6 +177,14 @@ async function runOcrJob(job: JobRecord) {
         regionIds: job.regionIds ?? [],
         result,
       });
+      recordJobDiagnostic(
+        job,
+        outcome.status === 'failed' ? 'error' : 'warning',
+        outcome.status === 'failed'
+          ? 'OCR finished with unresolved failures'
+          : 'OCR completed with warnings',
+        formatJobResultSummary(job.stage, result),
+      );
     }
 
     updateJob(job.id, {
@@ -159,6 +196,12 @@ async function runOcrJob(job: JobRecord) {
       error: outcome.error,
     });
   } catch (error) {
+    recordJobDiagnostic(
+      job,
+      'error',
+      'OCR backend failed',
+      formatDiagnosticError(error, 'OCR backend error'),
+    );
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),
@@ -182,6 +225,7 @@ async function runTranslationJob(job: JobRecord) {
 
   const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
   if (!page) {
+    recordJobDiagnostic(job, 'error', 'Translation job failed', 'Page not found');
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),
@@ -198,6 +242,12 @@ async function runTranslationJob(job: JobRecord) {
       : page.regions;
 
   if (targetRegions.length === 0) {
+    recordJobDiagnostic(
+      job,
+      'warning',
+      'Translation skipped: empty selection',
+      'No regions selected for translation',
+    );
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),
@@ -239,6 +289,12 @@ async function runTranslationJob(job: JobRecord) {
       message: formatJobResultSummary(job.stage, result),
     });
   } catch (error) {
+    recordJobDiagnostic(
+      job,
+      'error',
+      'Translation backend failed',
+      formatDiagnosticError(error, 'Translation backend error'),
+    );
     updateJob(job.id, {
       status: 'failed',
       finishedAt: Date.now(),

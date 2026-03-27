@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { formatDiagnosticError } from '../services/diagnostics';
 import type {
   ProjectSettingsRecord,
   TextStyleRecord,
@@ -8,6 +9,7 @@ import {
 } from '../repositories/projectDefaults';
 import { projectSettingsRepository } from '../repositories/projectSettingsRepository';
 import { textStyleRepository } from '../repositories/textStyleRepository';
+import { useDiagnosticsStore } from './useDiagnosticsStore';
 
 interface ProjectDomainState {
   projectId: string | null;
@@ -50,6 +52,13 @@ export const useProjectDomainStore = create<ProjectDomainState>((set, get) => ({
       });
     } catch (error) {
       console.warn('Project domain hydration failed:', error);
+      useDiagnosticsStore.getState().record({
+        scope: 'project',
+        level: 'warning',
+        message: 'Project domain hydration failed',
+        detail: formatDiagnosticError(error, 'Project domain hydration failed'),
+        ...(projectId ? { projectId } : {}),
+      });
       set({
         projectId,
         loading: false,

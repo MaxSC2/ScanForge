@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ProjectMeta } from '../types';
+import { formatDiagnosticError } from '../services/diagnostics';
 import { getProjectRepository } from '../storage';
+import { useDiagnosticsStore } from '../stores/useDiagnosticsStore';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useHistoryStore } from '../stores/useHistoryStore';
 import { useJobStore } from '../stores/useJobStore';
@@ -82,11 +84,27 @@ export function useLocalProjectPersistence() {
         void useProjectLibraryStore.getState().refresh();
         requestFitToPage();
         if (loadResult.warning) {
+          useDiagnosticsStore.getState().record({
+            scope: 'recovery',
+            level: 'warning',
+            message: 'Project restored with recovery warning',
+            detail: loadResult.warning,
+            ...(hydrated.meta.localProjectId ? { projectId: hydrated.meta.localProjectId } : {}),
+          });
           pushToast(loadResult.warning, 'warning');
         }
         pushToast('Восстановлен локальный снимок проекта', 'info');
       } catch (error) {
         console.warn('Local project restore skipped:', error);
+        useDiagnosticsStore.getState().record({
+          scope: 'recovery',
+          level: 'error',
+          message: 'Automatic project restore failed',
+          detail: formatDiagnosticError(error, 'Local project restore skipped'),
+          ...(useProjectStore.getState().meta.localProjectId
+            ? { projectId: useProjectStore.getState().meta.localProjectId }
+            : {}),
+        });
       } finally {
         isRestoringRef.current = false;
       }
@@ -133,6 +151,15 @@ export function useLocalProjectPersistence() {
           usePersistenceStore.getState().markSaved(result.project.meta.updatedAt);
         } catch (error) {
           console.warn('Local project autosave failed:', error);
+          useDiagnosticsStore.getState().record({
+            scope: 'autosave',
+            level: 'error',
+            message: 'Local project autosave failed',
+            detail: formatDiagnosticError(error, 'Local project autosave failed'),
+            ...(useProjectStore.getState().meta.localProjectId
+              ? { projectId: useProjectStore.getState().meta.localProjectId }
+              : {}),
+          });
           usePersistenceStore
             .getState()
             .markError(error instanceof Error ? error.message : 'Local project autosave failed');

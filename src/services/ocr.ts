@@ -2,6 +2,8 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { pageRepository } from '../repositories/pageRepository';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import { regionRepository } from '../repositories/regionRepository';
+import { useDiagnosticsStore } from '../stores/useDiagnosticsStore';
+import { useProjectStore } from '../stores/useProjectStore';
 import type { OcrEngineId, OcrPageResult, Page, RegionRecord } from '../types';
 
 type OcrProgressCallback = (progress: number, message: string) => void;
@@ -208,6 +210,16 @@ async function runBrowserPreviewOcr(
     console.warn('[ScanForge][OCR] browser preview fallback used', {
       pageId: page.id,
       providerPath,
+    });
+    useDiagnosticsStore.getState().record({
+      scope: 'ocr',
+      level: 'warning',
+      message: 'Browser OCR preview fallback used',
+      detail: providerPath.join(' -> '),
+      ...(useProjectStore.getState().meta.localProjectId
+        ? { projectId: useProjectStore.getState().meta.localProjectId }
+        : {}),
+      pageId: page.id,
     });
   }
   const results: OcrPageResult['results'] = [];

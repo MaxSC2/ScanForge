@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { LocalProjectSummary, ProjectFile } from '../types';
+import { formatDiagnosticError } from '../services/diagnostics';
 import { getProjectRepository } from '../storage';
+import { useDiagnosticsStore } from './useDiagnosticsStore';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
 import { useProjectDomainStore } from './useProjectDomainStore';
@@ -62,6 +64,12 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
     } catch (error) {
       set({ loading: false });
       console.warn('Project library refresh failed:', error);
+      useDiagnosticsStore.getState().record({
+        scope: 'project',
+        level: 'warning',
+        message: 'Project library refresh failed',
+        detail: formatDiagnosticError(error, 'Project library refresh failed'),
+      });
     }
   },
 
@@ -85,6 +93,12 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
     } catch (error) {
       set({ switchingProjectId: null });
       console.warn('New local project creation failed:', error);
+      useDiagnosticsStore.getState().record({
+        scope: 'project',
+        level: 'error',
+        message: 'New local project creation failed',
+        detail: formatDiagnosticError(error, 'New local project creation failed'),
+      });
       useToastStore.getState().push('Не удалось создать локальный проект', 'error');
     }
   },
@@ -100,12 +114,28 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
       usePersistenceStore.getState().markSaved(loadResult.project.meta.updatedAt);
       usePersistenceStore.getState().setRecoveryNotice(loadResult.warning ?? null);
       if (loadResult.warning) {
+        useDiagnosticsStore.getState().record({
+          scope: 'recovery',
+          level: 'warning',
+          message: 'Project loaded with recovery warning',
+          detail: loadResult.warning,
+          ...(loadResult.project.meta.localProjectId
+            ? { projectId: loadResult.project.meta.localProjectId }
+            : {}),
+        });
         useToastStore.getState().push(loadResult.warning, 'warning');
       }
       useToastStore.getState().push('Локальный проект загружен', 'success');
     } catch (error) {
       set({ switchingProjectId: null });
       console.warn('Local project load failed:', error);
+      useDiagnosticsStore.getState().record({
+        scope: 'project',
+        level: 'error',
+        message: 'Local project load failed',
+        detail: formatDiagnosticError(error, 'Local project load failed'),
+        ...(id ? { projectId: id } : {}),
+      });
       useToastStore.getState().push('Не удалось открыть локальный проект', 'error');
     }
   },

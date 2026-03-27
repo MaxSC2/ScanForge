@@ -64,3 +64,9 @@ export type {
   TextStyleAlign,
   TextStyleRecord,
 } from './domain';
+export type {
+  DiagnosticEntry,
+  DiagnosticInput,
+  DiagnosticLevel,
+  DiagnosticScope,
+} from './diagnostics';
