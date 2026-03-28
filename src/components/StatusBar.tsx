@@ -82,9 +82,9 @@ export function StatusBar() {
   } as const;
 
   const viewModeLabel = {
-    manual: 'Manual',
-    'fit-page': 'Fit page',
-    'fit-width': 'Fit width',
+    manual: 'Ручной',
+    'fit-page': 'По странице',
+    'fit-width': 'По ширине',
     actual: '1:1',
   } as const;
 
@@ -93,30 +93,30 @@ export function StatusBar() {
   const persistencePresentation =
     saveState === 'saving'
       ? {
-          label: 'Saving...',
-          title: 'Local project autosave is in progress',
+          label: 'Сохранение...',
+          title: 'Выполняется локальное автосохранение проекта',
           icon: <LoaderCircle size={11} className="animate-spin" />,
           className: 'text-indigo-400',
         }
       : saveState === 'pending'
         ? {
-            label: 'Autosave pending',
-            title: 'Local project changes are queued for autosave',
+            label: 'Автосохранение ожидает',
+            title: 'Изменения проекта стоят в очереди на автосохранение',
             icon: <Save size={11} />,
             className: 'text-zinc-400',
           }
         : saveState === 'error'
           ? {
-              label: 'Autosave failed',
-              title: lastError ?? 'Local project autosave failed',
+              label: 'Ошибка автосохранения',
+              title: lastError ?? 'Не удалось выполнить локальное автосохранение проекта',
               icon: <AlertTriangle size={11} />,
               className: 'text-amber-400',
             }
           : {
-              label: savedAtLabel ? `Saved ${savedAtLabel}` : 'Autosave ready',
+              label: savedAtLabel ? `Сохранено ${savedAtLabel}` : 'Автосохранение готово',
               title: savedAtLabel
-                ? `Last local save completed at ${savedAtLabel}`
-                : 'Local project autosave is ready',
+                ? `Последнее локальное сохранение завершено в ${savedAtLabel}`
+                : 'Локальное автосохранение готово',
               icon: <CheckCircle2 size={11} />,
               className: 'text-emerald-400',
             };
@@ -156,30 +156,30 @@ export function StatusBar() {
           <span className="max-w-32 truncate text-indigo-400">• {selectedRegion.label}</span>
         )}
 
-        <span className="text-zinc-600">View: {viewModeLabel[viewMode]}</span>
+        <span className="text-zinc-600">Вид: {viewModeLabel[viewMode]}</span>
 
         {(runningJobs > 0 || queuedJobs > 0) && (
           <span className="flex items-center gap-1 text-zinc-400">
             <ScanText size={11} />
-            Jobs: {runningJobs} active / {queuedJobs} queued
+            Задачи: {runningJobs} в работе / {queuedJobs} в очереди
           </span>
         )}
 
         {translationQueued > 0 && (
           <span className="flex items-center gap-1 text-zinc-400">
             <Languages size={11} />
-            TR: {translationQueued}
+            Перевод: {translationQueued}
           </span>
         )}
 
         {ocrQueued > 0 && translationQueued === 0 && (
-          <span className="text-zinc-600">OCR queue: {ocrQueued}</span>
+          <span className="text-zinc-600">Очередь OCR: {ocrQueued}</span>
         )}
 
         {focusMode && (
           <span className="flex items-center gap-1 text-zinc-400">
             <Focus size={11} />
-            Focus mode
+            Фокус-режим
           </span>
         )}
 
@@ -194,7 +194,7 @@ export function StatusBar() {
         {recoveryNotice && (
           <span className="flex items-center gap-1 text-amber-400" title={recoveryNotice}>
             <AlertTriangle size={11} />
-            Recovery warning
+            Предупреждение восстановления
           </span>
         )}
       </div>
@@ -225,7 +225,7 @@ export function StatusBar() {
           className={`rounded p-1 transition-colors ${
             regionOverlaysVisible ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'
           }`}
-          title="Показать или скрыть region overlays"
+          title="Показать или скрыть оверлеи регионов"
         >
           {regionOverlaysVisible ? <Eye size={12} /> : <EyeOff size={12} />}
         </button>

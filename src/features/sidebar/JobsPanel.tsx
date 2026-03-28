@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import {
+  ChevronDown,
+  ChevronRight,
   CircleAlert,
   CircleCheckBig,
   Eraser,
@@ -22,22 +25,22 @@ function formatClock(value: number | null) {
 
 function formatTarget(job: { regionIds?: string[] }) {
   if (!job.regionIds?.length) {
-    return 'page';
+    return 'страница';
   }
 
-  return job.regionIds.length === 1 ? '1 region' : `${job.regionIds.length} regions`;
+  return job.regionIds.length === 1 ? '1 регион' : `${job.regionIds.length} регионов`;
 }
 
 function formatReason(reason: string) {
   switch (reason) {
     case 'already_filled':
-      return 'already filled';
+      return 'уже заполнено';
     case 'invalid_bounds':
-      return 'invalid bounds';
+      return 'неверные границы';
     case 'no_text':
-      return 'no text';
+      return 'нет текста';
     case 'locked':
-      return 'locked';
+      return 'заблокировано';
     default:
       return reason.replace(/_/g, ' ');
   }
@@ -48,17 +51,32 @@ function formatScope(scope: string) {
     case 'ocr':
       return 'OCR';
     case 'translation':
-      return 'Translation';
+      return 'Перевод';
     case 'export':
-      return 'Export';
+      return 'Экспорт';
     case 'recovery':
-      return 'Recovery';
+      return 'Восстановление';
     case 'autosave':
-      return 'Autosave';
+      return 'Автосохранение';
     case 'project':
-      return 'Project';
+      return 'Проект';
     default:
-      return 'Runtime';
+      return 'Система';
+  }
+}
+
+function formatStatus(status: string) {
+  switch (status) {
+    case 'queued':
+      return 'в очереди';
+    case 'running':
+      return 'в работе';
+    case 'done':
+      return 'готово';
+    case 'failed':
+      return 'ошибка';
+    default:
+      return status;
   }
 }
 
@@ -74,6 +92,7 @@ function diagnosticDotClass(level: string) {
 }
 
 export function JobsPanel() {
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const jobs = useJobStore((state) => state.jobs);
   const processing = useJobStore((state) => state.processing);
   const retryJob = useJobStore((state) => state.retryJob);
@@ -91,7 +110,7 @@ export function JobsPanel() {
       <div className="flex items-center gap-2 px-3 py-2">
         <Workflow size={12} className="text-zinc-500" />
         <h2 className="flex-1 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Jobs
+          Задачи
         </h2>
         <span className="text-[10px] tabular-nums text-zinc-600">{jobs.length}</span>
       </div>
@@ -99,15 +118,15 @@ export function JobsPanel() {
       <div className="space-y-2 px-2 pb-2">
         <div className="grid grid-cols-3 gap-1 text-[10px]">
           <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
-            <div className="text-zinc-600">Running</div>
+            <div className="text-zinc-600">В работе</div>
             <div className="mt-1 text-xs font-semibold text-zinc-200">{runningCount}</div>
           </div>
           <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
-            <div className="text-zinc-600">Queued</div>
+            <div className="text-zinc-600">В очереди</div>
             <div className="mt-1 text-xs font-semibold text-zinc-200">{queuedCount}</div>
           </div>
           <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
-            <div className="text-zinc-600">Failed</div>
+            <div className="text-zinc-600">Ошибки</div>
             <div className="mt-1 text-xs font-semibold text-zinc-200">{failedCount}</div>
           </div>
         </div>
@@ -119,31 +138,31 @@ export function JobsPanel() {
             ) : (
               <ScanText size={11} className="text-zinc-500" />
             )}
-            {processing ? 'Pipeline worker active' : 'Pipeline worker idle'}
+            {processing ? 'Пайплайн активен' : 'Пайплайн ожидает'}
           </div>
 
           <button
             onClick={clearFinished}
             className="ml-auto inline-flex h-7 items-center justify-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            title="Clear completed and failed jobs"
+            title="Очистить завершенные и ошибочные задачи"
           >
             <Eraser size={11} />
-            Clear
+            Очистить
           </button>
         </div>
 
         <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40">
           {jobs.length === 0 ? (
             <div className="px-3 py-4 text-center">
-              <p className="text-[11px] font-medium text-zinc-400">Job queue is empty</p>
+              <p className="text-[11px] font-medium text-zinc-400">Очередь задач пуста</p>
               <p className="mt-1 text-[10px] text-zinc-600">
-                Run OCR or translation for the selected page from the top toolbar.
+                Запусти OCR или перевод для выбранной страницы через верхнюю панель.
               </p>
             </div>
           ) : (
             <ul className="max-h-56 overflow-y-auto p-1">
               {jobs.map((job) => {
-                const stageLabel = job.stage === 'ocr' ? 'OCR' : 'TR';
+                const stageLabel = job.stage === 'ocr' ? 'OCR' : 'Перевод';
                 const statusIcon =
                   job.status === 'running' ? (
                     <LoaderCircle size={12} className="animate-spin text-indigo-400" />
@@ -198,7 +217,7 @@ export function JobsPanel() {
                           />
                         </div>
                         <div className="mt-2 flex items-center gap-2 text-[10px] text-zinc-600">
-                          <span>{job.status}</span>
+                          <span>{formatStatus(job.status)}</span>
                           <span>{formatClock(job.finishedAt ?? job.startedAt ?? job.createdAt)}</span>
                         </div>
                         {job.error && (
@@ -210,7 +229,7 @@ export function JobsPanel() {
                             className="mt-2 inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-800"
                           >
                             <RotateCcw size={10} />
-                            Retry
+                            Повторить
                           </button>
                         )}
                       </div>
@@ -224,24 +243,39 @@ export function JobsPanel() {
 
         <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40">
           <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
-            <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              Diagnostics
-            </span>
-            <span className="text-[10px] tabular-nums text-zinc-600">{diagnostics.length}</span>
+            <button
+              type="button"
+              onClick={() => setDiagnosticsOpen((state) => !state)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-200"
+            >
+              {diagnosticsOpen ? (
+                <ChevronDown size={12} className="text-zinc-500" />
+              ) : (
+                <ChevronRight size={12} className="text-zinc-500" />
+              )}
+              <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                Диагностика
+              </span>
+              <span className="text-[10px] tabular-nums text-zinc-600">{diagnostics.length}</span>
+            </button>
             <button
               onClick={clearDiagnostics}
               className="inline-flex h-6 items-center rounded-md border border-zinc-800 bg-zinc-900 px-2 text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              title="Clear diagnostics log"
+              title="Очистить журнал диагностики"
             >
-              Clear
+              Очистить
             </button>
           </div>
 
-          {recentDiagnostics.length === 0 ? (
+          {!diagnosticsOpen ? (
+            <div className="px-3 py-3 text-[10px] text-zinc-600">
+              Недавние предупреждения и сообщения восстановления скрыты, чтобы не перегружать боковую панель.
+            </div>
+          ) : recentDiagnostics.length === 0 ? (
             <div className="px-3 py-4 text-center">
-              <p className="text-[11px] font-medium text-zinc-400">No recent diagnostics</p>
+              <p className="text-[11px] font-medium text-zinc-400">Нет недавней диагностики</p>
               <p className="mt-1 text-[10px] text-zinc-600">
-                Pipeline warnings and recovery errors will appear here.
+                Здесь будут появляться предупреждения пайплайна и ошибки восстановления.
               </p>
             </div>
           ) : (

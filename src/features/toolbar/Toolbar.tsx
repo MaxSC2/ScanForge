@@ -1,5 +1,7 @@
-import { type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
+  Check,
+  ChevronDown,
   Combine,
   Download,
   Eye,
@@ -12,7 +14,6 @@ import {
   Maximize,
   MousePointer2,
   Redo2,
-  RotateCcw,
   Save,
   ScanText,
   Square,
@@ -40,7 +41,9 @@ import { getStitchPreview, suggestSafeStitch } from '../../utils/stitch';
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
   const [stitchDialogOpen, setStitchDialogOpen] = useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
 
   const addPages = usePageStore((state) => state.addPages);
   const setProjectState = usePageStore((state) => state.setProjectState);
@@ -66,12 +69,8 @@ export function Toolbar() {
   const setTool = useEditorStore((state) => state.setTool);
   const focusMode = useEditorStore((state) => state.focusMode);
   const cleanView = useEditorStore((state) => state.cleanView);
-  const ocrOverwrite = useEditorStore((state) => state.ocrOverwrite);
-  const translationOverwrite = useEditorStore((state) => state.translationOverwrite);
   const toggleFocusMode = useEditorStore((state) => state.toggleFocusMode);
   const toggleCleanView = useEditorStore((state) => state.toggleCleanView);
-  const toggleOcrOverwrite = useEditorStore((state) => state.toggleOcrOverwrite);
-  const toggleTranslationOverwrite = useEditorStore((state) => state.toggleTranslationOverwrite);
   const viewMode = useEditorStore((state) => state.viewMode);
   const regionOverlaysVisible = useEditorStore((state) => state.regionOverlaysVisible);
   const requestFitToPage = useEditorStore((state) => state.requestFitToPage);
@@ -106,6 +105,12 @@ export function Toolbar() {
   const canStitch = selectedPageIds.length >= 2 && !stitching;
   const canRunOcr = ocrTargets.length > 0;
   const canRunTranslation = translationTargets.length > 0;
+  const viewModeLabel = {
+    manual: 'Ручной',
+    'fit-page': 'По странице',
+    'fit-width': 'По ширине',
+    actual: '1:1',
+  } as const;
 
   const tools: { id: EditorTool; icon: ReactNode; label: string; shortcut: string }[] = [
     { id: 'select', icon: <MousePointer2 size={14} />, label: 'Выбор', shortcut: 'V' },
@@ -134,6 +139,30 @@ export function Toolbar() {
           stitchOptions,
         )
       : null;
+
+  useEffect(() => {
+    if (!viewMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!viewMenuRef.current?.contains(event.target as Node)) {
+        setViewMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setViewMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [viewMenuOpen]);
 
   const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -170,7 +199,7 @@ export function Toolbar() {
   const handleTranslate = () => {
     const queued = queueTranslationJobs(translationTargets);
     if (queued === 0) {
-      pushToast('Translation already queued for the selected target or nothing is selected', 'warning');
+      pushToast('Перевод уже стоит в очереди для выбранной цели или ничего не выбрано', 'warning');
     }
   };
 
@@ -273,32 +302,12 @@ export function Toolbar() {
       </IconButton>
 
       <IconButton
-        active={ocrOverwrite}
-        onClick={toggleOcrOverwrite}
-        tooltip="Overwrite existing source text when running OCR"
-        variant="ghost"
-      >
-        <RotateCcw size={14} />
-        <span className="hidden 2xl:inline">OCR overwrite</span>
-      </IconButton>
-
-      <IconButton
         onClick={handleTranslate}
-        tooltip="Run translation for the selected page or region (Ctrl+Shift+T)"
+        tooltip="Запустить перевод для выбранной страницы или региона (Ctrl+Shift+T)"
         disabled={!canRunTranslation}
       >
         <Languages size={14} />
-        <span className="hidden xl:inline">Translate</span>
-      </IconButton>
-
-      <IconButton
-        active={translationOverwrite}
-        onClick={toggleTranslationOverwrite}
-        tooltip="Overwrite existing translations when running translation"
-        variant="ghost"
-      >
-        <RotateCcw size={14} />
-        <span className="hidden 2xl:inline">Overwrite</span>
+        <span className="hidden xl:inline">Перевод</span>
       </IconButton>
 
       <IconButton
@@ -313,24 +322,6 @@ export function Toolbar() {
       <div className="h-5 w-px bg-zinc-700/60" />
 
       <div className="flex items-center gap-0.5 rounded-lg bg-zinc-800/50 p-0.5">
-        <IconButton
-          active={focusMode}
-          onClick={toggleFocusMode}
-          tooltip="Focus mode: панели открываются поверх холста (Ctrl+.)"
-          variant="ghost"
-        >
-          <Focus size={14} />
-        </IconButton>
-
-        <IconButton
-          active={cleanView}
-          onClick={toggleCleanView}
-          tooltip="Clean view: скрыть весь UI кроме холста (Ctrl+Shift+.)"
-          variant="ghost"
-        >
-          <Maximize size={14} />
-        </IconButton>
-
         {tools.map((item) => (
           <IconButton
             key={item.id}
@@ -378,33 +369,74 @@ export function Toolbar() {
         </IconButton>
       </div>
 
-      <div className="ml-2 flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/70 p-1">
-        <ViewPresetButton
-          label="1:1"
-          active={viewMode === 'actual'}
-          onClick={requestActualSize}
-          title="Показать в 100%"
-        />
-        <ViewPresetButton
-          label="Width"
-          active={viewMode === 'fit-width'}
-          onClick={requestFitToWidth}
-          title="Подогнать по ширине"
-        />
-        <ViewPresetButton
-          label="Page"
-          active={viewMode === 'fit-page'}
-          onClick={requestFitToPage}
-          title="Подогнать в окно"
-        />
-        <IconButton
-          active={!regionOverlaysVisible}
-          onClick={toggleRegionOverlays}
-          tooltip="Показать или скрыть region overlays"
-          variant="ghost"
+      <div ref={viewMenuRef} className="relative z-10 ml-2">
+        <button
+          type="button"
+          onClick={() => setViewMenuOpen((state) => !state)}
+          className="inline-flex h-8 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2.5 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          title="Настройки просмотра"
         >
-          {regionOverlaysVisible ? <Eye size={14} /> : <EyeOff size={14} />}
-        </IconButton>
+          <Eye size={14} className="text-zinc-500" />
+          <span>Вид</span>
+          <span className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+            {viewModeLabel[viewMode]}
+          </span>
+          <ChevronDown
+            size={13}
+            className={`text-zinc-500 transition-transform ${viewMenuOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {viewMenuOpen && (
+          <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-52 rounded-xl border border-zinc-800 bg-zinc-950/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur">
+            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              Просмотр
+            </div>
+
+            <ViewMenuItem
+              label="Реальный масштаб"
+              hint="1:1"
+              active={viewMode === 'actual'}
+              onClick={requestActualSize}
+            />
+            <ViewMenuItem
+              label="По ширине"
+              hint="Ширина"
+              active={viewMode === 'fit-width'}
+              onClick={requestFitToWidth}
+            />
+            <ViewMenuItem
+              label="По странице"
+              hint="Страница"
+              active={viewMode === 'fit-page'}
+              onClick={requestFitToPage}
+            />
+
+            <div className="my-1 h-px bg-zinc-800" />
+
+            <ViewMenuItem
+              icon={regionOverlaysVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+              label="Оверлеи регионов"
+              hint={regionOverlaysVisible ? 'Показаны' : 'Скрыты'}
+              active={regionOverlaysVisible}
+              onClick={toggleRegionOverlays}
+            />
+            <ViewMenuItem
+              icon={<Focus size={13} />}
+              label="Фокус-режим"
+              hint="Ctrl+."
+              active={focusMode}
+              onClick={toggleFocusMode}
+            />
+            <ViewMenuItem
+              icon={<Maximize size={13} />}
+              label="Чистый режим"
+              hint="Ctrl+Shift+."
+              active={cleanView}
+              onClick={toggleCleanView}
+            />
+          </div>
+        )}
       </div>
 
       <StitchDialog
@@ -451,28 +483,33 @@ export function Toolbar() {
   );
 }
 
-function ViewPresetButton({
+function ViewMenuItem({
+  icon,
   label,
+  hint,
   active,
   onClick,
-  title,
 }: {
+  icon?: ReactNode;
   label: string;
+  hint?: string;
   active: boolean;
   onClick: () => void;
-  title: string;
 }) {
   return (
     <button
       onClick={onClick}
-      title={title}
-      className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] font-medium transition-colors ${
         active
-          ? 'bg-indigo-500/15 text-indigo-200 ring-1 ring-indigo-500/20'
-          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+          ? 'bg-indigo-500/15 text-indigo-200'
+          : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'
       }`}
     >
-      {label}
+      <span className={`flex h-5 w-5 items-center justify-center rounded-md ${active ? 'bg-indigo-500/10 text-indigo-300' : 'bg-zinc-900 text-zinc-500'}`}>
+        {icon ?? <Check size={12} className={active ? 'opacity-100' : 'opacity-0'} />}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {hint ? <span className="text-[10px] text-zinc-500">{hint}</span> : null}
     </button>
   );
 }

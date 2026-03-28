@@ -11,6 +11,7 @@ interface EditorState {
   /** Panel visibility */
   sidebarOpen: boolean;
   inspectorOpen: boolean;
+  inspectorWidth: number;
   focusMode: boolean;
   cleanView: boolean;
   /** Canvas overlays */
@@ -38,6 +39,7 @@ interface EditorState {
   toggleInspector: () => void;
   setSidebarOpen: (value: boolean) => void;
   setInspectorOpen: (value: boolean) => void;
+  setInspectorWidth: (value: number) => void;
   toggleFocusMode: () => void;
   setFocusMode: (value: boolean) => void;
   toggleCleanView: () => void;
@@ -59,9 +61,38 @@ interface EditorState {
 const ZOOM_STEP = 0.15;
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 8;
+const INSPECTOR_WIDTH_MIN = 280;
+const INSPECTOR_WIDTH_MAX = 520;
+const INSPECTOR_WIDTH_STORAGE_KEY = 'scanforge.editor.inspectorWidth';
 
 function clampZoom(z: number) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+}
+
+function clampInspectorWidth(width: number) {
+  return Math.min(INSPECTOR_WIDTH_MAX, Math.max(INSPECTOR_WIDTH_MIN, Math.round(width)));
+}
+
+function getInitialInspectorWidth() {
+  if (typeof window === 'undefined') {
+    return 320;
+  }
+
+  const raw = window.localStorage.getItem(INSPECTOR_WIDTH_STORAGE_KEY);
+  if (!raw) {
+    return 320;
+  }
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? clampInspectorWidth(parsed) : 320;
+}
+
+function persistInspectorWidth(width: number) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(clampInspectorWidth(width)));
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -71,6 +102,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   viewMode: 'fit-page',
   sidebarOpen: true,
   inspectorOpen: true,
+  inspectorWidth: getInitialInspectorWidth(),
   focusMode: false,
   cleanView: false,
   regionOverlaysVisible: true,
@@ -93,6 +125,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   setSidebarOpen: (value) => set({ sidebarOpen: value }),
   setInspectorOpen: (value) => set({ inspectorOpen: value }),
+  setInspectorWidth: (value) => {
+    const nextWidth = clampInspectorWidth(value);
+    persistInspectorWidth(nextWidth);
+    set({ inspectorWidth: nextWidth });
+  },
   toggleFocusMode: () =>
     set((state) => ({
       focusMode: !state.focusMode,

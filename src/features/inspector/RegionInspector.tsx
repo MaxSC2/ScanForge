@@ -33,7 +33,7 @@ import { useToastStore } from '../../stores/useToastStore';
 import { REGION_KIND_OPTIONS, getRegionColor } from '../../types';
 import type { Region, RegionKind } from '../../types';
 
-type InspectorView = 'details' | 'regions';
+type InspectorView = 'details' | 'regions' | 'pipeline';
 
 export function RegionInspector() {
   const [activeView, setActiveView] = useState<InspectorView>('details');
@@ -92,9 +92,11 @@ export function RegionInspector() {
         onChange={setActiveView}
       />
 
-      <ProjectSettingsPanel />
-
-      {activeView === 'regions' ? (
+      {activeView === 'pipeline' ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ProjectSettingsPanel />
+        </div>
+      ) : activeView === 'regions' ? (
         activePage.regions.length > 0 ? (
           <RegionListPanel
             regions={activePage.regions}
@@ -330,7 +332,7 @@ function InspectorHeader({
         <span className="text-[10px] tabular-nums text-zinc-600">Регионов: {count}</span>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-1">
+      <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-1">
         <InspectorTabButton
           active={activeView === 'details'}
           icon={<Type size={12} />}
@@ -342,6 +344,12 @@ function InspectorHeader({
           icon={<Layers size={12} />}
           label="Регионы"
           onClick={() => onChange('regions')}
+        />
+        <InspectorTabButton
+          active={activeView === 'pipeline'}
+          icon={<Settings2 size={12} />}
+          label="Пайплайн"
+          onClick={() => onChange('pipeline')}
         />
       </div>
     </div>
