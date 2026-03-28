@@ -6,7 +6,13 @@ import {
   syncJobsForProject,
 } from '../repositories';
 import { formatDiagnosticError } from '../services/diagnostics';
-import { deriveOcrJobOutcome, formatJobResultSummary, summarizeOcrPageResult } from '../services/jobSummary';
+import {
+  deriveOcrJobOutcome,
+  deriveTranslationJobOutcome as deriveTranslationOutcome,
+  formatJobResultSummary,
+  summarizeOcrPageResult,
+  summarizeTranslationPageResult,
+} from '../services/jobSummary';
 import { runPageOcr } from '../services/ocr';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
@@ -273,20 +279,27 @@ async function runTranslationJob(job: JobRecord) {
     );
     await refreshPageRegionsFromRepository(page.id);
 
-    const result: JobResultSummary = {
-      provider: translationResult.provider,
-      regionsProcessed: translationResult.regionsProcessed,
-      appliedCount: translationResult.translatedCount,
-      skippedCount: translationResult.skippedCount,
-      failedCount: 0,
-    };
+    const result: JobResultSummary = summarizeTranslationPageResult(translationResult);
+    const outcome = deriveTranslationOutcome(result);
+
+    if (result.failedCount > 0 || (result.appliedCount === 0 && result.skippedCount > 0)) {
+      recordJobDiagnostic(
+        job,
+        outcome.status === 'failed' ? 'error' : 'warning',
+        outcome.status === 'failed'
+          ? 'Translation finished with unresolved failures'
+          : 'Translation completed with warnings',
+        formatJobResultSummary(job.stage, result),
+      );
+    }
 
     updateJob(job.id, {
-      status: 'done',
+      status: outcome.status,
       finishedAt: Date.now(),
       progress: 1,
       result,
-      message: formatJobResultSummary(job.stage, result),
+      message: outcome.message,
+      error: outcome.error,
     });
   } catch (error) {
     recordJobDiagnostic(

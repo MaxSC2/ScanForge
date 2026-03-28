@@ -17,6 +17,7 @@ pub struct TranslationRegionResult {
 #[serde(rename_all = "camelCase")]
 pub struct TranslationPageResult {
     pub provider: String,
+    pub provider_path: Option<Vec<String>>,
     pub regions_processed: usize,
     pub translated_count: usize,
     pub skipped_count: usize,
@@ -41,6 +42,15 @@ fn resolve_provider(provider: &str) -> Result<TranslationProviderMode, String> {
         "mock" => Ok(TranslationProviderMode::Preview),
         "remote" => Err("Remote translation provider is not implemented yet in Stage 3.".into()),
         other => Err(format!("Unsupported translation provider '{}'.", other)),
+    }
+}
+
+fn build_provider_chain(provider: &str) -> Vec<&'static str> {
+    match provider {
+        "local" => vec!["local", "mock"],
+        "mock" => vec!["mock"],
+        "remote" => vec!["remote", "local", "mock"],
+        _ => vec!["local", "mock"],
     }
 }
 
@@ -268,7 +278,27 @@ pub fn run_page_translation(
         .as_ref()
         .map(|settings| settings.translation_provider.as_str())
         .unwrap_or("local");
-    let provider = resolve_provider(requested_provider)?;
+    let provider_chain = build_provider_chain(requested_provider);
+    let mut provider_path = Vec::new();
+    let mut active_provider = None;
+
+    for provider_key in provider_chain {
+        provider_path.push(provider_key.to_string());
+        match resolve_provider(provider_key) {
+            Ok(provider) => {
+                active_provider = Some(provider);
+                break;
+            }
+            Err(_) => continue,
+        }
+    }
+
+    let provider = active_provider.ok_or_else(|| {
+        format!(
+            "No translation provider available for '{}'.",
+            requested_provider
+        )
+    })?;
     let provider_label = provider_name(&provider).to_string();
 
     let target_region_ids = region_ids.map(|ids| ids.into_iter().collect::<HashSet<_>>());
@@ -349,6 +379,11 @@ pub fn run_page_translation(
 
     Ok(TranslationPageResult {
         provider: provider_label,
+        provider_path: if provider_path.is_empty() {
+            None
+        } else {
+            Some(provider_path)
+        },
         regions_processed: results.len(),
         translated_count,
         skipped_count,

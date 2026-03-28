@@ -46,6 +46,9 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - OCR overwrite toggle wiring
 - OCR retry and per-job failure reasons in Jobs panel
 - OCR provider-chain fallback on desktop
+- translation provider fallback chain and provider-path metadata
+- translation job summaries with explicit skip/failure reasons
+- translation job outcome hardening for empty-source and all-skipped cases
 - crash/recovery hardening for project load and autosave
 - autosave status surfaced in editor UI
 - undo checkpoint coalescing for region edits
@@ -68,24 +71,23 @@ Stage 4 is in progress.
 Workstreams with meaningful progress:
 
 - Workstream A - OCR Pipeline v2
+- Workstream B - Translation System v2
 - Workstream C - Editor Stability
 - Workstream F - Error Handling and Observability
 
 Workstreams still needing real progress:
 
-- Workstream B - Translation System v2
 - Workstream D - Canvas Performance
 - Workstream E - Export System v2
 - Workstream G - Architecture Readiness
 
 ## Next Recommended Slice
 
-Start Workstream B in earnest:
+Keep hardening Workstream B:
 
-- translation provider fallback order
-- explicit manual-edit preservation rules
 - translation retry behavior
-- better provider metadata and failure reporting
+- translation desktop manual verification and failure replay
+- clearer surfacing when configured provider falls back
 
 ## Required Verification For New Work
 

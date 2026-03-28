@@ -33,6 +33,7 @@ export interface TranslationRegionResult {
 
 export interface TranslationPageResult {
   provider: string;
+  providerPath?: string[];
   regionsProcessed: number;
   translatedCount: number;
   skippedCount: number;

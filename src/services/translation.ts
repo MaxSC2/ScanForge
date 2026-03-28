@@ -29,6 +29,48 @@ interface StoredTranslationContext {
   regions: RegionRecord[];
 }
 
+const TRANSLATION_PROVIDER_FALLBACKS: Record<string, string[]> = {
+  local: ['local', 'mock'],
+  mock: ['mock'],
+  remote: ['remote', 'local', 'mock'],
+};
+
+function getTranslationProviderChain(provider: TranslationProviderId | string) {
+  return TRANSLATION_PROVIDER_FALLBACKS[provider] ?? [provider, 'local', 'mock'];
+}
+
+function getTranslationProviderName(provider: string) {
+  switch (provider) {
+    case 'local':
+      return 'scanforge-local-draft';
+    case 'mock':
+      return 'scanforge-translation-preview';
+    case 'remote':
+      return 'scanforge-translation-remote';
+    default:
+      return provider;
+  }
+}
+
+function isBrowserTranslationProviderAvailable(provider: string) {
+  return provider === 'local' || provider === 'mock';
+}
+
+function runBrowserProviderTranslation(
+  provider: string,
+  sourceText: string,
+  targetLanguage: ProjectTargetLanguage,
+) {
+  switch (provider) {
+    case 'local':
+      return buildLocalDraftTranslation(sourceText, targetLanguage);
+    case 'mock':
+      return buildPreviewTranslation(sourceText, targetLanguage);
+    default:
+      return null;
+  }
+}
+
 function filterTargetRegions(regions: RegionRecord[], regionIds?: string[]) {
   if (!regionIds || regionIds.length === 0) {
     return regions;
@@ -65,6 +107,7 @@ async function loadStoredTranslationContext(
 async function applyBrowserTranslationResult(
   context: StoredTranslationContext,
   results: TranslationPageResult['results'],
+  providerName: string,
 ) {
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
@@ -82,7 +125,7 @@ async function applyBrowserTranslationResult(
         status: 'translated',
         targetLanguage: context.targetLanguage,
         translationStatus: 'done',
-        translationProvider: String(context.translationProvider),
+        translationProvider: providerName,
         translationUpdatedAt: updatedAt,
       });
     }),
@@ -100,10 +143,20 @@ async function runBrowserTranslation(
   }
 
   const overwriteExisting = options.overwriteExisting ?? false;
-  const provider = context.translationProvider === 'local' ? 'local' : context.translationProvider;
-  const providerName =
-    provider === 'local' ? 'scanforge-local-draft' : 'scanforge-translation-preview';
+  const providerChain = getTranslationProviderChain(context.translationProvider);
+  const providerPath: string[] = [];
+  let activeProvider = 'mock';
   const results: TranslationPageResult['results'] = [];
+
+  for (const provider of providerChain) {
+    providerPath.push(provider);
+    if (!isBrowserTranslationProviderAvailable(provider)) {
+      continue;
+    }
+
+    activeProvider = provider;
+    break;
+  }
 
   for (let index = 0; index < context.regions.length; index += 1) {
     const region = context.regions[index];
@@ -131,10 +184,27 @@ async function runBrowserTranslation(
         reason: 'already_translated',
       });
     } else {
-      const translatedText =
-        provider === 'local'
-          ? buildLocalDraftTranslation(region.sourceText, context.targetLanguage)
-          : buildPreviewTranslation(region.sourceText, context.targetLanguage);
+      let translatedText: string | null = null;
+
+      translatedText = runBrowserProviderTranslation(
+        activeProvider,
+        region.sourceText,
+        context.targetLanguage,
+      );
+
+      if (!translatedText) {
+        results.push({
+          regionId: region.id,
+          translatedText: null,
+          skipped: true,
+          reason: 'provider_unavailable',
+        });
+        onProgress?.(
+          0.2 + ((index + 1) / Math.max(1, context.regions.length)) * 0.7,
+          `Translating region ${index + 1}/${context.regions.length}`,
+        );
+        continue;
+      }
 
       results.push({
         regionId: region.id,
@@ -150,13 +220,15 @@ async function runBrowserTranslation(
     );
   }
 
-  await applyBrowserTranslationResult(context, results);
+  const providerName = getTranslationProviderName(activeProvider);
+  await applyBrowserTranslationResult(context, results, providerName);
 
   const translatedCount = results.filter((item) => !item.skipped && item.translatedText).length;
   const skippedCount = results.length - translatedCount;
 
   return {
     provider: providerName,
+    ...(providerPath.length > 0 ? { providerPath } : {}),
     regionsProcessed: results.length,
     translatedCount,
     skippedCount,

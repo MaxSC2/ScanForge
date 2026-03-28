@@ -94,8 +94,13 @@ Persisted OCR metadata includes:
 
 ### Current Effective Order
 
-- configured translation provider
-- local/mock draft behavior depending on environment and implementation path
+Desktop and browser translation now follow an explicit fallback chain:
+
+- `remote` -> `local` -> `mock`
+- `local` -> `mock`
+- `mock` -> `mock`
+
+The final provider used is persisted in region metadata, and the fallback path is surfaced in job summaries.
 
 ### Translation Rules
 
@@ -104,6 +109,7 @@ Persisted OCR metadata includes:
 - overwrite should be explicit and opt-in
 - repeated phrases should eventually support cache or memory behavior
 - failures must be visible in Jobs and diagnostics
+- fallback behavior must be inspectable in result metadata
 
 Persisted translation metadata includes:
 
