@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import {
   mergeJobsWithRepository,
   mergeRegionsForPage,
+  syncRegionsForPages,
   syncJobsForProject,
 } from '../repositories';
 import { formatDiagnosticError } from '../services/diagnostics';
@@ -143,6 +144,21 @@ function updateTranslationTargetsInEditor(
     }),
   }));
   useProjectStore.getState().touch();
+}
+
+async function persistTranslationTargets(pageId: string) {
+  const page = usePageStore.getState().pages.find((item) => item.id === pageId);
+  if (!page) {
+    return;
+  }
+
+  const meta = useProjectStore.getState().meta;
+  if (!meta.localProjectId) {
+    await ensureProjectDomainStatePersisted();
+    return;
+  }
+
+  await syncRegionsForPages([page]);
 }
 
 async function runOcrJob(job: JobRecord) {
@@ -299,6 +315,7 @@ async function runTranslationJob(job: JobRecord) {
     updateTranslationTargetsInEditor(page.id, job.regionIds, () => ({
       translationStatus: 'running',
     }));
+    await persistTranslationTargets(page.id);
     await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().translationOverwrite;
     const translationResult = await runPageTranslation(
@@ -346,6 +363,7 @@ async function runTranslationJob(job: JobRecord) {
           : 'idle',
       translationUpdatedAt: failedAt,
     }));
+    await persistTranslationTargets(page.id);
     recordJobDiagnostic(
       job,
       'error',
@@ -462,6 +480,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       updateTranslationTargetsInEditor(job.pageId, job.regionIds, () => ({
         translationStatus: 'queued',
       }));
+      void persistTranslationTargets(job.pageId);
     }
 
     setJobsAndPersist((jobs) => [...newJobs, ...jobs]);

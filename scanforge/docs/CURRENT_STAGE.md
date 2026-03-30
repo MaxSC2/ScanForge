@@ -51,6 +51,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - translation job outcome hardening for empty-source and all-skipped cases
 - translation region lifecycle hardening for queued/running/failed states
 - translation fallback route now persists into region metadata for inspector/reload visibility
+- translation queued/running/failed lifecycle now persists during retry and recovery flows
 - crash/recovery hardening for project load and autosave
 - autosave status surfaced in editor UI
 - undo checkpoint coalescing for region edits
@@ -88,7 +89,7 @@ Workstreams still needing real progress:
 Keep hardening Workstream B:
 
 - translation desktop manual verification and failure replay
-- translation retry behavior after failed region state
+- translation retry behavior after failed region recovery
 - export-side verification of translated region metadata after fallback
 
 ## Required Verification For New Work

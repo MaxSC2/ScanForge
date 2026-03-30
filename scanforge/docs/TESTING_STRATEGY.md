@@ -57,6 +57,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - confirm fallback provider behavior is visible in job output when configured provider is unavailable
 - confirm region translation status moves through queued/running/done or failed as expected
 - confirm fallback provider route is still visible after reload
+- confirm retry from a failed translation state rehydrates and persists the new lifecycle correctly
 
 ### Recovery
 
