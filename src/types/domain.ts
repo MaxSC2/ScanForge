@@ -67,7 +67,7 @@ export type ProjectSettingsRecord = ProjectSettings;
 export type TextStyleRecord = TextStyle;
 export type TextStyleAlign = TextAlign;
 
-export type JobType = 'OCR' | 'TRANSLATE';
+export type JobType = 'OCR' | 'TRANSLATE' | 'EXPORT';
 export type JobQueueStatus = 'queued' | 'running' | 'done' | 'failed';
 
 export interface JobEntity {

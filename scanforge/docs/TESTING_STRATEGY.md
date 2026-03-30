@@ -58,6 +58,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - confirm region translation status moves through queued/running/done or failed as expected
 - confirm fallback provider route is still visible after reload
 - confirm retry from a failed translation state rehydrates and persists the new lifecycle correctly
+- confirm desktop replay covers success -> reload -> failed(empty source) -> retry -> reload
 
 ### Recovery
 
@@ -68,6 +69,9 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 ### Export
 
 - rendered export succeeds on a translated page
+- rendered export appears in Jobs with explicit done/canceled/failed outcome
+- export cancellation is visible as a non-failure pipeline outcome
+- export failures surface in diagnostics rather than disappearing behind a toast
 - re-export from unchanged state produces stable output
 - export failures are visible rather than silent
 
@@ -94,7 +98,6 @@ Do not treat a slice as done if:
 
 - repository CRUD coverage
 - translation provider failure coverage
-- translation desktop failure replay coverage
 - batch export verification
 - large-page performance regression checks
 - desktop-focused repeatable end-to-end tests

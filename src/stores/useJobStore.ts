@@ -8,12 +8,15 @@ import {
 } from '../repositories';
 import { formatDiagnosticError } from '../services/diagnostics';
 import {
+  deriveExportJobOutcome,
   deriveOcrJobOutcome,
   deriveTranslationJobOutcome as deriveTranslationOutcome,
   formatJobResultSummary,
+  summarizeExportResult,
   summarizeOcrPageResult,
   summarizeTranslationPageResult,
 } from '../services/jobSummary';
+import { exportRenderedPageAsPng } from '../features/export/renderExport';
 import { runPageOcr } from '../services/ocr';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
@@ -37,11 +40,17 @@ interface TranslationJobTarget {
   regionIds?: string[];
 }
 
+interface ExportJobTarget {
+  pageId: string;
+  outputPath?: string;
+}
+
 interface JobState {
   jobs: JobRecord[];
   processing: boolean;
   queueOcrJobs: (targets: OcrJobTarget[]) => number;
   queueTranslationJobs: (targets: TranslationJobTarget[]) => number;
+  queueExportJobs: (targets: ExportJobTarget[]) => number;
   retryJob: (jobId: string) => void;
   clearFinished: () => void;
   loadJobsForCurrentProject: () => Promise<void>;
@@ -83,7 +92,7 @@ function recordJobDiagnostic(
   detail?: string,
 ) {
   useDiagnosticsStore.getState().record({
-    scope: job.stage === 'ocr' ? 'ocr' : 'translation',
+    scope: job.stage === 'ocr' ? 'ocr' : job.stage === 'translate' ? 'translation' : 'export',
     level,
     message,
     ...(detail ? { detail } : {}),
@@ -381,13 +390,97 @@ async function runTranslationJob(job: JobRecord) {
   }
 }
 
+async function runExportJob(job: JobRecord) {
+  updateJob(job.id, {
+    status: 'running',
+    startedAt: Date.now(),
+    progress: 0.2,
+    message: 'Preparing rendered export',
+    error: null,
+    result: null,
+  });
+
+  const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
+  if (!page) {
+    recordJobDiagnostic(job, 'error', 'Export job failed', 'Page not found');
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: 'Page not found',
+      message: 'Export job failed',
+    });
+    return;
+  }
+
+  try {
+    updateJob(job.id, {
+      progress: 0.45,
+      message: 'Rendering translated page',
+    });
+
+    const exportResult = await exportRenderedPageAsPng(page, {
+      ...(job.outputPath ? { outputPath: job.outputPath } : {}),
+    });
+    const result = summarizeExportResult(exportResult);
+
+    if (exportResult.canceled) {
+      recordJobDiagnostic(
+        job,
+        'warning',
+        'Rendered export canceled by user',
+        formatJobResultSummary('export', result),
+      );
+      updateJob(job.id, {
+        status: 'done',
+        finishedAt: Date.now(),
+        progress: 1,
+        result,
+        message: 'rendered-png: canceled by user',
+        error: null,
+      });
+      return;
+    }
+
+    const outcome = deriveExportJobOutcome(result);
+    updateJob(job.id, {
+      status: outcome.status,
+      finishedAt: Date.now(),
+      progress: 1,
+      result,
+      message: outcome.message,
+      error: outcome.error,
+    });
+  } catch (error) {
+    recordJobDiagnostic(
+      job,
+      'error',
+      'Rendered export failed',
+      formatDiagnosticError(error, 'Rendered export error'),
+    );
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: error instanceof Error ? error.message : 'Rendered export error',
+      message: 'Rendered export failed',
+      result: null,
+    });
+  }
+}
+
 async function runJob(job: JobRecord) {
   if (job.stage === 'ocr') {
     await runOcrJob(job);
     return;
   }
 
-  await runTranslationJob(job);
+  if (job.stage === 'translate') {
+    await runTranslationJob(job);
+    return;
+  }
+
+  await runExportJob(job);
 }
 
 async function pumpQueue() {
@@ -413,6 +506,10 @@ function buildTranslationJobSignature(pageId: string, regionIds?: string[]) {
 
 function buildOcrJobSignature(pageId: string, regionIds?: string[]) {
   return `${pageId}:${(regionIds ?? []).slice().sort().join(',')}`;
+}
+
+function buildExportJobSignature(pageId: string) {
+  return pageId;
 }
 
 export const useJobStore = create<JobState>((set, get) => ({
@@ -555,6 +652,63 @@ export const useJobStore = create<JobState>((set, get) => ({
     return newJobs.length;
   },
 
+  queueExportJobs: (targets) => {
+    const normalizedTargets = targets.filter((target) => target.pageId);
+    const activeSignatures = new Set(
+      get()
+        .jobs.filter(
+          (job) => job.stage === 'export' && (job.status === 'queued' || job.status === 'running'),
+        )
+        .map((job) => buildExportJobSignature(job.pageId)),
+    );
+    const pagesById = new Map(
+      usePageStore.getState().pages.map((page) => [page.id, page] as const),
+    );
+    const filteredTargets = normalizedTargets.filter(
+      (target) => !activeSignatures.has(buildExportJobSignature(target.pageId)),
+    );
+
+    if (filteredTargets.length === 0) {
+      return 0;
+    }
+
+    const createdAt = Date.now();
+    const newJobs: JobRecord[] = filteredTargets
+      .map((target, index) => {
+        const page = pagesById.get(target.pageId);
+        if (!page) {
+          return null;
+        }
+
+        return {
+          id: uuid(),
+          stage: 'export' as const,
+          status: 'queued' as const,
+          pageId: target.pageId,
+          pageName: page.fileName,
+          ...(target.outputPath ? { outputPath: target.outputPath } : {}),
+          createdAt: createdAt + index,
+          startedAt: null,
+          finishedAt: null,
+          progress: 0,
+          message: 'Queued for rendered export',
+          error: null,
+          result: null,
+        };
+      })
+      .filter((job): job is JobRecord => job !== null);
+
+    if (newJobs.length === 0) {
+      return 0;
+    }
+
+    setJobsAndPersist((jobs) => [...newJobs, ...jobs]);
+
+    useToastStore.getState().push(`Export jobs queued: ${newJobs.length}`, 'info');
+    void pumpQueue();
+    return newJobs.length;
+  },
+
   retryJob: (jobId) => {
     const job = get().jobs.find((item) => item.id === jobId);
     if (!job) return;
@@ -564,6 +718,16 @@ export const useJobStore = create<JobState>((set, get) => ({
         {
           pageId: job.pageId,
           ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
+        },
+      ]);
+      return;
+    }
+
+    if (job.stage === 'export') {
+      get().queueExportJobs([
+        {
+          pageId: job.pageId,
+          ...(job.outputPath ? { outputPath: job.outputPath } : {}),
         },
       ]);
       return;

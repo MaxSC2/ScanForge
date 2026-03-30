@@ -1,4 +1,7 @@
 export type {
+  RenderedExportResult,
+} from './export';
+export type {
   Region,
   RegionKind,
   RegionStatus,

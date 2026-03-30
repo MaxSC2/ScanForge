@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  deriveExportJobOutcome,
   deriveOcrJobOutcome,
   deriveTranslationJobOutcome,
   formatJobResultSummary,
+  summarizeExportResult,
   summarizeOcrPageResult,
   summarizeTranslationPageResult,
 } from '../../services/jobSummary';
-import type { OcrPageResult, TranslationPageResult } from '../../types';
+import type { OcrPageResult, RenderedExportResult, TranslationPageResult } from '../../types';
 
 describe('jobSummary', () => {
   it('aggregates OCR skip and failure reasons', () => {
@@ -111,5 +113,30 @@ describe('jobSummary', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.error).toContain('empty source x1');
+  });
+
+  it('summarizes rendered export success and cancellation separately', () => {
+    const success: RenderedExportResult = {
+      saved: true,
+      canceled: false,
+      suggestedName: 'page-1-rendered.png',
+      translatedRegions: 2,
+      renderedRegions: 2,
+    };
+    const canceled: RenderedExportResult = {
+      saved: false,
+      canceled: true,
+      suggestedName: 'page-1-rendered.png',
+      translatedRegions: 2,
+      renderedRegions: 0,
+    };
+
+    const successSummary = summarizeExportResult(success);
+    const canceledSummary = summarizeExportResult(canceled);
+
+    expect(formatJobResultSummary('export', successSummary)).toContain('rendered-png: rendered 2/2');
+    expect(formatJobResultSummary('export', canceledSummary)).toContain('canceled x1');
+    expect(deriveExportJobOutcome(successSummary).status).toBe('done');
+    expect(deriveExportJobOutcome(canceledSummary).status).toBe('done');
   });
 });

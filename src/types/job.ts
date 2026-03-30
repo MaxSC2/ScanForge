@@ -1,4 +1,4 @@
-export type JobStage = 'ocr' | 'translate';
+export type JobStage = 'ocr' | 'translate' | 'export';
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed';
 
 export interface JobResultReason {
@@ -23,6 +23,7 @@ export interface JobRecord {
   pageId: string;
   pageName: string;
   regionIds?: string[];
+  outputPath?: string;
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;

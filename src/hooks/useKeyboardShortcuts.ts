@@ -4,7 +4,8 @@ import { useHistoryStore } from '../stores/useHistoryStore';
 import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useRegionStore } from '../stores/useRegionStore';
-import { exportRenderedPageAsPng } from '../features/export/renderExport';
+import { isTauri } from '@tauri-apps/api/core';
+import { pickRenderedPageExportPath } from '../features/export/renderExport';
 
 export function useKeyboardShortcuts() {
   useEffect(() => {
@@ -190,7 +191,19 @@ export function useKeyboardShortcuts() {
         const page = activePageId ? pages.find((item) => item.id === activePageId) : null;
         if (page) {
           event.preventDefault();
-          void exportRenderedPageAsPng(page);
+          void (async () => {
+            const outputPath = await pickRenderedPageExportPath(page);
+            if (!outputPath && isTauri()) {
+              return;
+            }
+
+            useJobStore.getState().queueExportJobs([
+              {
+                pageId: page.id,
+                ...(outputPath ? { outputPath } : {}),
+              },
+            ]);
+          })();
         }
         return;
       }

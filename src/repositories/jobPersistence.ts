@@ -8,7 +8,7 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
 
   return {
     id: job.id,
-    type: job.stage === 'ocr' ? 'OCR' : 'TRANSLATE',
+    type: job.stage === 'ocr' ? 'OCR' : job.stage === 'translate' ? 'TRANSLATE' : 'EXPORT',
     status: job.status,
     projectId: meta.localProjectId,
     pageId: job.pageId,
@@ -22,14 +22,23 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
 }
 
 function deriveMessage(job: JobEntity) {
-  const stageLabel = job.type === 'OCR' ? 'OCR' : 'Translation';
+  const stageLabel =
+    job.type === 'OCR' ? 'OCR' : job.type === 'TRANSLATE' ? 'Translation' : 'Export';
 
   if (job.status === 'queued') {
-    return job.type === 'OCR' ? 'Queued for OCR' : 'Queued for translation';
+    return job.type === 'OCR'
+      ? 'Queued for OCR'
+      : job.type === 'TRANSLATE'
+        ? 'Queued for translation'
+        : 'Queued for export';
   }
 
   if (job.status === 'running') {
-    return job.type === 'OCR' ? 'OCR in progress' : 'Translation in progress';
+    return job.type === 'OCR'
+      ? 'OCR in progress'
+      : job.type === 'TRANSLATE'
+        ? 'Translation in progress'
+        : 'Export in progress';
   }
 
   if (job.status === 'done') {
@@ -45,7 +54,7 @@ function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord
 
   return {
     id: entity.id,
-    stage: entity.type === 'OCR' ? 'ocr' : 'translate',
+    stage: entity.type === 'OCR' ? 'ocr' : entity.type === 'TRANSLATE' ? 'translate' : 'export',
     status: normalizedStatus,
     pageId: entity.pageId ?? '',
     pageName: page?.fileName ?? 'Unknown page',
@@ -64,7 +73,9 @@ function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord
       entity.status === 'running'
         ? entity.type === 'OCR'
           ? 'Recovered queued OCR job'
-          : 'Recovered queued translation job'
+          : entity.type === 'TRANSLATE'
+            ? 'Recovered queued translation job'
+            : 'Recovered queued export job'
         : entity.summary ?? deriveMessage(entity),
     error: entity.error ?? null,
     result: null,

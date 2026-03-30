@@ -1,4 +1,5 @@
 import type {
+  RenderedExportResult,
   JobRecord,
   JobResultReason,
   JobResultSummary,
@@ -24,6 +25,8 @@ function normalizeReasonLabel(reason: string) {
       return 'no text';
     case 'provider_unavailable':
       return 'provider unavailable';
+    case 'canceled':
+      return 'canceled';
     default:
       return reason.replace(/_/g, ' ');
   }
@@ -119,8 +122,30 @@ export function summarizeTranslationPageResult(result: TranslationPageResult): J
   };
 }
 
+export function summarizeExportResult(result: RenderedExportResult): JobResultSummary {
+  if (result.canceled) {
+    return {
+      provider: 'rendered-png',
+      regionsProcessed: Math.max(1, result.translatedRegions),
+      appliedCount: 0,
+      skippedCount: 1,
+      failedCount: 0,
+      reasons: [{ reason: 'canceled', count: 1, kind: 'skip' }],
+    };
+  }
+
+  return {
+    provider: 'rendered-png',
+    regionsProcessed: result.translatedRegions,
+    appliedCount: result.renderedRegions,
+    skippedCount: 0,
+    failedCount: 0,
+  };
+}
+
 export function formatJobResultSummary(stage: JobRecord['stage'], result: JobResultSummary) {
-  const action = stage === 'ocr' ? 'applied' : 'translated';
+  const action =
+    stage === 'ocr' ? 'applied' : stage === 'translate' ? 'translated' : 'rendered';
   const parts = [`${result.provider}: ${action} ${result.appliedCount}/${result.regionsProcessed}`];
 
   if (result.failedCount > 0) {
@@ -169,6 +194,28 @@ export function deriveTranslationJobOutcome(result: JobResultSummary): {
   message: string;
 } {
   const message = formatJobResultSummary('translate', result);
+
+  if (result.failedCount > 0 && result.appliedCount === 0) {
+    return {
+      status: 'failed',
+      error: message,
+      message,
+    };
+  }
+
+  return {
+    status: 'done',
+    error: null,
+    message,
+  };
+}
+
+export function deriveExportJobOutcome(result: JobResultSummary): {
+  status: JobStatus;
+  error: string | null;
+  message: string;
+} {
+  const message = formatJobResultSummary('export', result);
 
   if (result.failedCount > 0 && result.appliedCount === 0) {
     return {

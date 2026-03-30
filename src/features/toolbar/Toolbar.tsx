@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   Check,
   ChevronDown,
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 import { IconButton } from '../../components/IconButton';
 import { StitchDialog } from '../../components/StitchDialog';
-import { exportRenderedPageAsPng } from '../export/renderExport';
+import { pickRenderedPageExportPath } from '../export/renderExport';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
 import { useJobStore } from '../../stores/useJobStore';
@@ -58,6 +59,7 @@ export function Toolbar() {
 
   const queueOcrJobs = useJobStore((state) => state.queueOcrJobs);
   const queueTranslationJobs = useJobStore((state) => state.queueTranslationJobs);
+  const queueExportJobs = useJobStore((state) => state.queueExportJobs);
 
   const undo = useHistoryStore((state) => state.undo);
   const redo = useHistoryStore((state) => state.redo);
@@ -216,13 +218,19 @@ export function Toolbar() {
   const handleExportActive = async () => {
     if (!activePage) return;
 
-    try {
-      const saved = await exportRenderedPageAsPng(activePage);
-      if (saved) {
-        pushToast(`Рендер экспортирован: ${activePage.fileName}`, 'success');
-      }
-    } catch {
-      pushToast('Не удалось экспортировать рендер страницы', 'error');
+    const outputPath = await pickRenderedPageExportPath(activePage);
+    if (!outputPath && isTauri()) {
+      return;
+    }
+
+    const queued = queueExportJobs([
+      {
+        pageId: activePage.id,
+        ...(outputPath ? { outputPath } : {}),
+      },
+    ]);
+    if (queued === 0) {
+      pushToast('Экспорт уже стоит в очереди для активной страницы или страница не выбрана', 'warning');
     }
   };
 

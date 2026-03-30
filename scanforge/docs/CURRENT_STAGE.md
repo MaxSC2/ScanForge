@@ -52,10 +52,13 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - translation region lifecycle hardening for queued/running/failed states
 - translation fallback route now persists into region metadata for inspector/reload visibility
 - translation queued/running/failed lifecycle now persists during retry and recovery flows
+- translation desktop verification now covers success, reload, empty-source failure, retry, and post-retry reload
 - crash/recovery hardening for project load and autosave
 - autosave status surfaced in editor UI
 - undo checkpoint coalescing for region edits
 - centralized diagnostics trail for OCR, recovery, autosave, and project failures
+- rendered export now runs as an observable pipeline job with diagnostics-aware cancel vs failure handling
+- rendered export success path now surfaces through Jobs and downloads the composed PNG output
 
 Recent commits on this branch:
 
@@ -76,6 +79,7 @@ Workstreams with meaningful progress:
 - Workstream A - OCR Pipeline v2
 - Workstream B - Translation System v2
 - Workstream C - Editor Stability
+- Workstream E - Export System v2
 - Workstream F - Error Handling and Observability
 
 Workstreams still needing real progress:
@@ -86,11 +90,11 @@ Workstreams still needing real progress:
 
 ## Next Recommended Slice
 
-Keep hardening Workstream B:
+Keep hardening Workstream E:
 
-- translation desktop manual verification and failure replay
-- translation retry behavior after failed region recovery
-- export-side verification of translated region metadata after fallback
+- export desktop verification for cancel and failure surfacing
+- export retry behavior after failed save or rendered-export error
+- batch/export reproducibility checks for unchanged state
 
 ## Required Verification For New Work
 

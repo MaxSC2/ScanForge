@@ -4,6 +4,7 @@ import {
   ChevronRight,
   CircleAlert,
   CircleCheckBig,
+  Download,
   Eraser,
   Languages,
   LoaderCircle,
@@ -35,12 +36,20 @@ function formatReason(reason: string) {
   switch (reason) {
     case 'already_filled':
       return 'уже заполнено';
+    case 'already_translated':
+      return 'уже переведено';
     case 'invalid_bounds':
       return 'неверные границы';
     case 'no_text':
       return 'нет текста';
     case 'locked':
       return 'заблокировано';
+    case 'empty_source':
+      return 'пустой исходник';
+    case 'provider_unavailable':
+      return 'провайдер недоступен';
+    case 'canceled':
+      return 'отменено';
     default:
       return reason.replace(/_/g, ' ');
   }
@@ -156,13 +165,14 @@ export function JobsPanel() {
             <div className="px-3 py-4 text-center">
               <p className="text-[11px] font-medium text-zinc-400">Очередь задач пуста</p>
               <p className="mt-1 text-[10px] text-zinc-600">
-                Запусти OCR или перевод для выбранной страницы через верхнюю панель.
+                Запусти OCR, перевод или экспорт через верхнюю панель.
               </p>
             </div>
           ) : (
             <ul className="max-h-56 overflow-y-auto p-1">
               {jobs.map((job) => {
-                const stageLabel = job.stage === 'ocr' ? 'OCR' : 'Перевод';
+                const stageLabel =
+                  job.stage === 'ocr' ? 'OCR' : job.stage === 'translate' ? 'Перевод' : 'Экспорт';
                 const statusIcon =
                   job.status === 'running' ? (
                     <LoaderCircle size={12} className="animate-spin text-indigo-400" />
@@ -170,6 +180,8 @@ export function JobsPanel() {
                     <CircleCheckBig size={12} className="text-emerald-400" />
                   ) : job.status === 'failed' ? (
                     <CircleAlert size={12} className="text-amber-400" />
+                  ) : job.stage === 'export' ? (
+                    <Download size={12} className="text-zinc-500" />
                   ) : job.stage === 'translate' ? (
                     <Languages size={12} className="text-zinc-500" />
                   ) : (
@@ -220,10 +232,10 @@ export function JobsPanel() {
                           <span>{formatStatus(job.status)}</span>
                           <span>{formatClock(job.finishedAt ?? job.startedAt ?? job.createdAt)}</span>
                         </div>
-                        {job.error && (
+                        {job.error ? (
                           <div className="mt-1 text-[10px] text-amber-400">{job.error}</div>
-                        )}
-                        {job.status === 'failed' && (
+                        ) : null}
+                        {job.status === 'failed' ? (
                           <button
                             onClick={() => retryJob(job.id)}
                             className="mt-2 inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-800"
@@ -231,7 +243,7 @@ export function JobsPanel() {
                             <RotateCcw size={10} />
                             Повторить
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </li>

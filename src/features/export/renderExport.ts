@@ -3,7 +3,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { loadProjectDomainContext, pageRepository, regionRepository } from '../../repositories';
 import { ensureProjectDomainStatePersisted } from '../../services/projectSync';
-import { type Page, type RegionRecord, type TextStyleRecord } from '../../types';
+import { type Page, type RegionRecord, type RenderedExportResult, type TextStyleRecord } from '../../types';
 import { buildRenderedPngName, resolveTextStyle } from './renderHelpers';
 
 interface RenderTextLayout {
@@ -12,17 +12,35 @@ interface RenderTextLayout {
   lines: string[];
 }
 
-async function saveBlob(blob: Blob, suggestedName: string): Promise<boolean> {
+interface SavedBlobResult {
+  saved: boolean;
+  canceled: boolean;
+  outputPath?: string;
+}
+
+async function saveBlob(
+  blob: Blob,
+  suggestedName: string,
+  explicitPath?: string,
+): Promise<SavedBlobResult> {
   if (isTauri()) {
-    const path = await save({
-      title: 'Export rendered page',
-      defaultPath: suggestedName,
-      filters: [{ name: 'PNG image', extensions: ['png'] }],
-    });
-    if (!path) return false;
+    const path =
+      explicitPath ??
+      (await save({
+        title: 'Export rendered page',
+        defaultPath: suggestedName,
+        filters: [{ name: 'PNG image', extensions: ['png'] }],
+      }));
+    if (!path) {
+      return { saved: false, canceled: true };
+    }
     const bytes = new Uint8Array(await blob.arrayBuffer());
     await writeFile(path, bytes);
-    return true;
+    return {
+      saved: true,
+      canceled: false,
+      outputPath: path,
+    };
   }
 
   const url = URL.createObjectURL(blob);
@@ -31,7 +49,22 @@ async function saveBlob(blob: Blob, suggestedName: string): Promise<boolean> {
   anchor.download = suggestedName;
   anchor.click();
   URL.revokeObjectURL(url);
-  return true;
+  return {
+    saved: true,
+    canceled: false,
+  };
+}
+
+export async function pickRenderedPageExportPath(page: Page): Promise<string | null> {
+  if (!isTauri()) {
+    return null;
+  }
+
+  return save({
+    title: 'Export rendered page',
+    defaultPath: buildRenderedPngName(page.fileName),
+    filters: [{ name: 'PNG image', extensions: ['png'] }],
+  });
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -225,10 +258,26 @@ async function renderPageToBlob(page: Page) {
     throw new Error('Failed to create rendered export image');
   }
 
-  return blob;
+  return {
+    blob,
+    translatedRegions: visibleTranslatedRegions.length,
+  };
 }
 
-export async function exportRenderedPageAsPng(page: Page): Promise<boolean> {
-  const blob = await renderPageToBlob(page);
-  return saveBlob(blob, buildRenderedPngName(page.fileName));
+export async function exportRenderedPageAsPng(
+  page: Page,
+  options: { outputPath?: string } = {},
+): Promise<RenderedExportResult> {
+  const { blob, translatedRegions } = await renderPageToBlob(page);
+  const suggestedName = buildRenderedPngName(page.fileName);
+  const saveResult = await saveBlob(blob, suggestedName, options.outputPath);
+
+  return {
+    saved: saveResult.saved,
+    canceled: saveResult.canceled,
+    suggestedName,
+    translatedRegions,
+    renderedRegions: saveResult.saved ? translatedRegions : 0,
+    ...(saveResult.outputPath ? { outputPath: saveResult.outputPath } : {}),
+  };
 }
