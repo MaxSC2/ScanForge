@@ -1,13 +1,14 @@
-import { isTauri } from '@tauri-apps/api/core';
 import { browserProjectRepository } from './browserProjectRepository';
 import type { ProjectRepository } from './projectRepository';
 import { tauriProjectRepository } from './tauriProjectRepository';
+import { isDesktopRuntime } from '../utils/runtime';
 
 let repository: ProjectRepository | null = null;
 
 export function getProjectRepository(): ProjectRepository {
-  if (!repository) {
-    repository = isTauri() ? tauriProjectRepository : browserProjectRepository;
+  const nextRepository = isDesktopRuntime() ? tauriProjectRepository : browserProjectRepository;
+  if (!repository || repository !== nextRepository) {
+    repository = nextRepository;
   }
 
   return repository;

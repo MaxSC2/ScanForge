@@ -47,6 +47,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - run OCR on a selected region
 - retry a failed OCR job
 - confirm failure details surface in Jobs and diagnostics
+- confirm desktop runs stay on the native OCR/runtime path instead of dropping to browser preview fallback unexpectedly
 
 ### Translation
 
@@ -71,6 +72,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - rendered export succeeds on a translated page
 - rendered export appears in Jobs with explicit done/canceled/failed outcome
 - export cancellation is visible as a non-failure pipeline outcome
+- desktop export uses the native save dialog path rather than browser blob download fallback
 - export failures surface in diagnostics rather than disappearing behind a toast
 - export retry opens a fresh target selection instead of silently reusing a stale failed path
 - export retry cancel is visible through diagnostics or toast feedback instead of silently doing nothing

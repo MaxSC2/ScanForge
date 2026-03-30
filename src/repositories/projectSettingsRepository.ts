@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { ProjectSettingsRecord } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class ProjectSettingsRepository {
   async getByProjectId(projectId: string): Promise<ProjectSettingsRecord | null> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<ProjectSettingsRecord | null>('get_project_settings_record', { projectId });
     }
 
@@ -26,7 +27,7 @@ export class ProjectSettingsRepository {
   }
 
   async delete(projectId: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_project_settings_record', { projectId });
       return;
     }
@@ -37,7 +38,7 @@ export class ProjectSettingsRepository {
   }
 
   private async upsert(settings: ProjectSettingsRecord): Promise<ProjectSettingsRecord> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<ProjectSettingsRecord>('upsert_project_settings_record', { settings });
     }
 

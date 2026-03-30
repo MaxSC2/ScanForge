@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { isTauri } from '@tauri-apps/api/core';
 import {
   Check,
   ChevronDown,
@@ -39,6 +38,7 @@ import {
   saveProjectFile,
 } from '../../utils/persistence';
 import { getStitchPreview, suggestSafeStitch } from '../../utils/stitch';
+import { isDesktopRuntime } from '../../utils/runtime';
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -219,7 +219,7 @@ export function Toolbar() {
     if (!activePage) return;
 
     const outputPath = await pickRenderedPageExportPath(activePage);
-    if (!outputPath && isTauri()) {
+    if (!outputPath && isDesktopRuntime()) {
       return;
     }
 

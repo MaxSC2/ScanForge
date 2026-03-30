@@ -1,10 +1,10 @@
-import { isTauri } from '@tauri-apps/api/core';
 import {
   createDefaultTextStyle,
   DEFAULT_PROJECT_SETTINGS,
   type ProjectSettingsRecord,
   type TextStyleRecord,
 } from '../types';
+import { isDesktopRuntime } from '../utils/runtime';
 import { projectSettingsRepository } from './projectSettingsRepository';
 import { textStyleRepository } from './textStyleRepository';
 
@@ -15,7 +15,7 @@ export async function ensureProjectDomainDefaults(projectId: string) {
   ]);
   const runtimeDefaults = {
     ...DEFAULT_PROJECT_SETTINGS,
-    ocrEngine: isTauri() ? 'windows' : DEFAULT_PROJECT_SETTINGS.ocrEngine,
+    ocrEngine: isDesktopRuntime() ? 'windows' : DEFAULT_PROJECT_SETTINGS.ocrEngine,
     translationProvider: 'local',
   } as const;
 
@@ -30,7 +30,9 @@ export async function ensureProjectDomainDefaults(projectId: string) {
   const nextSettings: ProjectSettingsRecord = {
     projectId,
     ...(existingSettings ?? runtimeDefaults),
-    ...(existingSettings?.ocrEngine === 'mock' && isTauri() ? { ocrEngine: 'windows' } : {}),
+    ...(existingSettings?.ocrEngine === 'mock' && isDesktopRuntime()
+      ? { ocrEngine: 'windows' }
+      : {}),
     ...(existingSettings?.translationProvider === 'mock'
       ? { translationProvider: 'local' }
       : {}),

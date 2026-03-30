@@ -1,8 +1,8 @@
-import { isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { Page, ProjectFile, ProjectMeta } from '../types';
 import { normalizeRegion } from '../types/region';
+import { isDesktopRuntime } from './runtime';
 
 export interface HydratedProjectState {
   meta: ProjectMeta;
@@ -47,7 +47,7 @@ export async function hydrateProjectFile(contents: ProjectFile): Promise<Hydrate
 export async function saveProjectFile(contents: ProjectFile): Promise<void> {
   const text = JSON.stringify(contents, null, 2);
 
-  if (isTauri()) {
+  if (isDesktopRuntime()) {
     const path = await save({
       title: 'Сохранить проект ScanForge',
       defaultPath: `${contents.meta.name || 'scanforge-project'}.scanforge.json`,
@@ -68,7 +68,7 @@ export async function saveProjectFile(contents: ProjectFile): Promise<void> {
 }
 
 export async function openProjectFile(): Promise<ProjectFile | null> {
-  if (isTauri()) {
+  if (isDesktopRuntime()) {
     const path = await open({
       title: 'Открыть проект ScanForge',
       multiple: false,
@@ -107,7 +107,7 @@ function toPngName(fileName: string): string {
 }
 
 async function saveBlob(blob: Blob, suggestedName: string): Promise<boolean> {
-  if (isTauri()) {
+  if (isDesktopRuntime()) {
     const path = await save({
       title: 'Экспорт изображения',
       defaultPath: suggestedName,

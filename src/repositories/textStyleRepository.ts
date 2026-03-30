@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { TextStyleRecord } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class TextStyleRepository {
   async listByProject(projectId: string): Promise<TextStyleRecord[]> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<TextStyleRecord[]>('list_text_style_records_by_project', { projectId });
     }
 
@@ -20,7 +21,7 @@ export class TextStyleRepository {
   }
 
   async getById(id: string): Promise<TextStyleRecord | null> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<TextStyleRecord | null>('get_text_style_record', { id });
     }
 
@@ -38,7 +39,7 @@ export class TextStyleRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_text_style_record', { id });
       return;
     }
@@ -49,7 +50,7 @@ export class TextStyleRepository {
   }
 
   async deleteByProject(projectId: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_text_style_records_by_project', { projectId });
       return;
     }
@@ -64,7 +65,7 @@ export class TextStyleRepository {
   }
 
   private async upsert(style: TextStyleRecord): Promise<TextStyleRecord> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<TextStyleRecord>('upsert_text_style_record', { style });
     }
 

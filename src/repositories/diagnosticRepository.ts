@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { DiagnosticEntity } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class DiagnosticRepository {
   async listByProject(projectId: string): Promise<DiagnosticEntity[]> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<DiagnosticEntity[]>('list_diagnostic_entities_by_project', { projectId });
     }
 
@@ -20,7 +21,7 @@ export class DiagnosticRepository {
   }
 
   async upsert(entry: DiagnosticEntity): Promise<DiagnosticEntity> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<DiagnosticEntity>('upsert_diagnostic_entity', { entry });
     }
 
@@ -31,7 +32,7 @@ export class DiagnosticRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_diagnostic_entity', { id });
       return;
     }
@@ -42,7 +43,7 @@ export class DiagnosticRepository {
   }
 
   async deleteByProject(projectId: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_diagnostic_entities_by_project', { projectId });
       return;
     }

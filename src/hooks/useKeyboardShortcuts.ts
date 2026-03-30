@@ -4,8 +4,8 @@ import { useHistoryStore } from '../stores/useHistoryStore';
 import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useRegionStore } from '../stores/useRegionStore';
-import { isTauri } from '@tauri-apps/api/core';
 import { pickRenderedPageExportPath } from '../features/export/renderExport';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export function useKeyboardShortcuts() {
   useEffect(() => {
@@ -193,7 +193,7 @@ export function useKeyboardShortcuts() {
           event.preventDefault();
           void (async () => {
             const outputPath = await pickRenderedPageExportPath(page);
-            if (!outputPath && isTauri()) {
+            if (!outputPath && isDesktopRuntime()) {
               return;
             }
 

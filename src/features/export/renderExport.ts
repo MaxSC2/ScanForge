@@ -1,9 +1,9 @@
-import { isTauri } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { loadProjectDomainContext, pageRepository, regionRepository } from '../../repositories';
 import { formatDiagnosticError } from '../../services/diagnostics';
 import { ensureProjectDomainStatePersisted } from '../../services/projectSync';
+import { isDesktopRuntime } from '../../utils/runtime';
 import {
   type Page,
   type RegionRecord,
@@ -63,7 +63,7 @@ async function saveBlob(
   suggestedName: string,
   explicitPath?: string,
 ): Promise<SavedBlobResult> {
-  if (isTauri()) {
+  if (isDesktopRuntime()) {
     const path =
       explicitPath ??
       (await save({
@@ -107,7 +107,7 @@ async function saveBlob(
 }
 
 export async function pickRenderedPageExportPath(page: Page): Promise<string | null> {
-  if (!isTauri()) {
+  if (!isDesktopRuntime()) {
     return null;
   }
 

@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { JobEntity } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class JobRepository {
   async listByProject(projectId: string): Promise<JobEntity[]> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<JobEntity[]>('list_job_entities_by_project', { projectId });
     }
 
@@ -20,7 +21,7 @@ export class JobRepository {
   }
 
   async getById(id: string): Promise<JobEntity | null> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<JobEntity | null>('get_job_entity', { id });
     }
 
@@ -38,7 +39,7 @@ export class JobRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_job_entity', { id });
       return;
     }
@@ -49,7 +50,7 @@ export class JobRepository {
   }
 
   async deleteByProject(projectId: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_job_entities_by_project', { projectId });
       return;
     }
@@ -64,7 +65,7 @@ export class JobRepository {
   }
 
   private async upsert(job: JobEntity): Promise<JobEntity> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<JobEntity>('upsert_job_entity', { job });
     }
 

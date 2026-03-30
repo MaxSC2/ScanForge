@@ -67,6 +67,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - job result details now persist through repository storage so reason badges and artifact hashes survive reload
 - project-scoped diagnostics now persist through repository storage and survive reload for the active project
 - manual UI replay now confirms export job summaries and project-scoped diagnostics remain visible after reload
+- desktop runtime detection now prefers injected Tauri globals so export, OCR, and repositories do not silently fall back to browser mode inside the desktop shell
 
 Recent commits on this branch:
 
@@ -100,8 +101,8 @@ Workstreams still needing real progress:
 
 Keep hardening Workstream E:
 
-- export desktop verification for save-target cancel surfacing
-- export desktop replay after forced save failure to confirm Jobs and diagnostics keep the failure summary
+- verify rendered export now uses the native desktop save path instead of browser blob downloads with GUID-like filenames
+- replay desktop OCR/export flows to confirm the app stays on Tauri runtime paths and does not silently fall back to browser preview logic
 - Tauri-native replay after forced save failure or canceled save target to confirm desktop-only paths match the browser/UI reload behavior
 
 ## Required Verification For New Work

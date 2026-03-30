@@ -1,4 +1,4 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import { pageRepository } from '../repositories/pageRepository';
 import { regionRepository } from '../repositories/regionRepository';
@@ -13,6 +13,7 @@ import type {
   TranslationPageResult,
   TranslationProviderId,
 } from '../types';
+import { isDesktopRuntime } from '../utils/runtime';
 
 type TranslationProgressCallback = (progress: number, message: string) => void;
 
@@ -290,7 +291,7 @@ export async function runPageTranslation(
   options: TranslationRunOptions = {},
   onProgress?: TranslationProgressCallback,
 ): Promise<TranslationPageResult> {
-  if (!isTauri()) {
+  if (!isDesktopRuntime()) {
     onProgress?.(0.15, 'Running browser translation provider');
     return runBrowserTranslation(page, options, onProgress);
   }

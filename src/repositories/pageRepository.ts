@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { PageRecord } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class PageRepository {
   async listByProject(projectId: string): Promise<PageRecord[]> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<PageRecord[]>('list_page_records_by_project', { projectId });
     }
 
@@ -20,7 +21,7 @@ export class PageRepository {
   }
 
   async getById(id: string): Promise<PageRecord | null> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<PageRecord | null>('get_page_record', { id });
     }
 
@@ -38,7 +39,7 @@ export class PageRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_page_record', { id });
       return;
     }
@@ -56,7 +57,7 @@ export class PageRepository {
   }
 
   async deleteByProject(projectId: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_page_records_by_project', { projectId });
       return;
     }
@@ -79,7 +80,7 @@ export class PageRepository {
   }
 
   private async upsert(page: PageRecord): Promise<PageRecord> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<PageRecord>('upsert_page_record', { page });
     }
 

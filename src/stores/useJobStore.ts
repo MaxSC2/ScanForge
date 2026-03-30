@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { isTauri } from '@tauri-apps/api/core';
 import { v4 as uuid } from 'uuid';
 import {
   mergeJobsWithRepository,
@@ -29,6 +28,7 @@ import { useHistoryStore } from './useHistoryStore';
 import { usePageStore } from './usePageStore';
 import { useProjectStore } from './useProjectStore';
 import { useToastStore } from './useToastStore';
+import { isDesktopRuntime } from '../utils/runtime';
 
 const MAX_JOBS = 30;
 
@@ -748,7 +748,7 @@ export const useJobStore = create<JobState>((set, get) => ({
     }
 
     const outputPath = await pickRenderedPageExportPath(page);
-    if (!outputPath && isTauri()) {
+    if (!outputPath && isDesktopRuntime()) {
       recordExportSelectionCanceled(page.id, page.fileName);
       return 0;
     }

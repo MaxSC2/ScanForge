@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { ProjectRecord } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class ProjectRepository {
   async list(): Promise<ProjectRecord[]> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<ProjectRecord[]>('list_project_records');
     }
 
@@ -19,7 +20,7 @@ export class ProjectRepository {
   }
 
   async getById(id: string): Promise<ProjectRecord | null> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<ProjectRecord | null>('get_project_record', { id });
     }
 
@@ -37,7 +38,7 @@ export class ProjectRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_project_record', { id });
       return;
     }
@@ -76,7 +77,7 @@ export class ProjectRepository {
   }
 
   private async upsert(project: ProjectRecord): Promise<ProjectRecord> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<ProjectRecord>('upsert_project_record', { project });
     }
 

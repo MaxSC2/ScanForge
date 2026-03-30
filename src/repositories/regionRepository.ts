@@ -1,14 +1,15 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { RegionRecord } from '../types';
 import {
   cloneDomainValue,
   readBrowserDomainState,
   writeBrowserDomainState,
 } from './browserDomainState';
+import { isDesktopRuntime } from '../utils/runtime';
 
 export class RegionRepository {
   async getByPage(pageId: string): Promise<RegionRecord[]> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<RegionRecord[]>('list_region_records_by_page', { pageId });
     }
 
@@ -19,7 +20,7 @@ export class RegionRepository {
   }
 
   async getById(id: string): Promise<RegionRecord | null> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<RegionRecord | null>('get_region_record', { id });
     }
 
@@ -37,7 +38,7 @@ export class RegionRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_region_record', { id });
       return;
     }
@@ -48,7 +49,7 @@ export class RegionRepository {
   }
 
   async deleteByPage(pageId: string): Promise<void> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       await invoke('delete_region_records_by_page', { pageId });
       return;
     }
@@ -63,7 +64,7 @@ export class RegionRepository {
   }
 
   private async upsert(region: RegionRecord): Promise<RegionRecord> {
-    if (isTauri()) {
+    if (isDesktopRuntime()) {
       return invoke<RegionRecord>('upsert_region_record', { region });
     }
 

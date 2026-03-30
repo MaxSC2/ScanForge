@@ -1,10 +1,11 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { pageRepository } from '../repositories/pageRepository';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import { regionRepository } from '../repositories/regionRepository';
 import { useDiagnosticsStore } from '../stores/useDiagnosticsStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import type { OcrEngineId, OcrPageResult, Page, RegionRecord } from '../types';
+import { isDesktopRuntime } from '../utils/runtime';
 
 type OcrProgressCallback = (progress: number, message: string) => void;
 
@@ -284,7 +285,7 @@ export async function runPageOcr(
   options: OcrRunOptions = {},
   onProgress?: OcrProgressCallback,
 ): Promise<OcrPageResult> {
-  if (!isTauri()) {
+  if (!isDesktopRuntime()) {
     onProgress?.(0.2, 'Running browser OCR preview');
     return runBrowserPreviewOcr(page, options, onProgress);
   }
