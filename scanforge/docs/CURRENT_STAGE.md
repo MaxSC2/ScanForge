@@ -59,6 +59,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - centralized diagnostics trail for OCR, recovery, autosave, and project failures
 - rendered export now runs as an observable pipeline job with diagnostics-aware cancel vs failure handling
 - rendered export success path now surfaces through Jobs and downloads the composed PNG output
+- export retry now re-prompts the save target instead of blindly reusing a failed path
 
 Recent commits on this branch:
 
@@ -93,8 +94,8 @@ Workstreams still needing real progress:
 Keep hardening Workstream E:
 
 - export desktop verification for cancel and failure surfacing
-- export retry behavior after failed save or rendered-export error
 - batch/export reproducibility checks for unchanged state
+- export retry desktop replay after failed save target selection or save error
 
 ## Required Verification For New Work
 

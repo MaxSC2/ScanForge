@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isTauri } from '@tauri-apps/api/core';
 import { v4 as uuid } from 'uuid';
 import {
   mergeJobsWithRepository,
@@ -16,7 +17,7 @@ import {
   summarizeOcrPageResult,
   summarizeTranslationPageResult,
 } from '../services/jobSummary';
-import { exportRenderedPageAsPng } from '../features/export/renderExport';
+import { exportRenderedPageAsPng, pickRenderedPageExportPath } from '../features/export/renderExport';
 import { runPageOcr } from '../services/ocr';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
@@ -724,12 +725,25 @@ export const useJobStore = create<JobState>((set, get) => ({
     }
 
     if (job.stage === 'export') {
-      get().queueExportJobs([
-        {
-          pageId: job.pageId,
-          ...(job.outputPath ? { outputPath: job.outputPath } : {}),
-        },
-      ]);
+      void (async () => {
+        const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
+        if (!page) {
+          recordJobDiagnostic(job, 'error', 'Export retry failed', 'Page not found');
+          return;
+        }
+
+        const outputPath = await pickRenderedPageExportPath(page);
+        if (!outputPath && isTauri()) {
+          return;
+        }
+
+        get().queueExportJobs([
+          {
+            pageId: job.pageId,
+            ...(outputPath ? { outputPath } : {}),
+          },
+        ]);
+      })();
       return;
     }
 

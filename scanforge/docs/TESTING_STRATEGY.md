@@ -72,6 +72,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - rendered export appears in Jobs with explicit done/canceled/failed outcome
 - export cancellation is visible as a non-failure pipeline outcome
 - export failures surface in diagnostics rather than disappearing behind a toast
+- export retry opens a fresh target selection instead of silently reusing a stale failed path
 - re-export from unchanged state produces stable output
 - export failures are visible rather than silent
 
