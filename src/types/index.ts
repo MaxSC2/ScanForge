@@ -1,4 +1,6 @@
 export type {
+  RenderedExportFailure,
+  RenderedExportFailureReason,
   RenderedExportResult,
 } from './export';
 export type {

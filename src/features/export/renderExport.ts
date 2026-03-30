@@ -2,8 +2,16 @@ import { isTauri } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { loadProjectDomainContext, pageRepository, regionRepository } from '../../repositories';
+import { formatDiagnosticError } from '../../services/diagnostics';
 import { ensureProjectDomainStatePersisted } from '../../services/projectSync';
-import { type Page, type RegionRecord, type RenderedExportResult, type TextStyleRecord } from '../../types';
+import {
+  type Page,
+  type RegionRecord,
+  type RenderedExportFailure,
+  type RenderedExportFailureReason,
+  type RenderedExportResult,
+  type TextStyleRecord,
+} from '../../types';
 import { buildRenderedPngName, computeSha256Hex, resolveTextStyle } from './renderHelpers';
 
 interface RenderTextLayout {
@@ -16,6 +24,38 @@ interface SavedBlobResult {
   saved: boolean;
   canceled: boolean;
   outputPath?: string;
+}
+
+export class RenderedExportError extends Error {
+  reason: RenderedExportFailureReason;
+  translatedRegions?: number;
+  outputPath?: string;
+
+  constructor(message: string, details: RenderedExportFailure) {
+    super(message);
+    this.name = 'RenderedExportError';
+    this.reason = details.reason;
+    this.translatedRegions = details.translatedRegions;
+    this.outputPath = details.outputPath;
+  }
+}
+
+function toRenderedExportError(
+  error: unknown,
+  details: RenderedExportFailure,
+  fallbackMessage: string,
+) {
+  if (error instanceof RenderedExportError) {
+    if (details.translatedRegions !== undefined && error.translatedRegions === undefined) {
+      error.translatedRegions = details.translatedRegions;
+    }
+    if (details.outputPath && !error.outputPath) {
+      error.outputPath = details.outputPath;
+    }
+    return error;
+  }
+
+  return new RenderedExportError(formatDiagnosticError(error, fallbackMessage), details);
 }
 
 async function saveBlob(
@@ -35,7 +75,18 @@ async function saveBlob(
       return { saved: false, canceled: true };
     }
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    await writeFile(path, bytes);
+    try {
+      await writeFile(path, bytes);
+    } catch (error) {
+      throw toRenderedExportError(
+        error,
+        {
+          reason: 'save_failed',
+          outputPath: path,
+        },
+        `Failed to save rendered export to ${path}`,
+      );
+    }
     return {
       saved: true,
       canceled: false,
@@ -268,10 +319,42 @@ export async function exportRenderedPageAsPng(
   page: Page,
   options: { outputPath?: string } = {},
 ): Promise<RenderedExportResult> {
-  const { blob, translatedRegions } = await renderPageToBlob(page);
+  let blob: Blob;
+  let translatedRegions: number;
+
+  try {
+    const rendered = await renderPageToBlob(page);
+    blob = rendered.blob;
+    translatedRegions = rendered.translatedRegions;
+  } catch (error) {
+    throw toRenderedExportError(
+      error,
+      {
+        reason: 'render_failed',
+      },
+      'Failed to render translated page for export',
+    );
+  }
+
   const suggestedName = buildRenderedPngName(page.fileName);
   const outputSha256 = await computeSha256Hex(await blob.arrayBuffer());
-  const saveResult = await saveBlob(blob, suggestedName, options.outputPath);
+  let saveResult: SavedBlobResult;
+
+  try {
+    saveResult = await saveBlob(blob, suggestedName, options.outputPath);
+  } catch (error) {
+    throw toRenderedExportError(
+      error,
+      {
+        reason: 'save_failed',
+        translatedRegions,
+        ...(options.outputPath ? { outputPath: options.outputPath } : {}),
+      },
+      options.outputPath
+        ? `Failed to save rendered export to ${options.outputPath}`
+        : 'Failed to save rendered export',
+    );
+  }
 
   return {
     saved: saveResult.saved,

@@ -13,6 +13,7 @@ import {
   deriveOcrJobOutcome,
   deriveTranslationJobOutcome as deriveTranslationOutcome,
   formatJobResultSummary,
+  summarizeExportFailure,
   summarizeExportResult,
   summarizeOcrPageResult,
   summarizeTranslationPageResult,
@@ -52,6 +53,7 @@ interface JobState {
   queueOcrJobs: (targets: OcrJobTarget[]) => number;
   queueTranslationJobs: (targets: TranslationJobTarget[]) => number;
   queueExportJobs: (targets: ExportJobTarget[]) => number;
+  requestExportForPage: (pageId: string) => Promise<number>;
   retryJob: (jobId: string) => void;
   clearFinished: () => void;
   loadJobsForCurrentProject: () => Promise<void>;
@@ -104,6 +106,20 @@ function recordJobDiagnostic(
     ...(job.regionIds?.length === 1 ? { regionId: job.regionIds[0] } : {}),
     jobId: job.id,
   });
+}
+
+function recordExportSelectionCanceled(pageId: string, pageName: string) {
+  useDiagnosticsStore.getState().record({
+    scope: 'export',
+    level: 'warning',
+    message: 'Rendered export target selection canceled',
+    detail: 'Canceled before queueing export job',
+    ...(useProjectStore.getState().meta.localProjectId
+      ? { projectId: useProjectStore.getState().meta.localProjectId }
+      : {}),
+    pageId,
+  });
+  useToastStore.getState().push(`Экспорт отменён: ${pageName}`, 'info');
 }
 
 async function refreshPageRegionsFromRepository(pageId: string) {
@@ -453,19 +469,23 @@ async function runExportJob(job: JobRecord) {
       error: outcome.error,
     });
   } catch (error) {
+    const result = summarizeExportFailure(error);
+    const outcome = deriveExportJobOutcome(result);
+    const errorDetail = formatDiagnosticError(error, 'Rendered export error');
+
     recordJobDiagnostic(
       job,
       'error',
       'Rendered export failed',
-      formatDiagnosticError(error, 'Rendered export error'),
+      `${formatJobResultSummary('export', result)} | ${errorDetail}`,
     );
     updateJob(job.id, {
-      status: 'failed',
+      status: outcome.status,
       finishedAt: Date.now(),
       progress: 1,
-      error: error instanceof Error ? error.message : 'Rendered export error',
-      message: 'Rendered export failed',
-      result: null,
+      error: errorDetail,
+      message: outcome.message,
+      result,
     });
   }
 }
@@ -710,6 +730,45 @@ export const useJobStore = create<JobState>((set, get) => ({
     return newJobs.length;
   },
 
+  requestExportForPage: async (pageId) => {
+    const page = usePageStore.getState().pages.find((item) => item.id === pageId);
+    if (!page) {
+      useDiagnosticsStore.getState().record({
+        scope: 'export',
+        level: 'error',
+        message: 'Rendered export could not start',
+        detail: 'Page not found before queueing export job',
+        ...(useProjectStore.getState().meta.localProjectId
+          ? { projectId: useProjectStore.getState().meta.localProjectId }
+          : {}),
+        pageId,
+      });
+      useToastStore.getState().push('Не удалось запустить экспорт: страница не найдена', 'error');
+      return 0;
+    }
+
+    const outputPath = await pickRenderedPageExportPath(page);
+    if (!outputPath && isTauri()) {
+      recordExportSelectionCanceled(page.id, page.fileName);
+      return 0;
+    }
+
+    const queued = get().queueExportJobs([
+      {
+        pageId: page.id,
+        ...(outputPath ? { outputPath } : {}),
+      },
+    ]);
+
+    if (queued === 0) {
+      useToastStore
+        .getState()
+        .push('Экспорт уже стоит в очереди для этой страницы', 'warning');
+    }
+
+    return queued;
+  },
+
   retryJob: (jobId) => {
     const job = get().jobs.find((item) => item.id === jobId);
     if (!job) return;
@@ -726,23 +785,7 @@ export const useJobStore = create<JobState>((set, get) => ({
 
     if (job.stage === 'export') {
       void (async () => {
-        const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
-        if (!page) {
-          recordJobDiagnostic(job, 'error', 'Export retry failed', 'Page not found');
-          return;
-        }
-
-        const outputPath = await pickRenderedPageExportPath(page);
-        if (!outputPath && isTauri()) {
-          return;
-        }
-
-        get().queueExportJobs([
-          {
-            pageId: job.pageId,
-            ...(outputPath ? { outputPath } : {}),
-          },
-        ]);
+        await get().requestExportForPage(job.pageId);
       })();
       return;
     }

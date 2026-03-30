@@ -62,6 +62,8 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - export retry now re-prompts the save target instead of blindly reusing a failed path
 - rendered export jobs now include a short SHA-256 artifact fingerprint for reproducibility checks
 - repeated export from unchanged state now produces a stable visible artifact hash in job output
+- rendered export failures now keep a structured failure summary instead of collapsing to a generic failed state
+- export retry now surfaces canceled save-target selection through diagnostics and toast feedback
 
 Recent commits on this branch:
 
@@ -95,9 +97,9 @@ Workstreams still needing real progress:
 
 Keep hardening Workstream E:
 
-- export desktop verification for cancel and failure surfacing
-- export retry desktop replay after failed save target selection or save error
-- export-side failure replay with diagnostics persistence
+- export desktop verification for save-target cancel surfacing
+- export desktop replay after forced save failure to confirm Jobs and diagnostics keep the failure summary
+- export-side diagnostics persistence and replay after reload
 
 ## Required Verification For New Work
 

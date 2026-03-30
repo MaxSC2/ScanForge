@@ -27,6 +27,10 @@ function normalizeReasonLabel(reason: string) {
       return 'provider unavailable';
     case 'canceled':
       return 'canceled';
+    case 'render_failed':
+      return 'render failed';
+    case 'save_failed':
+      return 'save failed';
     default:
       return reason.replace(/_/g, ' ');
   }
@@ -142,6 +146,32 @@ export function summarizeExportResult(result: RenderedExportResult): JobResultSu
     skippedCount: 0,
     failedCount: 0,
     ...(result.outputSha256 ? { artifactHash: result.outputSha256 } : {}),
+  };
+}
+
+export function summarizeExportFailure(error: unknown): JobResultSummary {
+  const reason =
+    typeof error === 'object' &&
+    error &&
+    'reason' in error &&
+    typeof error.reason === 'string'
+      ? error.reason
+      : 'render_failed';
+  const translatedRegions =
+    typeof error === 'object' &&
+    error &&
+    'translatedRegions' in error &&
+    typeof error.translatedRegions === 'number'
+      ? error.translatedRegions
+      : undefined;
+
+  return {
+    provider: 'rendered-png',
+    regionsProcessed: Math.max(1, translatedRegions ?? 1),
+    appliedCount: 0,
+    skippedCount: 0,
+    failedCount: 1,
+    reasons: [{ reason, count: 1, kind: 'failure' }],
   };
 }
 

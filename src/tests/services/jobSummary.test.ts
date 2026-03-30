@@ -4,6 +4,7 @@ import {
   deriveOcrJobOutcome,
   deriveTranslationJobOutcome,
   formatJobResultSummary,
+  summarizeExportFailure,
   summarizeExportResult,
   summarizeOcrPageResult,
   summarizeTranslationPageResult,
@@ -142,5 +143,19 @@ describe('jobSummary', () => {
     expect(formatJobResultSummary('export', canceledSummary)).toContain('sha256 fedcba09');
     expect(deriveExportJobOutcome(successSummary).status).toBe('done');
     expect(deriveExportJobOutcome(canceledSummary).status).toBe('done');
+  });
+
+  it('marks rendered export save failures as failed with a structured reason', () => {
+    const summary = summarizeExportFailure({
+      reason: 'save_failed',
+      translatedRegions: 3,
+      message: 'Failed to save rendered export to C:/tmp/page-1-rendered.png',
+    });
+
+    expect(summary.appliedCount).toBe(0);
+    expect(summary.failedCount).toBe(1);
+    expect(summary.reasons).toEqual([{ reason: 'save_failed', count: 1, kind: 'failure' }]);
+    expect(formatJobResultSummary('export', summary)).toContain('save failed x1');
+    expect(deriveExportJobOutcome(summary).status).toBe('failed');
   });
 });
