@@ -10,6 +10,11 @@ import { useFileDrop } from '../../hooks/useFileDrop';
 import { RegionRect } from './RegionRect';
 import { CanvasGrid } from './CanvasGrid';
 import { Minimap } from './Minimap';
+import {
+  getCanvasViewportBounds,
+  isRegionWithinViewport,
+  shouldRenderRegionLabel,
+} from './canvasPerformance';
 import { ContextMenu } from '../../components/ContextMenu';
 import {
   ImagePlus,
@@ -44,6 +49,7 @@ export function EditorCanvas() {
   const cleanView = useEditorStore((s) => s.cleanView);
   const regionOverlaysVisible = useEditorStore((s) => s.regionOverlaysVisible);
   const gridVisible = useEditorStore((s) => s.gridVisible);
+  const labelsVisible = useEditorStore((s) => s.labelsVisible);
   const minimapVisible = useEditorStore((s) => s.minimapVisible);
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
   const viewRequestNonce = useEditorStore((s) => s.viewRequestNonce);
@@ -268,6 +274,19 @@ export function EditorCanvas() {
     pan: 'grab',
   };
 
+  const viewportBounds = getCanvasViewportBounds({
+    zoom,
+    stagePosition,
+    canvasWidth: size.width,
+    canvasHeight: size.height,
+  });
+
+  const sortedVisibleRegions = activePage
+    ? [...activePage.regions]
+      .sort((a, b) => a.order - b.order)
+      .filter((region) => region.id === selectedRegionId || isRegionWithinViewport(region, viewportBounds))
+    : [];
+
   // Empty state with drag & drop
   if (!activePage) {
     return (
@@ -404,11 +423,16 @@ export function EditorCanvas() {
 
           {/* Regions */}
           {regionOverlaysVisible &&
-            [...activePage.regions].sort((a, b) => a.order - b.order).map((r) => (
+            sortedVisibleRegions.map((r) => (
               <RegionRect
                 key={r.id}
                 region={r}
                 isSelected={r.id === selectedRegionId}
+                showLabelOverlay={shouldRenderRegionLabel({
+                  labelsVisible,
+                  zoom,
+                  isSelected: r.id === selectedRegionId,
+                })}
                 onContextMenu={handleRegionContextMenu(r.id)}
               />
             ))}

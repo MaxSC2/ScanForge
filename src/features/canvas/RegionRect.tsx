@@ -10,16 +10,21 @@ import { useEditorStore } from '../../stores/useEditorStore';
 interface RegionRectProps {
   region: Region;
   isSelected: boolean;
+  showLabelOverlay: boolean;
   onContextMenu?: (e: Konva.KonvaEventObject<PointerEvent>) => void;
 }
 
-export function RegionRect({ region, isSelected, onContextMenu }: RegionRectProps) {
+export function RegionRect({
+  region,
+  isSelected,
+  showLabelOverlay,
+  onContextMenu,
+}: RegionRectProps) {
   const shapeRef = useRef<Konva.Rect>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const selectRegion = useRegionStore((s) => s.selectRegion);
   const updateRegion = useRegionStore((s) => s.updateRegion);
   const activePageId = usePageStore((s) => s.activePageId);
-  const labelsVisible = useEditorStore((s) => s.labelsVisible);
   const tool = useEditorStore((s) => s.tool);
 
   useEffect(() => {
@@ -81,10 +86,12 @@ export function RegionRect({ region, isSelected, onContextMenu }: RegionRectProp
         onTransformEnd={handleTransformEnd}
         onContextMenu={onContextMenu}
         hitStrokeWidth={8}
+        perfectDrawEnabled={false}
+        listening={tool === 'select'}
       />
 
       {/* Label overlay */}
-      {labelsVisible && (
+      {showLabelOverlay && (
         <Group x={region.x} y={region.y - 18} listening={false}>
           <Rect
             width={Math.min(region.label.length * 6 + 16, region.width + 20)}
@@ -106,7 +113,7 @@ export function RegionRect({ region, isSelected, onContextMenu }: RegionRectProp
       )}
 
       {/* Lock indicator */}
-      {region.locked && labelsVisible && (
+      {region.locked && showLabelOverlay && (
         <Text
           x={region.x + region.width - 16}
           y={region.y + 2}

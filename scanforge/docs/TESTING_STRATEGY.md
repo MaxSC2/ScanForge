@@ -83,6 +83,12 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - re-export from unchanged state produces stable output
 - export failures are visible rather than silent
 
+### Canvas Performance
+
+- on heavier pages, offscreen regions should not keep the canvas visibly busy while panning or zooming
+- non-selected region labels should collapse at low zoom instead of filling the viewport with unreadable text noise
+- selected region affordances should remain visible even when label simplification is active
+
 ## Stage 4 Focus
 
 Stage 4 verification should especially cover:
@@ -92,6 +98,7 @@ Stage 4 verification should especially cover:
 - export reproducibility
 - diagnostics surfacing for failures
 - editor stability under repeated changes
+- canvas responsiveness on heavier pages and larger region sets
 
 ## Minimum Merge Bar
 

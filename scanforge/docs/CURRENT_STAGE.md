@@ -68,6 +68,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - project-scoped diagnostics now persist through repository storage and survive reload for the active project
 - manual UI replay now confirms export job summaries and project-scoped diagnostics remain visible after reload
 - desktop runtime detection now prefers injected Tauri globals so export, OCR, and repositories do not silently fall back to browser mode inside the desktop shell
+- canvas now culls offscreen region overlays and hides non-selected labels at low zoom to reduce needless redraw pressure on heavier pages
 
 Recent commits on this branch:
 
@@ -88,22 +89,22 @@ Workstreams with meaningful progress:
 - Workstream A - OCR Pipeline v2
 - Workstream B - Translation System v2
 - Workstream C - Editor Stability
+- Workstream D - Canvas Performance
 - Workstream E - Export System v2
 - Workstream F - Error Handling and Observability
 
 Workstreams still needing real progress:
 
-- Workstream D - Canvas Performance
 - Workstream E - Export System v2
 - Workstream G - Architecture Readiness
 
 ## Next Recommended Slice
 
-Keep hardening Workstream E:
+Keep hardening Workstream D:
 
-- verify rendered export now uses the native desktop save path instead of browser blob downloads with GUID-like filenames
-- replay desktop OCR/export flows to confirm the app stays on Tauri runtime paths and does not silently fall back to browser preview logic
-- Tauri-native replay after forced save failure or canceled save target to confirm desktop-only paths match the browser/UI reload behavior
+- validate overlay responsiveness on heavier pages with larger region counts
+- profile minimap and viewport redraw behavior during repeated zoom/pan
+- keep performance improvements inside rendering/canvas boundaries instead of adding unrelated editor features
 
 ## Required Verification For New Work
 
