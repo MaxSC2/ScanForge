@@ -58,6 +58,7 @@ export {
   DEFAULT_TEXT_STYLE_NAME,
 } from './textStyle';
 export type {
+  DiagnosticEntity,
   JobEntity,
   JobQueueStatus,
   JobType,

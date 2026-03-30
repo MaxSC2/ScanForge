@@ -65,6 +65,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - rendered export failures now keep a structured failure summary instead of collapsing to a generic failed state
 - export retry now surfaces canceled save-target selection through diagnostics and toast feedback
 - job result details now persist through repository storage so reason badges and artifact hashes survive reload
+- project-scoped diagnostics now persist through repository storage and survive reload for the active project
 
 Recent commits on this branch:
 
@@ -100,7 +101,7 @@ Keep hardening Workstream E:
 
 - export desktop verification for save-target cancel surfacing
 - export desktop replay after forced save failure to confirm Jobs and diagnostics keep the failure summary
-- export-side replay after reload to confirm structured job details remain visible
+- export-side replay after reload to confirm structured job details and diagnostics remain visible
 
 ## Required Verification For New Work
 

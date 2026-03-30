@@ -266,6 +266,20 @@ impl ProjectRepository {
                   error TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS diagnostics (
+                  id TEXT PRIMARY KEY,
+                  project_id TEXT NOT NULL,
+                  scope TEXT NOT NULL,
+                  level TEXT NOT NULL,
+                  message TEXT NOT NULL,
+                  timestamp INTEGER NOT NULL,
+                  count INTEGER NOT NULL,
+                  detail TEXT,
+                  page_id TEXT,
+                  region_id TEXT,
+                  job_id TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS project_settings (
                   project_id TEXT PRIMARY KEY,
                   source_language TEXT NOT NULL DEFAULT 'auto',
@@ -341,6 +355,7 @@ impl ProjectRepository {
         ensure_table_column(&connection, JOBS_TABLE, "region_ids", "TEXT")?;
         ensure_table_column(&connection, JOBS_TABLE, "summary", "TEXT")?;
         ensure_table_column(&connection, JOBS_TABLE, "result_json", "TEXT")?;
+        ensure_table_column(&connection, "diagnostics", "detail", "TEXT")?;
 
         migrate_snapshot_projects(&connection)?;
         Ok(())

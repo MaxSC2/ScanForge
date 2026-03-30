@@ -39,6 +39,7 @@ async function applyProject(project: ProjectFile) {
     pages,
     activePageId,
   });
+  await useDiagnosticsStore.getState().hydrateProject(hydrated.meta.localProjectId);
   await useProjectDomainStore.getState().hydrateProjectDomain(hydrated.meta.localProjectId);
   await useJobStore.getState().loadJobsForCurrentProject();
   useRegionStore.getState().selectRegion(null);

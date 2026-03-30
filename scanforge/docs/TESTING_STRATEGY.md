@@ -76,6 +76,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - export retry cancel is visible through diagnostics or toast feedback instead of silently doing nothing
 - save or render failures keep a structured failed summary in Jobs
 - job reason badges and artifact hashes remain visible after reload
+- project-scoped diagnostics remain visible after reload for the active project
 - repeated export from unchanged state keeps a stable artifact hash
 - re-export from unchanged state produces stable output
 - export failures are visible rather than silent

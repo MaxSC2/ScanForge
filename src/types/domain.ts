@@ -84,3 +84,17 @@ export interface JobEntity {
   resultJson?: string;
   error?: string;
 }
+
+export interface DiagnosticEntity {
+  id: string;
+  projectId: string;
+  scope: string;
+  level: string;
+  message: string;
+  timestamp: number;
+  count: number;
+  detail?: string;
+  pageId?: string;
+  regionId?: string;
+  jobId?: string;
+}

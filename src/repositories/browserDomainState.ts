@@ -1,4 +1,5 @@
 import type {
+  DiagnosticEntity,
   JobEntity,
   PageRecord,
   ProjectRecord,
@@ -12,6 +13,7 @@ interface BrowserDomainState {
   pages: Record<string, PageRecord>;
   regions: Record<string, RegionRecord>;
   jobs: Record<string, JobEntity>;
+  diagnostics: Record<string, DiagnosticEntity>;
   projectSettings: Record<string, ProjectSettingsRecord>;
   textStyles: Record<string, TextStyleRecord>;
 }
@@ -24,6 +26,7 @@ function emptyState(): BrowserDomainState {
     pages: {},
     regions: {},
     jobs: {},
+    diagnostics: {},
     projectSettings: {},
     textStyles: {},
   };
@@ -50,6 +53,7 @@ export function readBrowserDomainState(): BrowserDomainState {
       pages: parsed.pages ?? {},
       regions: parsed.regions ?? {},
       jobs: parsed.jobs ?? {},
+      diagnostics: parsed.diagnostics ?? {},
       projectSettings: parsed.projectSettings ?? {},
       textStyles: parsed.textStyles ?? {},
     };

@@ -108,6 +108,22 @@ pub struct JobEntity {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticEntity {
+    pub id: String,
+    pub project_id: String,
+    pub scope: String,
+    pub level: String,
+    pub message: String,
+    pub timestamp: i64,
+    pub count: i64,
+    pub detail: Option<String>,
+    pub page_id: Option<String>,
+    pub region_id: Option<String>,
+    pub job_id: Option<String>,
+}
+
 impl DomainRepository {
     pub fn new(app: &AppHandle) -> Result<Self, String> {
         let app_dir = app
@@ -193,6 +209,20 @@ impl DomainRepository {
                   error TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS diagnostics (
+                  id TEXT PRIMARY KEY,
+                  project_id TEXT NOT NULL,
+                  scope TEXT NOT NULL,
+                  level TEXT NOT NULL,
+                  message TEXT NOT NULL,
+                  timestamp INTEGER NOT NULL,
+                  count INTEGER NOT NULL,
+                  detail TEXT,
+                  page_id TEXT,
+                  region_id TEXT,
+                  job_id TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS project_settings (
                   project_id TEXT PRIMARY KEY,
                   source_language TEXT NOT NULL DEFAULT 'auto',
@@ -246,6 +276,7 @@ impl DomainRepository {
         ensure_table_column(&connection, "jobs", "region_ids", "TEXT")?;
         ensure_table_column(&connection, "jobs", "summary", "TEXT")?;
         ensure_table_column(&connection, "jobs", "result_json", "TEXT")?;
+        ensure_table_column(&connection, "diagnostics", "detail", "TEXT")?;
 
         Ok(())
     }
@@ -977,6 +1008,106 @@ impl DomainRepository {
             .map_err(|error| error.to_string())?;
         Ok(())
     }
+
+    pub fn list_diagnostics_by_project(
+        &self,
+        project_id: String,
+    ) -> Result<Vec<DiagnosticEntity>, String> {
+        let connection = self.connect()?;
+        let mut statement = connection
+            .prepare(
+                "
+                SELECT
+                  id,
+                  project_id,
+                  scope,
+                  level,
+                  message,
+                  timestamp,
+                  count,
+                  detail,
+                  page_id,
+                  region_id,
+                  job_id
+                FROM diagnostics
+                WHERE project_id = ?1
+                ORDER BY timestamp DESC, id DESC
+                ",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![project_id], map_diagnostic_entity)
+            .map_err(|error| error.to_string())?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn upsert_diagnostic(&self, entry: DiagnosticEntity) -> Result<DiagnosticEntity, String> {
+        let connection = self.connect()?;
+        connection
+            .execute(
+                "
+                INSERT INTO diagnostics (
+                  id,
+                  project_id,
+                  scope,
+                  level,
+                  message,
+                  timestamp,
+                  count,
+                  detail,
+                  page_id,
+                  region_id,
+                  job_id
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                ON CONFLICT(id) DO UPDATE SET
+                  project_id = excluded.project_id,
+                  scope = excluded.scope,
+                  level = excluded.level,
+                  message = excluded.message,
+                  timestamp = excluded.timestamp,
+                  count = excluded.count,
+                  detail = excluded.detail,
+                  page_id = excluded.page_id,
+                  region_id = excluded.region_id,
+                  job_id = excluded.job_id
+                ",
+                params![
+                    entry.id,
+                    entry.project_id,
+                    entry.scope,
+                    entry.level,
+                    entry.message,
+                    entry.timestamp,
+                    entry.count,
+                    entry.detail,
+                    entry.page_id,
+                    entry.region_id,
+                    entry.job_id,
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+
+        Ok(entry)
+    }
+
+    pub fn delete_diagnostic(&self, id: String) -> Result<(), String> {
+        let connection = self.connect()?;
+        connection
+            .execute("DELETE FROM diagnostics WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_diagnostics_by_project(&self, project_id: String) -> Result<(), String> {
+        let connection = self.connect()?;
+        connection
+            .execute("DELETE FROM diagnostics WHERE project_id = ?1", params![project_id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
 }
 
 fn map_project_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProjectRecord> {
@@ -1074,6 +1205,22 @@ fn map_job_entity(row: &rusqlite::Row<'_>) -> rusqlite::Result<JobEntity> {
         summary: row.get(9)?,
         result_json: row.get(10)?,
         error: row.get(11)?,
+    })
+}
+
+fn map_diagnostic_entity(row: &rusqlite::Row<'_>) -> rusqlite::Result<DiagnosticEntity> {
+    Ok(DiagnosticEntity {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        scope: row.get(2)?,
+        level: row.get(3)?,
+        message: row.get(4)?,
+        timestamp: row.get(5)?,
+        count: row.get(6)?,
+        detail: row.get(7)?,
+        page_id: row.get(8)?,
+        region_id: row.get(9)?,
+        job_id: row.get(10)?,
     })
 }
 
@@ -1352,4 +1499,36 @@ pub fn delete_job_entities_by_project(
     repository: State<'_, DomainRepository>,
 ) -> Result<(), String> {
     repository.delete_jobs_by_project(project_id)
+}
+
+#[tauri::command]
+pub fn list_diagnostic_entities_by_project(
+    project_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<Vec<DiagnosticEntity>, String> {
+    repository.list_diagnostics_by_project(project_id)
+}
+
+#[tauri::command]
+pub fn upsert_diagnostic_entity(
+    entry: DiagnosticEntity,
+    repository: State<'_, DomainRepository>,
+) -> Result<DiagnosticEntity, String> {
+    repository.upsert_diagnostic(entry)
+}
+
+#[tauri::command]
+pub fn delete_diagnostic_entity(
+    id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<(), String> {
+    repository.delete_diagnostic(id)
+}
+
+#[tauri::command]
+pub fn delete_diagnostic_entities_by_project(
+    project_id: String,
+    repository: State<'_, DomainRepository>,
+) -> Result<(), String> {
+    repository.delete_diagnostics_by_project(project_id)
 }

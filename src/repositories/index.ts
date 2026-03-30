@@ -1,3 +1,4 @@
+export { DiagnosticRepository, diagnosticRepository } from './diagnosticRepository';
 export { JobRepository, jobRepository } from './jobRepository';
 export { mergeJobsWithRepository, syncJobsForProject } from './jobPersistence';
 export { PageRepository, pageRepository } from './pageRepository';

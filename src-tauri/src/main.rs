@@ -4,13 +4,15 @@ mod storage;
 mod translation;
 
 use domain_storage::{
+    delete_diagnostic_entities_by_project, delete_diagnostic_entity,
     delete_job_entities_by_project, delete_job_entity, delete_page_record,
     delete_page_records_by_project, delete_project_record, delete_project_settings_record,
     delete_region_record, delete_region_records_by_page, delete_text_style_record,
     delete_text_style_records_by_project, get_job_entity, get_page_record, get_project_record,
     get_project_settings_record, get_region_record, get_text_style_record,
-    list_job_entities_by_project, list_page_records_by_project, list_project_records,
-    list_region_records_by_page, list_text_style_records_by_project, upsert_job_entity,
+    list_diagnostic_entities_by_project, list_job_entities_by_project,
+    list_page_records_by_project, list_project_records, list_region_records_by_page,
+    list_text_style_records_by_project, upsert_diagnostic_entity, upsert_job_entity,
     upsert_page_record, upsert_project_record, upsert_project_settings_record,
     upsert_region_record, upsert_text_style_record, DomainRepository,
 };
@@ -68,6 +70,10 @@ fn main() {
             upsert_job_entity,
             delete_job_entity,
             delete_job_entities_by_project,
+            list_diagnostic_entities_by_project,
+            upsert_diagnostic_entity,
+            delete_diagnostic_entity,
+            delete_diagnostic_entities_by_project,
             run_page_ocr,
             run_page_translation
         ])

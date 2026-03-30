@@ -69,6 +69,7 @@ export function useLocalProjectPersistence() {
           pages,
           activePageId,
         });
+        await useDiagnosticsStore.getState().hydrateProject(hydrated.meta.localProjectId);
         await useProjectDomainStore.getState().hydrateProjectDomain(
           hydrated.meta.localProjectId,
         );
