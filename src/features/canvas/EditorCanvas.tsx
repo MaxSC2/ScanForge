@@ -37,6 +37,8 @@ export function EditorCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
+  const cursorFrameRef = useRef<number | null>(null);
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   const activePage = usePageStore((s) => {
     const id = s.activePageId;
@@ -87,6 +89,12 @@ export function EditorCanvas() {
     });
     obs.observe(el);
     return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => () => {
+    if (cursorFrameRef.current !== null) {
+      window.cancelAnimationFrame(cursorFrameRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -173,7 +181,18 @@ export function EditorCanvas() {
       const stage = e.target.getStage();
       if (stage) {
         const pos = getScaledPointer(stage);
-        if (pos) setCursorPosition({ x: pos.x, y: pos.y });
+        if (pos) {
+          pendingCursorRef.current = { x: pos.x, y: pos.y };
+          if (cursorFrameRef.current === null) {
+            cursorFrameRef.current = window.requestAnimationFrame(() => {
+              cursorFrameRef.current = null;
+              const nextCursor = pendingCursorRef.current;
+              if (nextCursor) {
+                setCursorPosition(nextCursor);
+              }
+            });
+          }
+        }
       }
 
       if (!isDrawing.current || tool !== 'draw') return;

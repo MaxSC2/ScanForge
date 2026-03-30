@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Region } from '../../types';
 import {
   getCanvasViewportBounds,
+  getWheelViewportTransform,
   isRegionWithinViewport,
   shouldRenderRegionLabel,
 } from '../../features/canvas/canvasPerformance';
@@ -84,5 +85,22 @@ describe('canvasPerformance', () => {
         isSelected: true,
       }),
     ).toBe(true);
+  });
+
+  it('computes one batched viewport transform for wheel zoom around the pointer', () => {
+    expect(
+      getWheelViewportTransform({
+        zoom: 1,
+        stagePosition: { x: 0, y: 0 },
+        pointer: { x: 200, y: 100 },
+        deltaY: -120,
+      }),
+    ).toEqual({
+      zoom: 1.08,
+      stagePosition: {
+        x: -16,
+        y: -8,
+      },
+    });
   });
 });

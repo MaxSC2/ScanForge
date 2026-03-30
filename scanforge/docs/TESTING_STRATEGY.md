@@ -88,6 +88,8 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - on heavier pages, offscreen regions should not keep the canvas visibly busy while panning or zooming
 - non-selected region labels should collapse at low zoom instead of filling the viewport with unreadable text noise
 - selected region affordances should remain visible even when label simplification is active
+- zoom interaction should not double-commit viewport state when a single wheel step is enough
+- cursor/status updates should stay readable without flooding store updates during rapid mouse movement
 
 ## Stage 4 Focus
 

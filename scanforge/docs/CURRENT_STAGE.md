@@ -69,6 +69,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - manual UI replay now confirms export job summaries and project-scoped diagnostics remain visible after reload
 - desktop runtime detection now prefers injected Tauri globals so export, OCR, and repositories do not silently fall back to browser mode inside the desktop shell
 - canvas now culls offscreen region overlays and hides non-selected labels at low zoom to reduce needless redraw pressure on heavier pages
+- wheel zoom now applies viewport changes in one batched transform and cursor updates are frame-throttled to reduce store churn during pan/zoom work
 
 Recent commits on this branch:
 

@@ -1,14 +1,13 @@
 import { useCallback } from 'react';
 import type Konva from 'konva';
 import { useEditorStore } from '../stores/useEditorStore';
-
-const ZOOM_FACTOR = 1.08;
+import { getWheelViewportTransform } from '../features/canvas/canvasPerformance';
 
 /**
  * Provides wheel-zoom and drag handlers for the Konva Stage.
  */
 export function useCanvasInteraction() {
-  const setZoom = useEditorStore((s) => s.setZoom);
+  const applyViewportTransform = useEditorStore((s) => s.applyViewportTransform);
   const setStagePosition = useEditorStore((s) => s.setStagePosition);
 
   const handleWheel = useCallback(
@@ -21,26 +20,16 @@ export function useCanvasInteraction() {
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
 
-      const mousePointTo = {
-        x: (pointer.x - stage.x()) / oldScale,
-        y: (pointer.y - stage.y()) / oldScale,
-      };
-
-      const direction = e.evt.deltaY < 0 ? 1 : -1;
-      const newScale =
-        direction > 0 ? oldScale * ZOOM_FACTOR : oldScale / ZOOM_FACTOR;
-
-      const clampedScale = Math.min(5, Math.max(0.1, newScale));
-
-      const newPos = {
-        x: pointer.x - mousePointTo.x * clampedScale,
-        y: pointer.y - mousePointTo.y * clampedScale,
-      };
-
-      setZoom(clampedScale);
-      setStagePosition(newPos);
+      applyViewportTransform(
+        getWheelViewportTransform({
+          zoom: oldScale,
+          stagePosition: { x: stage.x(), y: stage.y() },
+          pointer,
+          deltaY: e.evt.deltaY,
+        }),
+      );
     },
-    [setZoom, setStagePosition],
+    [applyViewportTransform],
   );
 
   const handleDragEnd = useCallback(

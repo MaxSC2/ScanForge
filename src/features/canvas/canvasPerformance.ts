@@ -7,6 +7,11 @@ export interface CanvasViewportBounds {
   bottom: number;
 }
 
+export interface CanvasPointerPosition {
+  x: number;
+  y: number;
+}
+
 interface ViewportArgs {
   zoom: number;
   stagePosition: { x: number; y: number };
@@ -23,6 +28,9 @@ interface LabelVisibilityArgs {
 
 const VIEWPORT_PADDING = 120;
 const LABEL_VISIBILITY_MIN_ZOOM = 0.55;
+const CANVAS_ZOOM_MIN = 0.1;
+const CANVAS_ZOOM_MAX = 5;
+const WHEEL_ZOOM_FACTOR = 1.08;
 
 export function getCanvasViewportBounds({
   zoom,
@@ -63,4 +71,33 @@ export function shouldRenderRegionLabel({
   }
 
   return isSelected || zoom >= LABEL_VISIBILITY_MIN_ZOOM;
+}
+
+export function getWheelViewportTransform({
+  zoom,
+  stagePosition,
+  pointer,
+  deltaY,
+}: {
+  zoom: number;
+  stagePosition: CanvasPointerPosition;
+  pointer: CanvasPointerPosition;
+  deltaY: number;
+}) {
+  const direction = deltaY < 0 ? 1 : -1;
+  const nextZoom = direction > 0 ? zoom * WHEEL_ZOOM_FACTOR : zoom / WHEEL_ZOOM_FACTOR;
+  const clampedZoom = Math.min(CANVAS_ZOOM_MAX, Math.max(CANVAS_ZOOM_MIN, nextZoom));
+
+  const pointerInPageSpace = {
+    x: (pointer.x - stagePosition.x) / zoom,
+    y: (pointer.y - stagePosition.y) / zoom,
+  };
+
+  return {
+    zoom: clampedZoom,
+    stagePosition: {
+      x: pointer.x - pointerInPageSpace.x * clampedZoom,
+      y: pointer.y - pointerInPageSpace.y * clampedZoom,
+    },
+  };
 }
