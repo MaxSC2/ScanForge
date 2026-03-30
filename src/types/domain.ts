@@ -81,5 +81,6 @@ export interface JobEntity {
   createdAt: number;
   updatedAt: number;
   summary?: string;
+  resultJson?: string;
   error?: string;
 }

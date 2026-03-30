@@ -104,6 +104,7 @@ pub struct JobEntity {
     pub created_at: i64,
     pub updated_at: i64,
     pub summary: Option<String>,
+    pub result_json: Option<String>,
     pub error: Option<String>,
 }
 
@@ -188,6 +189,7 @@ impl DomainRepository {
                   created_at INTEGER,
                   updated_at INTEGER,
                   summary TEXT,
+                  result_json TEXT,
                   error TEXT
                 );
 
@@ -243,6 +245,7 @@ impl DomainRepository {
         ensure_table_column(&connection, "regions", "text_style_id", "TEXT")?;
         ensure_table_column(&connection, "jobs", "region_ids", "TEXT")?;
         ensure_table_column(&connection, "jobs", "summary", "TEXT")?;
+        ensure_table_column(&connection, "jobs", "result_json", "TEXT")?;
 
         Ok(())
     }
@@ -861,6 +864,7 @@ impl DomainRepository {
                   created_at,
                   updated_at,
                   summary,
+                  result_json,
                   error
                 FROM jobs
                 WHERE project_id = ?1
@@ -892,6 +896,7 @@ impl DomainRepository {
                   created_at,
                   updated_at,
                   summary,
+                  result_json,
                   error
                 FROM jobs
                 WHERE id = ?1
@@ -920,9 +925,10 @@ impl DomainRepository {
                   created_at,
                   updated_at,
                   summary,
+                  result_json,
                   error
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 ON CONFLICT(id) DO UPDATE SET
                   type = excluded.type,
                   status = excluded.status,
@@ -933,6 +939,7 @@ impl DomainRepository {
                   created_at = excluded.created_at,
                   updated_at = excluded.updated_at,
                   summary = excluded.summary,
+                  result_json = excluded.result_json,
                   error = excluded.error
                 ",
                 params![
@@ -946,6 +953,7 @@ impl DomainRepository {
                     job.created_at,
                     job.updated_at,
                     job.summary,
+                    job.result_json,
                     job.error,
                 ],
             )
@@ -1064,7 +1072,8 @@ fn map_job_entity(row: &rusqlite::Row<'_>) -> rusqlite::Result<JobEntity> {
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
         summary: row.get(9)?,
-        error: row.get(10)?,
+        result_json: row.get(10)?,
+        error: row.get(11)?,
     })
 }
 

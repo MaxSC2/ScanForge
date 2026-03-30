@@ -262,6 +262,7 @@ impl ProjectRepository {
                   created_at INTEGER,
                   updated_at INTEGER,
                   summary TEXT,
+                  result_json TEXT,
                   error TEXT
                 );
 
@@ -339,6 +340,7 @@ impl ProjectRepository {
         ensure_table_column(&connection, REGIONS_TABLE, "text_style_id", "TEXT")?;
         ensure_table_column(&connection, JOBS_TABLE, "region_ids", "TEXT")?;
         ensure_table_column(&connection, JOBS_TABLE, "summary", "TEXT")?;
+        ensure_table_column(&connection, JOBS_TABLE, "result_json", "TEXT")?;
 
         migrate_snapshot_projects(&connection)?;
         Ok(())

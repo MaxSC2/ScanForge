@@ -1,6 +1,26 @@
 import type { JobEntity, JobRecord, Page, ProjectMeta } from '../types';
 import { jobRepository } from './jobRepository';
 
+function serializeJobResult(job: JobRecord) {
+  if (!job.result) {
+    return undefined;
+  }
+
+  return JSON.stringify(job.result);
+}
+
+function deserializeJobResult(entity: JobEntity): JobRecord['result'] {
+  if (!entity.resultJson) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(entity.resultJson) as JobRecord['result'];
+  } catch {
+    return null;
+  }
+}
+
 function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
   if (!meta.localProjectId) {
     return null;
@@ -14,6 +34,7 @@ function buildJobEntity(meta: ProjectMeta, job: JobRecord): JobEntity | null {
     pageId: job.pageId,
     ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
     summary: job.message,
+    ...(job.result ? { resultJson: serializeJobResult(job) } : {}),
     progress: job.progress,
     createdAt: job.createdAt,
     updatedAt: job.finishedAt ?? job.startedAt ?? job.createdAt,
@@ -78,7 +99,7 @@ function toJobRecord(entity: JobEntity, pagesById: Map<string, Page>): JobRecord
             : 'Recovered queued export job'
         : entity.summary ?? deriveMessage(entity),
     error: entity.error ?? null,
-    result: null,
+    result: deserializeJobResult(entity),
   };
 }
 
