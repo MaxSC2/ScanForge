@@ -4,7 +4,7 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 import { loadProjectDomainContext, pageRepository, regionRepository } from '../../repositories';
 import { ensureProjectDomainStatePersisted } from '../../services/projectSync';
 import { type Page, type RegionRecord, type RenderedExportResult, type TextStyleRecord } from '../../types';
-import { buildRenderedPngName, resolveTextStyle } from './renderHelpers';
+import { buildRenderedPngName, computeSha256Hex, resolveTextStyle } from './renderHelpers';
 
 interface RenderTextLayout {
   fontSize: number;
@@ -270,6 +270,7 @@ export async function exportRenderedPageAsPng(
 ): Promise<RenderedExportResult> {
   const { blob, translatedRegions } = await renderPageToBlob(page);
   const suggestedName = buildRenderedPngName(page.fileName);
+  const outputSha256 = await computeSha256Hex(await blob.arrayBuffer());
   const saveResult = await saveBlob(blob, suggestedName, options.outputPath);
 
   return {
@@ -278,6 +279,7 @@ export async function exportRenderedPageAsPng(
     suggestedName,
     translatedRegions,
     renderedRegions: saveResult.saved ? translatedRegions : 0,
+    outputSha256,
     ...(saveResult.outputPath ? { outputPath: saveResult.outputPath } : {}),
   };
 }

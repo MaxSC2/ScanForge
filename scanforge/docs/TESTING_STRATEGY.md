@@ -73,6 +73,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - export cancellation is visible as a non-failure pipeline outcome
 - export failures surface in diagnostics rather than disappearing behind a toast
 - export retry opens a fresh target selection instead of silently reusing a stale failed path
+- repeated export from unchanged state keeps a stable artifact hash
 - re-export from unchanged state produces stable output
 - export failures are visible rather than silent
 

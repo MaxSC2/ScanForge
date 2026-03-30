@@ -17,3 +17,15 @@ export function resolveTextStyle(
     createDefaultTextStyle(projectId)
   );
 }
+
+export async function computeSha256Hex(input: ArrayBuffer | Uint8Array) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export function shortenHash(hash: string, length = 8) {
+  return hash.slice(0, length);
+}

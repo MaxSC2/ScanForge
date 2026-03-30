@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildRenderedPngName, resolveTextStyle } from '../../features/export/renderHelpers';
+import {
+  buildRenderedPngName,
+  computeSha256Hex,
+  resolveTextStyle,
+  shortenHash,
+} from '../../features/export/renderHelpers';
 import { createDefaultTextStyle, type RegionRecord, type TextStyleRecord } from '../../types';
 
 function makeRegion(overrides: Partial<RegionRecord> = {}): RegionRecord {
@@ -70,5 +75,13 @@ describe('renderHelpers', () => {
     const resolved = resolveTextStyle(makeRegion(), [], 'project-1');
     expect(resolved.id).toBe('project-1:default-style');
     expect(resolved.name).toBe('Default');
+  });
+
+  it('computes deterministic sha256 fingerprints for export artifacts', async () => {
+    const first = await computeSha256Hex(new TextEncoder().encode('scanforge-export'));
+    const second = await computeSha256Hex(new TextEncoder().encode('scanforge-export'));
+
+    expect(first).toBe(second);
+    expect(shortenHash(first)).toHaveLength(8);
   });
 });

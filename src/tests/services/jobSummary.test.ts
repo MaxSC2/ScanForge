@@ -122,6 +122,7 @@ describe('jobSummary', () => {
       suggestedName: 'page-1-rendered.png',
       translatedRegions: 2,
       renderedRegions: 2,
+      outputSha256: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     };
     const canceled: RenderedExportResult = {
       saved: false,
@@ -129,13 +130,16 @@ describe('jobSummary', () => {
       suggestedName: 'page-1-rendered.png',
       translatedRegions: 2,
       renderedRegions: 0,
+      outputSha256: 'fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
     };
 
     const successSummary = summarizeExportResult(success);
     const canceledSummary = summarizeExportResult(canceled);
 
     expect(formatJobResultSummary('export', successSummary)).toContain('rendered-png: rendered 2/2');
+    expect(formatJobResultSummary('export', successSummary)).toContain('sha256 12345678');
     expect(formatJobResultSummary('export', canceledSummary)).toContain('canceled x1');
+    expect(formatJobResultSummary('export', canceledSummary)).toContain('sha256 fedcba09');
     expect(deriveExportJobOutcome(successSummary).status).toBe('done');
     expect(deriveExportJobOutcome(canceledSummary).status).toBe('done');
   });

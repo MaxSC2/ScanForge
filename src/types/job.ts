@@ -13,6 +13,7 @@ export interface JobResultSummary {
   appliedCount: number;
   skippedCount: number;
   failedCount: number;
+  artifactHash?: string;
   reasons?: JobResultReason[];
 }
 

@@ -4,5 +4,6 @@ export interface RenderedExportResult {
   suggestedName: string;
   translatedRegions: number;
   renderedRegions: number;
+  outputSha256?: string;
   outputPath?: string;
 }

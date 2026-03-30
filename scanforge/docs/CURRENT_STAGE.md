@@ -60,6 +60,8 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - rendered export now runs as an observable pipeline job with diagnostics-aware cancel vs failure handling
 - rendered export success path now surfaces through Jobs and downloads the composed PNG output
 - export retry now re-prompts the save target instead of blindly reusing a failed path
+- rendered export jobs now include a short SHA-256 artifact fingerprint for reproducibility checks
+- repeated export from unchanged state now produces a stable visible artifact hash in job output
 
 Recent commits on this branch:
 
@@ -94,8 +96,8 @@ Workstreams still needing real progress:
 Keep hardening Workstream E:
 
 - export desktop verification for cancel and failure surfacing
-- batch/export reproducibility checks for unchanged state
 - export retry desktop replay after failed save target selection or save error
+- export-side failure replay with diagnostics persistence
 
 ## Required Verification For New Work
 

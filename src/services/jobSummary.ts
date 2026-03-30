@@ -130,6 +130,7 @@ export function summarizeExportResult(result: RenderedExportResult): JobResultSu
       appliedCount: 0,
       skippedCount: 1,
       failedCount: 0,
+      ...(result.outputSha256 ? { artifactHash: result.outputSha256 } : {}),
       reasons: [{ reason: 'canceled', count: 1, kind: 'skip' }],
     };
   }
@@ -140,6 +141,7 @@ export function summarizeExportResult(result: RenderedExportResult): JobResultSu
     appliedCount: result.renderedRegions,
     skippedCount: 0,
     failedCount: 0,
+    ...(result.outputSha256 ? { artifactHash: result.outputSha256 } : {}),
   };
 }
 
@@ -161,6 +163,10 @@ export function formatJobResultSummary(stage: JobRecord['stage'], result: JobRes
       .map((reason) => `${normalizeReasonLabel(reason.reason)} x${reason.count}`)
       .join(', ');
     parts.push(`(${detail})`);
+  }
+
+  if (result.artifactHash) {
+    parts.push(`sha256 ${result.artifactHash.slice(0, 8)}`);
   }
 
   return parts.join(', ');
