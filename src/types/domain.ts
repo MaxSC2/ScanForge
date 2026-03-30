@@ -3,7 +3,6 @@ import type {
   ProjectSettings,
   ProjectSourceLanguage,
   ProjectTargetLanguage,
-  TranslationProviderId,
 } from './projectSettings';
 import type {
   TextAlign,
@@ -55,7 +54,7 @@ export interface RegionRecord {
   ocrUpdatedAt?: number;
   targetLanguage?: ProjectTargetLanguage;
   translationStatus: RegionTranslationStatus;
-  translationProvider?: TranslationProviderId;
+  translationProvider?: string;
   translationUpdatedAt?: number;
   notes: string;
   locked: boolean;

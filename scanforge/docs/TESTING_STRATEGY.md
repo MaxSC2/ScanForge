@@ -22,6 +22,7 @@ What exists today:
 - Vitest coverage for job summary logic
 - Vitest coverage for translation draft helpers
 - Vitest coverage for translation fallback and summary behavior
+- Vitest coverage for region lifecycle policy after manual source/translation edits
 - Vitest coverage for render helper logic
 - Vitest coverage for region history checkpoint policy
 
@@ -54,6 +55,8 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - confirm overwrite behavior matches expectation
 - confirm manual translated text is not silently destroyed
 - confirm fallback provider behavior is visible in job output when configured provider is unavailable
+- confirm region translation status moves through queued/running/done or failed as expected
+- confirm fallback provider route is still visible after reload
 
 ### Recovery
 
@@ -90,6 +93,7 @@ Do not treat a slice as done if:
 
 - repository CRUD coverage
 - translation provider failure coverage
+- translation desktop failure replay coverage
 - batch export verification
 - large-page performance regression checks
 - desktop-focused repeatable end-to-end tests

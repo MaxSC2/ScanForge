@@ -52,6 +52,14 @@ function getTranslationProviderName(provider: string) {
   }
 }
 
+function describeTranslationProviderLabel(provider: string, providerPath?: string[]) {
+  if (providerPath && providerPath.length > 1) {
+    return `${provider} via ${providerPath.slice(0, -1).join(' -> ')}`;
+  }
+
+  return provider;
+}
+
 function isBrowserTranslationProviderAvailable(provider: string) {
   return provider === 'local' || provider === 'mock';
 }
@@ -108,14 +116,55 @@ async function applyBrowserTranslationResult(
   context: StoredTranslationContext,
   results: TranslationPageResult['results'],
   providerName: string,
+  providerPath?: string[],
 ) {
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
+  const providerLabel = describeTranslationProviderLabel(providerName, providerPath);
 
   await Promise.all(
     context.regions.map(async (record) => {
       const result = resultMap.get(record.id);
-      if (!result || result.skipped || !result.translatedText) {
+      if (!result) {
+        return;
+      }
+
+      if (result.skipped) {
+        if (result.reason === 'locked') {
+          return;
+        }
+
+        if (result.reason === 'already_translated' && record.translatedText.trim()) {
+          await regionRepository.update({
+            ...record,
+            status: 'translated',
+            targetLanguage: context.targetLanguage,
+            translationStatus: 'done',
+            translationProvider: record.translationProvider ?? providerLabel,
+            translationUpdatedAt: record.translationUpdatedAt ?? updatedAt,
+          });
+          return;
+        }
+
+        await regionRepository.update({
+          ...record,
+          status: record.translatedText.trim()
+            ? 'translated'
+            : record.sourceText.trim()
+              ? 'ocr_done'
+              : 'idle',
+          targetLanguage: context.targetLanguage,
+          translationStatus: 'failed',
+          translationProvider:
+            result.reason === 'provider_unavailable'
+              ? providerLabel
+              : record.translationProvider,
+          translationUpdatedAt: updatedAt,
+        });
+        return;
+      }
+
+      if (!result.translatedText) {
         return;
       }
 
@@ -125,7 +174,7 @@ async function applyBrowserTranslationResult(
         status: 'translated',
         targetLanguage: context.targetLanguage,
         translationStatus: 'done',
-        translationProvider: providerName,
+        translationProvider: providerLabel,
         translationUpdatedAt: updatedAt,
       });
     }),
@@ -221,7 +270,7 @@ async function runBrowserTranslation(
   }
 
   const providerName = getTranslationProviderName(activeProvider);
-  await applyBrowserTranslationResult(context, results, providerName);
+  await applyBrowserTranslationResult(context, results, providerName, providerPath);
 
   const translatedCount = results.filter((item) => !item.skipped && item.translatedText).length;
   const skippedCount = results.length - translatedCount;

@@ -16,7 +16,7 @@ import {
 import { runPageOcr } from '../services/ocr';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { runPageTranslation } from '../services/translation';
-import type { JobRecord, JobResultSummary } from '../types';
+import type { JobRecord, JobResultSummary, Region } from '../types';
 import { useDiagnosticsStore } from './useDiagnosticsStore';
 import { useEditorStore } from './useEditorStore';
 import { useHistoryStore } from './useHistoryStore';
@@ -110,6 +110,37 @@ async function refreshPageRegionsFromRepository(pageId: string) {
           }
         : entry,
     ),
+  }));
+  useProjectStore.getState().touch();
+}
+
+function updateTranslationTargetsInEditor(
+  pageId: string,
+  regionIds: string[] | undefined,
+  getPatch: (region: Region) => Partial<Region>,
+) {
+  const targetIds = regionIds?.length ? new Set(regionIds) : null;
+
+  usePageStore.setState((state) => ({
+    pages: state.pages.map((page) => {
+      if (page.id !== pageId) {
+        return page;
+      }
+
+      return {
+        ...page,
+        regions: page.regions.map((region) => {
+          if (targetIds && !targetIds.has(region.id)) {
+            return region;
+          }
+
+          return {
+            ...region,
+            ...getPatch(region),
+          };
+        }),
+      };
+    }),
   }));
   useProjectStore.getState().touch();
 }
@@ -265,6 +296,9 @@ async function runTranslationJob(job: JobRecord) {
   }
 
   try {
+    updateTranslationTargetsInEditor(page.id, job.regionIds, () => ({
+      translationStatus: 'running',
+    }));
     await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().translationOverwrite;
     const translationResult = await runPageTranslation(
@@ -302,6 +336,16 @@ async function runTranslationJob(job: JobRecord) {
       error: outcome.error,
     });
   } catch (error) {
+    const failedAt = Date.now();
+    updateTranslationTargetsInEditor(page.id, job.regionIds, (region) => ({
+      translationStatus: 'failed',
+      status: region.translatedText.trim()
+        ? 'translated'
+        : region.sourceText.trim()
+          ? 'ocr_done'
+          : 'idle',
+      translationUpdatedAt: failedAt,
+    }));
     recordJobDiagnostic(
       job,
       'error',
@@ -412,6 +456,12 @@ export const useJobStore = create<JobState>((set, get) => ({
 
     if (newJobs.length === 0) {
       return 0;
+    }
+
+    for (const job of newJobs) {
+      updateTranslationTargetsInEditor(job.pageId, job.regionIds, () => ({
+        translationStatus: 'queued',
+      }));
     }
 
     setJobsAndPersist((jobs) => [...newJobs, ...jobs]);

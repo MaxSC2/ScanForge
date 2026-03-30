@@ -101,11 +101,13 @@ Desktop and browser translation now follow an explicit fallback chain:
 - `mock` -> `mock`
 
 The final provider used is persisted in region metadata, and the fallback path is surfaced in job summaries.
+When fallback happens, the effective provider route is also visible in region metadata after reload.
 
 ### Translation Rules
 
 - translation must be provider-independent at the service boundary
 - manual translated text must not be silently overwritten
+- manual translated text should be marked as manual state, not mistaken for provider output
 - overwrite should be explicit and opt-in
 - repeated phrases should eventually support cache or memory behavior
 - failures must be visible in Jobs and diagnostics
@@ -118,6 +120,13 @@ Persisted translation metadata includes:
 - `translationStatus`
 - `translationProvider`
 - `translationUpdatedAt`
+
+Translation lifecycle should surface these states clearly:
+
+- `queued`
+- `running`
+- `done`
+- `failed`
 
 ## Provider Contract Rules
 

@@ -241,6 +241,28 @@ fn provider_name(mode: &TranslationProviderMode) -> &'static str {
     }
 }
 
+fn describe_provider_label(provider: &str, provider_path: &[String]) -> String {
+    if provider_path.len() > 1 {
+        return format!(
+            "{} via {}",
+            provider,
+            provider_path[..provider_path.len() - 1].join(" -> ")
+        );
+    }
+
+    provider.to_string()
+}
+
+fn derive_region_status(region: &RegionRecord) -> String {
+    if !region.translated_text.trim().is_empty() {
+        "translated".into()
+    } else if !region.source_text.trim().is_empty() {
+        "ocr_done".into()
+    } else {
+        "idle".into()
+    }
+}
+
 fn apply_translation_result_to_region(
     repository: &DomainRepository,
     region: &RegionRecord,
@@ -256,6 +278,47 @@ fn apply_translation_result_to_region(
     updated_region.translation_status = "done".into();
     updated_region.translation_provider = Some(provider.to_string());
     updated_region.translation_updated_at = Some(processed_at);
+    repository.upsert_region(updated_region).map(|_| ())
+}
+
+fn apply_translation_skip_to_region(
+    repository: &DomainRepository,
+    region: &RegionRecord,
+    reason: &str,
+    provider: &str,
+    target_language: &str,
+    processed_at: i64,
+) -> Result<(), String> {
+    let mut updated_region = region.clone();
+
+    match reason {
+        "locked" => return Ok(()),
+        "already_translated" => {
+            updated_region.status = "translated".into();
+            updated_region.target_language = Some(target_language.to_string());
+            updated_region.translation_status = "done".into();
+            updated_region.translation_provider = updated_region
+                .translation_provider
+                .clone()
+                .or_else(|| Some(provider.to_string()));
+            updated_region.translation_updated_at =
+                updated_region.translation_updated_at.or(Some(processed_at));
+        }
+        "provider_unavailable" => {
+            updated_region.status = derive_region_status(&updated_region);
+            updated_region.target_language = Some(target_language.to_string());
+            updated_region.translation_status = "failed".into();
+            updated_region.translation_provider = Some(provider.to_string());
+            updated_region.translation_updated_at = Some(processed_at);
+        }
+        _ => {
+            updated_region.status = derive_region_status(&updated_region);
+            updated_region.target_language = Some(target_language.to_string());
+            updated_region.translation_status = "failed".into();
+            updated_region.translation_updated_at = Some(processed_at);
+        }
+    }
+
     repository.upsert_region(updated_region).map(|_| ())
 }
 
@@ -299,7 +362,8 @@ pub fn run_page_translation(
             requested_provider
         )
     })?;
-    let provider_label = provider_name(&provider).to_string();
+    let provider_name = provider_name(&provider).to_string();
+    let provider_label = describe_provider_label(&provider_name, &provider_path);
 
     let target_region_ids = region_ids.map(|ids| ids.into_iter().collect::<HashSet<_>>());
     let mut regions = repository.list_regions_by_page(page_id)?;
@@ -316,6 +380,14 @@ pub fn run_page_translation(
 
     for region in &regions {
         if region.locked {
+            apply_translation_skip_to_region(
+                &repository,
+                region,
+                "locked",
+                &provider_label,
+                &target_language,
+                processed_at,
+            )?;
             results.push(TranslationRegionResult {
                 region_id: region.id.clone(),
                 translated_text: None,
@@ -326,6 +398,14 @@ pub fn run_page_translation(
         }
 
         if region.source_text.trim().is_empty() {
+            apply_translation_skip_to_region(
+                &repository,
+                region,
+                "empty_source",
+                &provider_label,
+                &target_language,
+                processed_at,
+            )?;
             results.push(TranslationRegionResult {
                 region_id: region.id.clone(),
                 translated_text: None,
@@ -336,6 +416,14 @@ pub fn run_page_translation(
         }
 
         if !overwrite_existing && !region.translated_text.trim().is_empty() {
+            apply_translation_skip_to_region(
+                &repository,
+                region,
+                "already_translated",
+                &provider_label,
+                &target_language,
+                processed_at,
+            )?;
             results.push(TranslationRegionResult {
                 region_id: region.id.clone(),
                 translated_text: None,
@@ -378,7 +466,7 @@ pub fn run_page_translation(
     let skipped_count = results.len().saturating_sub(translated_count);
 
     Ok(TranslationPageResult {
-        provider: provider_label,
+        provider: provider_name,
         provider_path: if provider_path.is_empty() {
             None
         } else {

@@ -6,6 +6,7 @@ import { usePageStore } from './usePageStore';
 import { useHistoryStore } from './useHistoryStore';
 import { useEditorStore } from './useEditorStore';
 import { resolveRegionHistoryCaptureOptions } from './regionHistoryPolicy';
+import { applyRegionLifecyclePatch } from './regionLifecyclePolicy';
 import { useProjectStore } from './useProjectStore';
 
 interface RegionState {
@@ -74,7 +75,15 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     useHistoryStore.getState().capture(resolveRegionHistoryCaptureOptions(pageId, regionId, patch));
     mutatePage(pageId, (regions) =>
       regions
-        .map((r) => (r.id === regionId ? normalizeRegion({ ...r, ...patch }) : r))
+        .map((r) =>
+          r.id === regionId
+            ? normalizeRegion({
+                ...r,
+                ...patch,
+                ...applyRegionLifecyclePatch(r, patch),
+              })
+            : r,
+        )
         .sort((a, b) => a.order - b.order)
         .map((r, i) => ({ ...r, order: i + 1 })),
     );
