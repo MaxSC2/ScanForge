@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Region } from '../../types';
 import {
   getCanvasViewportBounds,
+  getMinimapViewport,
   getWheelViewportTransform,
   isRegionWithinViewport,
   shouldRenderRegionLabel,
@@ -101,6 +102,27 @@ describe('canvasPerformance', () => {
         x: -16,
         y: -8,
       },
+    });
+  });
+
+  it('computes minimap viewport bounds from the current stage transform', () => {
+    expect(
+      getMinimapViewport({
+        zoom: 2,
+        stagePosition: { x: -100, y: -50 },
+        imageWidth: 1000,
+        imageHeight: 2000,
+        stageWidth: 800,
+        stageHeight: 600,
+        mapWidth: 160,
+      }),
+    ).toEqual({
+      mapWidth: 160,
+      mapHeight: 320,
+      viewportX: 8,
+      viewportY: 4,
+      viewportWidth: 64,
+      viewportHeight: 48,
     });
   });
 });

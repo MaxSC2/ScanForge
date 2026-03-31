@@ -26,11 +26,25 @@ interface LabelVisibilityArgs {
   isSelected: boolean;
 }
 
+interface MinimapViewportArgs {
+  zoom: number;
+  stagePosition: { x: number; y: number };
+  imageWidth: number;
+  imageHeight: number;
+  stageWidth: number;
+  stageHeight: number;
+  mapWidth: number;
+}
+
 const VIEWPORT_PADDING = 120;
 const LABEL_VISIBILITY_MIN_ZOOM = 0.55;
 const CANVAS_ZOOM_MIN = 0.1;
 const CANVAS_ZOOM_MAX = 5;
 const WHEEL_ZOOM_FACTOR = 1.08;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
 
 export function getCanvasViewportBounds({
   zoom,
@@ -99,5 +113,38 @@ export function getWheelViewportTransform({
       x: pointer.x - pointerInPageSpace.x * clampedZoom,
       y: pointer.y - pointerInPageSpace.y * clampedZoom,
     },
+  };
+}
+
+export function getMinimapViewport({
+  zoom,
+  stagePosition,
+  imageWidth,
+  imageHeight,
+  stageWidth,
+  stageHeight,
+  mapWidth,
+}: MinimapViewportArgs) {
+  const aspect = imageHeight / imageWidth;
+  const mapHeight = mapWidth * aspect;
+  const scale = mapWidth / imageWidth;
+
+  const unclampedX = (-stagePosition.x / zoom) * scale;
+  const unclampedY = (-stagePosition.y / zoom) * scale;
+  const rawWidth = (stageWidth / zoom) * scale;
+  const rawHeight = (stageHeight / zoom) * scale;
+
+  const viewportX = clamp(unclampedX, 0, mapWidth);
+  const viewportY = clamp(unclampedY, 0, mapHeight);
+  const viewportWidth = clamp(rawWidth - Math.max(0, -unclampedX), 0, mapWidth - viewportX);
+  const viewportHeight = clamp(rawHeight - Math.max(0, -unclampedY), 0, mapHeight - viewportY);
+
+  return {
+    mapWidth,
+    mapHeight,
+    viewportX,
+    viewportY,
+    viewportWidth,
+    viewportHeight,
   };
 }

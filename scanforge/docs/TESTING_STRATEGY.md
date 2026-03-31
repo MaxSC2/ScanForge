@@ -90,6 +90,7 @@ When work touches OCR, translation, recovery, or export, also validate the affec
 - selected region affordances should remain visible even when label simplification is active
 - zoom interaction should not double-commit viewport state when a single wheel step is enough
 - cursor/status updates should stay readable without flooding store updates during rapid mouse movement
+- minimap viewport math should stay stable and should not force extra work from unrelated EditorCanvas re-renders
 
 ## Stage 4 Focus
 

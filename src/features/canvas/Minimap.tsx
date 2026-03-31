@@ -1,4 +1,6 @@
+import { memo, useMemo } from 'react';
 import { useEditorStore } from '../../stores/useEditorStore';
+import { getMinimapViewport } from './canvasPerformance';
 
 interface MinimapProps {
   imageUrl: string;
@@ -10,14 +12,7 @@ interface MinimapProps {
 
 const MINIMAP_W = 160;
 
-/**
- * A small overview of the full page, showing viewport position.
- */
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-export function Minimap({
+function MinimapBase({
   imageUrl,
   imageWidth,
   imageHeight,
@@ -27,27 +22,33 @@ export function Minimap({
   const zoom = useEditorStore((s) => s.zoom);
   const stagePos = useEditorStore((s) => s.stagePosition);
 
-  const aspect = imageHeight / imageWidth;
-  const mapW = MINIMAP_W;
-  const mapH = mapW * aspect;
-  const scale = mapW / imageWidth;
-
-  const unclampedX = (-stagePos.x / zoom) * scale;
-  const unclampedY = (-stagePos.y / zoom) * scale;
-  const rawW = (stageWidth / zoom) * scale;
-  const rawH = (stageHeight / zoom) * scale;
-  const vpX = clamp(unclampedX, 0, mapW);
-  const vpY = clamp(unclampedY, 0, mapH);
-  const vpW = clamp(rawW - Math.max(0, -unclampedX), 0, mapW - vpX);
-  const vpH = clamp(rawH - Math.max(0, -unclampedY), 0, mapH - vpY);
+  const viewport = useMemo(
+    () =>
+      getMinimapViewport({
+        zoom,
+        stagePosition: stagePos,
+        imageWidth,
+        imageHeight,
+        stageWidth,
+        stageHeight,
+        mapWidth: MINIMAP_W,
+      }),
+    [zoom, stagePos, imageWidth, imageHeight, stageWidth, stageHeight],
+  );
 
   return (
     <div
       className="absolute bottom-3 right-3 border border-zinc-700/60 rounded-lg overflow-hidden bg-zinc-900/90 backdrop-blur-sm shadow-lg shadow-black/30"
-      style={{ width: mapW, height: mapH }}
+      style={{ width: viewport.mapWidth, height: viewport.mapHeight }}
     >
       {/* Page preview */}
-      <img src={imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-75" />
+      <img
+        src={imageUrl}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover opacity-75"
+        decoding="async"
+        loading="eager"
+      />
       <div className="absolute inset-0 bg-black/20" />
 
       {/* Left/right anchors help read alignment quickly */}
@@ -58,10 +59,10 @@ export function Minimap({
       <div
         className="absolute border-2 border-indigo-500/60 bg-indigo-500/8 rounded-sm"
         style={{
-          left: vpX,
-          top: vpY,
-          width: vpW,
-          height: vpH,
+          left: viewport.viewportX,
+          top: viewport.viewportY,
+          width: viewport.viewportWidth,
+          height: viewport.viewportHeight,
         }}
       />
 
@@ -73,3 +74,8 @@ export function Minimap({
     </div>
   );
 }
+
+/**
+ * A small overview of the full page, showing viewport position.
+ */
+export const Minimap = memo(MinimapBase);
