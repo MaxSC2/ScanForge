@@ -5,6 +5,24 @@ export function buildRenderedPngName(fileName: string) {
   return `${base}-rendered.png`;
 }
 
+export function ensurePngOutputPath(path: string) {
+  const trimmed = path.trim();
+  const lastSeparator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  const directory = lastSeparator >= 0 ? trimmed.slice(0, lastSeparator + 1) : '';
+  const fileName = lastSeparator >= 0 ? trimmed.slice(lastSeparator + 1) : trimmed;
+  const extensionIndex = fileName.lastIndexOf('.');
+
+  if (extensionIndex <= 0) {
+    return `${trimmed}.png`;
+  }
+
+  if (fileName.slice(extensionIndex + 1).toLowerCase() === 'png') {
+    return trimmed;
+  }
+
+  return `${directory}${fileName.slice(0, extensionIndex)}.png`;
+}
+
 export function resolveTextStyle(
   region: RegionRecord,
   styles: TextStyleRecord[],

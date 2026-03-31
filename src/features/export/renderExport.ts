@@ -12,7 +12,12 @@ import {
   type RenderedExportResult,
   type TextStyleRecord,
 } from '../../types';
-import { buildRenderedPngName, computeSha256Hex, resolveTextStyle } from './renderHelpers';
+import {
+  buildRenderedPngName,
+  computeSha256Hex,
+  ensurePngOutputPath,
+  resolveTextStyle,
+} from './renderHelpers';
 
 interface RenderTextLayout {
   fontSize: number;
@@ -64,33 +69,34 @@ async function saveBlob(
   explicitPath?: string,
 ): Promise<SavedBlobResult> {
   if (isDesktopRuntime()) {
-    const path =
+    const rawPath =
       explicitPath ??
       (await save({
         title: 'Export rendered page',
         defaultPath: suggestedName,
         filters: [{ name: 'PNG image', extensions: ['png'] }],
       }));
-    if (!path) {
+    if (!rawPath) {
       return { saved: false, canceled: true };
     }
+    const outputPath = ensurePngOutputPath(rawPath);
     const bytes = new Uint8Array(await blob.arrayBuffer());
     try {
-      await writeFile(path, bytes);
+      await writeFile(outputPath, bytes);
     } catch (error) {
       throw toRenderedExportError(
         error,
         {
           reason: 'save_failed',
-          outputPath: path,
+          outputPath,
         },
-        `Failed to save rendered export to ${path}`,
+        `Failed to save rendered export to ${outputPath}`,
       );
     }
     return {
       saved: true,
       canceled: false,
-      outputPath: path,
+      outputPath,
     };
   }
 
@@ -111,11 +117,12 @@ export async function pickRenderedPageExportPath(page: Page): Promise<string | n
     return null;
   }
 
-  return save({
+  const rawPath = await save({
     title: 'Export rendered page',
     defaultPath: buildRenderedPngName(page.fileName),
     filters: [{ name: 'PNG image', extensions: ['png'] }],
   });
+  return rawPath ? ensurePngOutputPath(rawPath) : null;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -348,10 +355,10 @@ export async function exportRenderedPageAsPng(
       {
         reason: 'save_failed',
         translatedRegions,
-        ...(options.outputPath ? { outputPath: options.outputPath } : {}),
+        ...(options.outputPath ? { outputPath: ensurePngOutputPath(options.outputPath) } : {}),
       },
       options.outputPath
-        ? `Failed to save rendered export to ${options.outputPath}`
+        ? `Failed to save rendered export to ${ensurePngOutputPath(options.outputPath)}`
         : 'Failed to save rendered export',
     );
   }

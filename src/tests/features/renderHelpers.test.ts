@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRenderedPngName,
   computeSha256Hex,
+  ensurePngOutputPath,
   resolveTextStyle,
   shortenHash,
 } from '../../features/export/renderHelpers';
@@ -44,6 +45,16 @@ describe('renderHelpers', () => {
   it('appends rendered suffix to exported png names', () => {
     expect(buildRenderedPngName('page-01.png')).toBe('page-01-rendered.png');
     expect(buildRenderedPngName('chapter')).toBe('chapter-rendered.png');
+  });
+
+  it('normalizes desktop export targets to png paths', () => {
+    expect(ensurePngOutputPath('C:\\exports\\page-01')).toBe('C:\\exports\\page-01.png');
+    expect(ensurePngOutputPath('C:\\exports\\page-01.jpg')).toBe(
+      'C:\\exports\\page-01.png',
+    );
+    expect(ensurePngOutputPath('C:\\exports\\page-01.png')).toBe(
+      'C:\\exports\\page-01.png',
+    );
   });
 
   it('prefers region style over project default style', () => {
