@@ -73,6 +73,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - minimap viewport math is now isolated and the minimap is memoized so EditorCanvas re-renders do not force unnecessary minimap repaint work
 - pipeline job execution has been extracted from `useJobStore` into a dedicated service layer so stores stay orchestration-oriented instead of acting like mini-backends
 - toolbar action orchestration has been extracted into a feature hook and target-selection helpers so `Toolbar.tsx` stays UI-oriented instead of mixing persistence, queueing, and project file workflows
+- region inspector details, shared inspector UI parts, and inspector state orchestration have been split into dedicated modules so `RegionInspector.tsx` is no longer the place where all inspector concerns accumulate
 
 Recent commits on this branch:
 
@@ -108,6 +109,7 @@ Keep hardening Workstream G:
 
 - continue moving pipeline execution logic out of large Zustand stores and into service-layer modules
 - keep large feature components such as `Toolbar.tsx` focused on UI composition while hooks/helpers own action orchestration
+- keep feature-heavy containers such as `RegionInspector.tsx` thin by pushing details panes, shared UI primitives, and inspector state into dedicated modules
 - keep stores focused on queue orchestration and user intent rather than provider/repository implementation detail
 - avoid behavior changes unless they directly improve stability or keep existing semantics intact
 

@@ -131,3 +131,19 @@ Consequences:
 - `Toolbar.tsx` can stay focused on layout, menus, and visible controls
 - reusable behavior such as OCR/translation target derivation can be unit-tested without rendering the toolbar
 - future toolbar changes should extend `src/features/toolbar/useToolbarActions.ts` or pure helpers before growing the component body again
+
+### 2026-04-01 - Large feature containers should split local state and detail panes before they become architecture bottlenecks
+
+Decision:
+
+- split inspector-specific state, shared inspector UI primitives, and the region details pane out of `RegionInspector.tsx`
+
+Context:
+
+- `RegionInspector.tsx` had grown into a single file responsible for tab switching, inspector state, detail editing, region list rendering, shared accordion primitives, and drag/reorder UI
+
+Consequences:
+
+- feature-local modules can evolve independently without forcing every inspector change through one large component file
+- `RegionInspector.tsx` stays focused on top-level view switching and composition
+- future inspector work should extend local modules such as `useRegionInspector.ts`, `RegionDetailsPanel.tsx`, or `inspectorShared.tsx` before growing the container again

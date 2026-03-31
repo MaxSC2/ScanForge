@@ -28,6 +28,8 @@ UI components should stay presentation-oriented and should not become persistenc
 
 Feature-level hooks and pure helpers are an acceptable boundary when a component starts accumulating file I/O, queue targeting, or multi-store orchestration.
 
+The same rule applies inside large feature folders: detail panes, shared inspector widgets, and feature-local hooks should be split before one container file becomes the de facto architecture for the whole feature.
+
 ### State Layer
 
 Primary folders:
@@ -78,6 +80,7 @@ Stage 4 note:
 - `useJobStore` should orchestrate queue state, retries, and user intent
 - provider/repository-heavy execution paths should live in service modules such as `src/services/jobExecution.ts`
 - component-adjacent orchestration such as toolbar actions or target derivation can live in feature hooks/helpers such as `src/features/toolbar/useToolbarActions.ts` and `src/features/toolbar/toolbarTargets.ts`
+- inspector-specific state and reusable UI pieces can live in feature-local modules such as `src/features/inspector/useRegionInspector.ts`, `src/features/inspector/RegionDetailsPanel.tsx`, and `src/features/inspector/inspectorShared.tsx`
 
 ### Repository Layer
 
