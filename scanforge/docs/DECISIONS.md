@@ -147,3 +147,19 @@ Consequences:
 - feature-local modules can evolve independently without forcing every inspector change through one large component file
 - `RegionInspector.tsx` stays focused on top-level view switching and composition
 - future inspector work should extend local modules such as `useRegionInspector.ts`, `RegionDetailsPanel.tsx`, or `inspectorShared.tsx` before growing the container again
+
+### 2026-04-01 - Sidebar containers should split formatting, sections, and selector hooks before growing into mixed-responsibility components
+
+Decision:
+
+- move jobs-sidebar formatting helpers, section rendering, and sidebar state selection out of `JobsPanel.tsx`
+
+Context:
+
+- `JobsPanel.tsx` had accumulated string formatting, diagnostics presentation, queue rendering, counter derivation, and sidebar runtime state in one file
+
+Consequences:
+
+- `JobsPanel.tsx` stays focused on layout and section composition
+- formatting logic becomes reusable and testable without rendering the sidebar
+- future jobs-sidebar changes should prefer modules such as `useJobsPanel.ts`, `jobsPanelFormatting.ts`, `JobQueueSection.tsx`, and `DiagnosticsSection.tsx` before growing the container again

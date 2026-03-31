@@ -30,6 +30,8 @@ Feature-level hooks and pure helpers are an acceptable boundary when a component
 
 The same rule applies inside large feature folders: detail panes, shared inspector widgets, and feature-local hooks should be split before one container file becomes the de facto architecture for the whole feature.
 
+Sidebar features follow the same rule: formatting helpers, section components, and feature-local selector hooks should be split before a sidebar container accumulates data shaping, render logic, and runtime controls in one file.
+
 ### State Layer
 
 Primary folders:
@@ -81,6 +83,7 @@ Stage 4 note:
 - provider/repository-heavy execution paths should live in service modules such as `src/services/jobExecution.ts`
 - component-adjacent orchestration such as toolbar actions or target derivation can live in feature hooks/helpers such as `src/features/toolbar/useToolbarActions.ts` and `src/features/toolbar/toolbarTargets.ts`
 - inspector-specific state and reusable UI pieces can live in feature-local modules such as `src/features/inspector/useRegionInspector.ts`, `src/features/inspector/RegionDetailsPanel.tsx`, and `src/features/inspector/inspectorShared.tsx`
+- jobs-sidebar state selection, formatting, and section rendering can live in feature-local modules such as `src/features/sidebar/useJobsPanel.ts`, `src/features/sidebar/jobsPanelFormatting.ts`, `src/features/sidebar/JobQueueSection.tsx`, and `src/features/sidebar/DiagnosticsSection.tsx`
 
 ### Repository Layer
 

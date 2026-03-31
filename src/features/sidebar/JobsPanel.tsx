@@ -1,118 +1,23 @@
 import { useState } from 'react';
-import {
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-  CircleCheckBig,
-  Download,
-  Eraser,
-  Languages,
-  LoaderCircle,
-  RotateCcw,
-  ScanText,
-  Workflow,
-} from 'lucide-react';
-import { useDiagnosticsStore } from '../../stores/useDiagnosticsStore';
-import { useJobStore } from '../../stores/useJobStore';
-
-function formatClock(value: number | null) {
-  if (!value) return '--';
-  return new Intl.DateTimeFormat('ru-RU', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(value);
-}
-
-function formatTarget(job: { regionIds?: string[] }) {
-  if (!job.regionIds?.length) {
-    return 'страница';
-  }
-
-  return job.regionIds.length === 1 ? '1 регион' : `${job.regionIds.length} регионов`;
-}
-
-function formatReason(reason: string) {
-  switch (reason) {
-    case 'already_filled':
-      return 'уже заполнено';
-    case 'already_translated':
-      return 'уже переведено';
-    case 'invalid_bounds':
-      return 'неверные границы';
-    case 'no_text':
-      return 'нет текста';
-    case 'locked':
-      return 'заблокировано';
-    case 'empty_source':
-      return 'пустой исходник';
-    case 'provider_unavailable':
-      return 'провайдер недоступен';
-    case 'canceled':
-      return 'отменено';
-    default:
-      return reason.replace(/_/g, ' ');
-  }
-}
-
-function formatScope(scope: string) {
-  switch (scope) {
-    case 'ocr':
-      return 'OCR';
-    case 'translation':
-      return 'Перевод';
-    case 'export':
-      return 'Экспорт';
-    case 'recovery':
-      return 'Восстановление';
-    case 'autosave':
-      return 'Автосохранение';
-    case 'project':
-      return 'Проект';
-    default:
-      return 'Система';
-  }
-}
-
-function formatStatus(status: string) {
-  switch (status) {
-    case 'queued':
-      return 'в очереди';
-    case 'running':
-      return 'в работе';
-    case 'done':
-      return 'готово';
-    case 'failed':
-      return 'ошибка';
-    default:
-      return status;
-  }
-}
-
-function diagnosticDotClass(level: string) {
-  switch (level) {
-    case 'error':
-      return 'bg-red-400';
-    case 'warning':
-      return 'bg-amber-400';
-    default:
-      return 'bg-zinc-500';
-  }
-}
+import { Workflow } from 'lucide-react';
+import { DiagnosticsSection } from './DiagnosticsSection';
+import { JobQueueSection } from './JobQueueSection';
+import { useJobsPanel } from './useJobsPanel';
 
 export function JobsPanel() {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const jobs = useJobStore((state) => state.jobs);
-  const processing = useJobStore((state) => state.processing);
-  const retryJob = useJobStore((state) => state.retryJob);
-  const clearFinished = useJobStore((state) => state.clearFinished);
-  const diagnostics = useDiagnosticsStore((state) => state.entries);
-  const clearDiagnostics = useDiagnosticsStore((state) => state.clear);
-
-  const runningCount = jobs.filter((job) => job.status === 'running').length;
-  const queuedCount = jobs.filter((job) => job.status === 'queued').length;
-  const failedCount = jobs.filter((job) => job.status === 'failed').length;
-  const recentDiagnostics = diagnostics.slice(0, 6);
+  const {
+    jobs,
+    processing,
+    retryJob,
+    clearFinished,
+    diagnostics,
+    clearDiagnostics,
+    runningCount,
+    queuedCount,
+    failedCount,
+    recentDiagnostics,
+  } = useJobsPanel();
 
   return (
     <section className="flex-none border-b border-zinc-800">
@@ -125,207 +30,23 @@ export function JobsPanel() {
       </div>
 
       <div className="space-y-2 px-2 pb-2">
-        <div className="grid grid-cols-3 gap-1 text-[10px]">
-          <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
-            <div className="text-zinc-600">В работе</div>
-            <div className="mt-1 text-xs font-semibold text-zinc-200">{runningCount}</div>
-          </div>
-          <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
-            <div className="text-zinc-600">В очереди</div>
-            <div className="mt-1 text-xs font-semibold text-zinc-200">{queuedCount}</div>
-          </div>
-          <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
-            <div className="text-zinc-600">Ошибки</div>
-            <div className="mt-1 text-xs font-semibold text-zinc-200">{failedCount}</div>
-          </div>
-        </div>
+        <JobQueueSection
+          jobs={jobs}
+          processing={processing}
+          runningCount={runningCount}
+          queuedCount={queuedCount}
+          failedCount={failedCount}
+          retryJob={retryJob}
+          clearFinished={clearFinished}
+        />
 
-        <div className="flex items-center gap-1">
-          <div className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-500">
-            {processing ? (
-              <LoaderCircle size={11} className="animate-spin text-indigo-400" />
-            ) : (
-              <ScanText size={11} className="text-zinc-500" />
-            )}
-            {processing ? 'Пайплайн активен' : 'Пайплайн ожидает'}
-          </div>
-
-          <button
-            onClick={clearFinished}
-            className="ml-auto inline-flex h-7 items-center justify-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            title="Очистить завершенные и ошибочные задачи"
-          >
-            <Eraser size={11} />
-            Очистить
-          </button>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40">
-          {jobs.length === 0 ? (
-            <div className="px-3 py-4 text-center">
-              <p className="text-[11px] font-medium text-zinc-400">Очередь задач пуста</p>
-              <p className="mt-1 text-[10px] text-zinc-600">
-                Запусти OCR, перевод или экспорт через верхнюю панель.
-              </p>
-            </div>
-          ) : (
-            <ul className="max-h-56 overflow-y-auto p-1">
-              {jobs.map((job) => {
-                const stageLabel =
-                  job.stage === 'ocr' ? 'OCR' : job.stage === 'translate' ? 'Перевод' : 'Экспорт';
-                const statusIcon =
-                  job.status === 'running' ? (
-                    <LoaderCircle size={12} className="animate-spin text-indigo-400" />
-                  ) : job.status === 'done' ? (
-                    <CircleCheckBig size={12} className="text-emerald-400" />
-                  ) : job.status === 'failed' ? (
-                    <CircleAlert size={12} className="text-amber-400" />
-                  ) : job.stage === 'export' ? (
-                    <Download size={12} className="text-zinc-500" />
-                  ) : job.stage === 'translate' ? (
-                    <Languages size={12} className="text-zinc-500" />
-                  ) : (
-                    <ScanText size={12} className="text-zinc-500" />
-                  );
-
-                return (
-                  <li key={job.id} className="rounded-md px-2 py-2 text-left hover:bg-zinc-900/70">
-                    <div className="flex items-start gap-2">
-                      <div className="mt-0.5">{statusIcon}</div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[11px] font-medium text-zinc-200">
-                          {stageLabel} · {job.pageName}
-                        </div>
-                        <div className="mt-1 text-[10px] text-zinc-500">{job.message}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-zinc-600">
-                          {formatTarget(job)}
-                        </div>
-                        {job.result?.reasons?.length ? (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {job.result.reasons.map((reason) => (
-                              <span
-                                key={`${job.id}-${reason.reason}`}
-                                className={`rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${
-                                  reason.kind === 'failure'
-                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                                    : 'border-zinc-700 bg-zinc-900/70 text-zinc-400'
-                                }`}
-                              >
-                                {formatReason(reason.reason)} x{reason.count}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                          <div
-                            className={`h-full rounded-full ${
-                              job.status === 'failed'
-                                ? 'bg-amber-500'
-                                : job.status === 'done'
-                                  ? 'bg-emerald-500'
-                                  : 'bg-indigo-500'
-                            }`}
-                            style={{ width: `${Math.max(6, job.progress * 100)}%` }}
-                          />
-                        </div>
-                        <div className="mt-2 flex items-center gap-2 text-[10px] text-zinc-600">
-                          <span>{formatStatus(job.status)}</span>
-                          <span>{formatClock(job.finishedAt ?? job.startedAt ?? job.createdAt)}</span>
-                        </div>
-                        {job.error ? (
-                          <div className="mt-1 text-[10px] text-amber-400">{job.error}</div>
-                        ) : null}
-                        {job.status === 'failed' ? (
-                          <button
-                            onClick={() => retryJob(job.id)}
-                            className="mt-2 inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-800"
-                          >
-                            <RotateCcw size={10} />
-                            Повторить
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40">
-          <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setDiagnosticsOpen((state) => !state)}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-200"
-            >
-              {diagnosticsOpen ? (
-                <ChevronDown size={12} className="text-zinc-500" />
-              ) : (
-                <ChevronRight size={12} className="text-zinc-500" />
-              )}
-              <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                Диагностика
-              </span>
-              <span className="text-[10px] tabular-nums text-zinc-600">{diagnostics.length}</span>
-            </button>
-            <button
-              onClick={clearDiagnostics}
-              className="inline-flex h-6 items-center rounded-md border border-zinc-800 bg-zinc-900 px-2 text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              title="Очистить журнал диагностики"
-            >
-              Очистить
-            </button>
-          </div>
-
-          {!diagnosticsOpen ? (
-            <div className="px-3 py-3 text-[10px] text-zinc-600">
-              Недавние предупреждения и сообщения восстановления скрыты, чтобы не перегружать боковую панель.
-            </div>
-          ) : recentDiagnostics.length === 0 ? (
-            <div className="px-3 py-4 text-center">
-              <p className="text-[11px] font-medium text-zinc-400">Нет недавней диагностики</p>
-              <p className="mt-1 text-[10px] text-zinc-600">
-                Здесь будут появляться предупреждения пайплайна и ошибки восстановления.
-              </p>
-            </div>
-          ) : (
-            <ul className="max-h-40 overflow-y-auto p-1">
-              {recentDiagnostics.map((entry) => (
-                <li key={entry.id} className="rounded-md px-2 py-2 hover:bg-zinc-900/70">
-                  <div className="flex items-start gap-2">
-                    <span
-                      className={`mt-1 h-2 w-2 flex-none rounded-full ${diagnosticDotClass(entry.level)}`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-[11px] font-medium text-zinc-200">
-                          {entry.message}
-                        </div>
-                        {entry.count > 1 ? (
-                          <span className="rounded-full border border-zinc-700 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-zinc-400">
-                            x{entry.count}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-wide text-zinc-600">
-                        <span>{formatScope(entry.scope)}</span>
-                        <span>{entry.level}</span>
-                        <span>{formatClock(entry.timestamp)}</span>
-                      </div>
-                      {entry.detail ? (
-                        <div className="mt-1 break-words text-[10px] text-zinc-500" title={entry.detail}>
-                          {entry.detail}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <DiagnosticsSection
+          diagnosticsOpen={diagnosticsOpen}
+          onToggle={() => setDiagnosticsOpen((state) => !state)}
+          diagnostics={diagnostics}
+          recentDiagnostics={recentDiagnostics}
+          clearDiagnostics={clearDiagnostics}
+        />
       </div>
     </section>
   );

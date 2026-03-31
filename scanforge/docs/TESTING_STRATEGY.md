@@ -26,6 +26,7 @@ What exists today:
 - Vitest coverage for render helper logic
 - Vitest coverage for region history checkpoint policy
 - Vitest coverage for toolbar target derivation helpers
+- Vitest coverage for jobs-sidebar formatting helpers
 
 What does not exist yet:
 
