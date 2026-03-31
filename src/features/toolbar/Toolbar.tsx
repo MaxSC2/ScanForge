@@ -23,22 +23,11 @@ import {
 } from 'lucide-react';
 import { IconButton } from '../../components/IconButton';
 import { StitchDialog } from '../../components/StitchDialog';
-import { pickRenderedPageExportPath } from '../export/renderExport';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
-import { useJobStore } from '../../stores/useJobStore';
-import { usePageStore } from '../../stores/usePageStore';
-import { useProjectStore } from '../../stores/useProjectStore';
-import { useRegionStore } from '../../stores/useRegionStore';
 import { useToastStore } from '../../stores/useToastStore';
-import {
-  exportPageImage,
-  hydrateProjectFile,
-  openProjectFile,
-  saveProjectFile,
-} from '../../utils/persistence';
-import { getStitchPreview, suggestSafeStitch } from '../../utils/stitch';
-import { isDesktopRuntime } from '../../utils/runtime';
+import { exportPageImage } from '../../utils/persistence';
+import { useToolbarActions } from './useToolbarActions';
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -46,26 +35,10 @@ export function Toolbar() {
   const [stitchDialogOpen, setStitchDialogOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
 
-  const addPages = usePageStore((state) => state.addPages);
-  const setProjectState = usePageStore((state) => state.setProjectState);
-  const toProjectFile = usePageStore((state) => state.toProjectFile);
-  const selectedPageIds = usePageStore((state) => state.selectedPageIds);
-  const activePageId = usePageStore((state) => state.activePageId);
-  const pages = usePageStore((state) => state.pages);
-  const stitchOptions = usePageStore((state) => state.stitchOptions);
-  const setStitchOptions = usePageStore((state) => state.setStitchOptions);
-  const stitchPages = usePageStore((state) => state.stitchPages);
-  const stitching = usePageStore((state) => state.stitching);
-
-  const queueOcrJobs = useJobStore((state) => state.queueOcrJobs);
-  const queueTranslationJobs = useJobStore((state) => state.queueTranslationJobs);
-  const queueExportJobs = useJobStore((state) => state.queueExportJobs);
-
   const undo = useHistoryStore((state) => state.undo);
   const redo = useHistoryStore((state) => state.redo);
   const canUndo = useHistoryStore((state) => state.canUndo);
   const canRedo = useHistoryStore((state) => state.canRedo);
-  const clearHistory = useHistoryStore((state) => state.clear);
 
   const tool = useEditorStore((state) => state.tool);
   const setTool = useEditorStore((state) => state.setTool);
@@ -85,28 +58,26 @@ export function Toolbar() {
   const resetZoom = useEditorStore((state) => state.resetZoom);
 
   const pushToast = useToastStore((state) => state.push);
-  const setMeta = useProjectStore((state) => state.setMeta);
-  const selectedRegionId = useRegionStore((state) => state.selectedRegionId);
+  const {
+    activePage,
+    selectedPageIds,
+    stitchOptions,
+    setStitchOptions,
+    stitchPages,
+    canStitch,
+    canRunOcr,
+    canRunTranslation,
+    stitchPreview,
+    safeSuggestion,
+    handleFiles,
+    handleStitch,
+    handleOcr,
+    handleTranslate,
+    handleSaveProject,
+    handleExportActive,
+    handleOpenProject,
+  } = useToolbarActions();
 
-  const activePage = activePageId ? pages.find((page) => page.id === activePageId) : null;
-  const selectedSet = new Set(selectedPageIds);
-  const selectedPagesInOrder = pages.filter((page) => selectedSet.has(page.id));
-  const ocrTargets =
-    selectedRegionId && activePageId
-      ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
-      : (selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : []).map(
-          (pageId) => ({ pageId }),
-        );
-  const translationTargets =
-    selectedRegionId && activePageId
-      ? [{ pageId: activePageId, regionIds: [selectedRegionId] }]
-      : (selectedPageIds.length > 0 ? selectedPageIds : activePageId ? [activePageId] : []).map(
-          (pageId) => ({ pageId }),
-        );
-
-  const canStitch = selectedPageIds.length >= 2 && !stitching;
-  const canRunOcr = ocrTargets.length > 0;
-  const canRunTranslation = translationTargets.length > 0;
   const viewModeLabel = {
     manual: 'Ручной',
     'fit-page': 'По странице',
@@ -119,28 +90,6 @@ export function Toolbar() {
     { id: 'draw', icon: <Square size={14} />, label: 'Рисование региона', shortcut: 'R' },
     { id: 'pan', icon: <Hand size={14} />, label: 'Панорама', shortcut: 'H' },
   ];
-
-  const stitchPreview =
-    selectedPagesInOrder.length >= 2
-      ? getStitchPreview(
-          selectedPagesInOrder.map((page) => ({
-            width: page.naturalWidth,
-            height: page.naturalHeight,
-          })),
-          stitchOptions,
-        )
-      : null;
-
-  const safeSuggestion =
-    selectedPagesInOrder.length >= 2
-      ? suggestSafeStitch(
-          selectedPagesInOrder.map((page) => ({
-            width: page.naturalWidth,
-            height: page.naturalHeight,
-          })),
-          stitchOptions,
-        )
-      : null;
 
   useEffect(() => {
     if (!viewMenuOpen) return;
@@ -165,94 +114,6 @@ export function Toolbar() {
       window.removeEventListener('keydown', handleEscape);
     };
   }, [viewMenuOpen]);
-
-  const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    if (files.length > 0) {
-      void addPages(files);
-      pushToast(`Загружено страниц: ${files.length}`, 'success');
-    }
-    event.target.value = '';
-  };
-
-  const handleStitch = async () => {
-    if (!canStitch) return;
-    const page = await stitchPages(selectedPageIds, stitchOptions);
-
-    if (!page) {
-      pushToast('Выбери минимум две страницы для склейки', 'info');
-      return;
-    }
-
-    if (stitchOptions.exportAfterStitch) {
-      await exportPageImage(page);
-    }
-
-    pushToast(`Создано: ${page.fileName}. Страниц: ${selectedPageIds.length}`, 'success');
-  };
-
-  const handleOcr = () => {
-    const queued = queueOcrJobs(ocrTargets);
-    if (queued === 0) {
-      pushToast('OCR уже выполняется для выбранных страниц или страницы не выбраны', 'warning');
-    }
-  };
-
-  const handleTranslate = () => {
-    const queued = queueTranslationJobs(translationTargets);
-    if (queued === 0) {
-      pushToast('Перевод уже стоит в очереди для выбранной цели или ничего не выбрано', 'warning');
-    }
-  };
-
-  const handleSaveProject = async () => {
-    try {
-      const data = await toProjectFile();
-      await saveProjectFile(data);
-      pushToast('Проект сохранен', 'success');
-    } catch {
-      pushToast('Не удалось сохранить проект', 'error');
-    }
-  };
-
-  const handleExportActive = async () => {
-    if (!activePage) return;
-
-    const outputPath = await pickRenderedPageExportPath(activePage);
-    if (!outputPath && isDesktopRuntime()) {
-      return;
-    }
-
-    const queued = queueExportJobs([
-      {
-        pageId: activePage.id,
-        ...(outputPath ? { outputPath } : {}),
-      },
-    ]);
-    if (queued === 0) {
-      pushToast('Экспорт уже стоит в очереди для активной страницы или страница не выбрана', 'warning');
-    }
-  };
-
-  const handleOpenProject = async () => {
-    try {
-      const data = await openProjectFile();
-      if (!data) return;
-
-      const hydrated = await hydrateProjectFile(data);
-      setMeta(hydrated.meta);
-      setProjectState({
-        pages: hydrated.pages,
-        activePageId: hydrated.activePageId,
-      });
-      await useJobStore.getState().loadJobsForCurrentProject();
-      clearHistory();
-      pushToast('Проект загружен', 'success');
-      requestFitToPage();
-    } catch {
-      pushToast('Не удалось открыть проект', 'error');
-    }
-  };
 
   return (
     <>
@@ -513,7 +374,11 @@ function ViewMenuItem({
           : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'
       }`}
     >
-      <span className={`flex h-5 w-5 items-center justify-center rounded-md ${active ? 'bg-indigo-500/10 text-indigo-300' : 'bg-zinc-900 text-zinc-500'}`}>
+      <span
+        className={`flex h-5 w-5 items-center justify-center rounded-md ${
+          active ? 'bg-indigo-500/10 text-indigo-300' : 'bg-zinc-900 text-zinc-500'
+        }`}
+      >
         {icon ?? <Check size={12} className={active ? 'opacity-100' : 'opacity-0'} />}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>

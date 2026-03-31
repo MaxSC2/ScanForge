@@ -115,3 +115,19 @@ Consequences:
 - stores stay responsible for queue state and user intent
 - pipeline execution becomes easier to locate and evolve in service modules
 - future provider or recovery changes should extend service boundaries before growing store complexity further
+
+### 2026-04-01 - Toolbar action orchestration should live in feature hooks/helpers
+
+Decision:
+
+- move toolbar-specific action orchestration and target derivation out of `Toolbar.tsx` into feature-level hooks and pure helpers
+
+Context:
+
+- the toolbar had accumulated project file workflows, export dispatch, OCR and translation target selection, stitch preview behavior, and multiple store interactions in one UI component
+
+Consequences:
+
+- `Toolbar.tsx` can stay focused on layout, menus, and visible controls
+- reusable behavior such as OCR/translation target derivation can be unit-tested without rendering the toolbar
+- future toolbar changes should extend `src/features/toolbar/useToolbarActions.ts` or pure helpers before growing the component body again

@@ -26,6 +26,8 @@ Responsibilities:
 
 UI components should stay presentation-oriented and should not become persistence or provider layers.
 
+Feature-level hooks and pure helpers are an acceptable boundary when a component starts accumulating file I/O, queue targeting, or multi-store orchestration.
+
 ### State Layer
 
 Primary folders:
@@ -75,6 +77,7 @@ Stage 4 note:
 
 - `useJobStore` should orchestrate queue state, retries, and user intent
 - provider/repository-heavy execution paths should live in service modules such as `src/services/jobExecution.ts`
+- component-adjacent orchestration such as toolbar actions or target derivation can live in feature hooks/helpers such as `src/features/toolbar/useToolbarActions.ts` and `src/features/toolbar/toolbarTargets.ts`
 
 ### Repository Layer
 

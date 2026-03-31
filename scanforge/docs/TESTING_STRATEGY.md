@@ -25,6 +25,7 @@ What exists today:
 - Vitest coverage for region lifecycle policy after manual source/translation edits
 - Vitest coverage for render helper logic
 - Vitest coverage for region history checkpoint policy
+- Vitest coverage for toolbar target derivation helpers
 
 What does not exist yet:
 
