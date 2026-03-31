@@ -71,6 +71,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - canvas now culls offscreen region overlays and hides non-selected labels at low zoom to reduce needless redraw pressure on heavier pages
 - wheel zoom now applies viewport changes in one batched transform and cursor updates are frame-throttled to reduce store churn during pan/zoom work
 - minimap viewport math is now isolated and the minimap is memoized so EditorCanvas re-renders do not force unnecessary minimap repaint work
+- pipeline job execution has been extracted from `useJobStore` into a dedicated service layer so stores stay orchestration-oriented instead of acting like mini-backends
 
 Recent commits on this branch:
 
@@ -94,19 +95,19 @@ Workstreams with meaningful progress:
 - Workstream D - Canvas Performance
 - Workstream E - Export System v2
 - Workstream F - Error Handling and Observability
+- Workstream G - Architecture Readiness
 
 Workstreams still needing real progress:
 
 - Workstream E - Export System v2
-- Workstream G - Architecture Readiness
 
 ## Next Recommended Slice
 
-Keep hardening Workstream D:
+Keep hardening Workstream G:
 
-- validate overlay responsiveness on heavier pages with larger region counts
-- profile minimap and viewport redraw behavior during repeated zoom/pan
-- keep performance improvements inside rendering/canvas boundaries instead of adding unrelated editor features
+- continue moving pipeline execution logic out of large Zustand stores and into service-layer modules
+- keep stores focused on queue orchestration and user intent rather than provider/repository implementation detail
+- avoid behavior changes unless they directly improve stability or keep existing semantics intact
 
 ## Required Verification For New Work
 

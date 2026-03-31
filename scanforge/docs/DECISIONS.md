@@ -99,3 +99,19 @@ Consequences:
 - `CURRENT_STAGE.md` becomes the daily entry point
 - architecture/provider/testing updates should be recorded when behavior changes materially
 - templates should be used to structure tasks, refactors, bugs, and decisions
+
+### 2026-04-01 - Job execution belongs in services, not inside large stores
+
+Decision:
+
+- move queued OCR, translation, and export execution out of `useJobStore` and into service-layer modules
+
+Context:
+
+- `useJobStore` had accumulated queue orchestration, provider execution, repository refreshes, diagnostics, and export behavior in one large file
+
+Consequences:
+
+- stores stay responsible for queue state and user intent
+- pipeline execution becomes easier to locate and evolve in service modules
+- future provider or recovery changes should extend service boundaries before growing store complexity further

@@ -63,12 +63,18 @@ Primary folders:
 Current responsibilities:
 
 - OCR and translation execution entry points
+- queued job execution and pipeline-stage dispatch
 - project sync before pipeline actions
 - job result summarization
 - rendered export helper logic
 - diagnostics formatting
 
 Services should contain pipeline behavior, not React component logic.
+
+Stage 4 note:
+
+- `useJobStore` should orchestrate queue state, retries, and user intent
+- provider/repository-heavy execution paths should live in service modules such as `src/services/jobExecution.ts`
 
 ### Repository Layer
 
