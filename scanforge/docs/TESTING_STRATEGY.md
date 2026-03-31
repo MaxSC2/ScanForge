@@ -27,6 +27,7 @@ What exists today:
 - Vitest coverage for region history checkpoint policy
 - Vitest coverage for toolbar target derivation helpers
 - Vitest coverage for jobs-sidebar formatting helpers
+- Vitest coverage for job queue normalization and queued-job construction helpers
 
 What does not exist yet:
 

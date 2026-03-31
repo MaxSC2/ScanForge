@@ -179,3 +179,19 @@ Consequences:
 - `EditorCanvas.tsx` stays focused on stage rendering and visible layer composition
 - canvas runtime behavior is easier to evolve without rewriting the whole container
 - future canvas work should prefer modules such as `useEditorCanvas.tsx` and `CanvasEmptyState.tsx` before growing the stage container again
+
+### 2026-04-01 - Job stores should delegate queue fabrication details to pure queue services
+
+Decision:
+
+- move target normalization, active-queue signature checks, retry-target derivation, and queued-job construction out of `useJobStore` into a pure queue service
+
+Context:
+
+- `useJobStore` had already delegated execution to `jobExecution`, but still contained repeated logic for deduping targets, constructing queue signatures, and creating new `JobRecord` objects for OCR, translation, and export
+
+Consequences:
+
+- `useJobStore` stays closer to orchestration, retries, and user intent
+- queue fabrication logic becomes reusable and testable without mutating store state
+- future queueing changes should prefer `src/services/jobQueue.ts` before growing `useJobStore` with another copy of target-processing logic

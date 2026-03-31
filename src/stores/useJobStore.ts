@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { v4 as uuid } from 'uuid';
 import {
   mergeJobsWithRepository,
   syncJobsForProject,
@@ -12,6 +11,12 @@ import {
   runQueuedJob,
   updateTranslationTargetsInEditor,
 } from '../services/jobExecution';
+import {
+  buildQueuedJobs,
+  buildRetryTarget,
+  filterQueueTargets,
+  normalizeQueueTargets,
+} from '../services/jobQueue';
 import type { JobRecord } from '../types';
 import { useDiagnosticsStore } from './useDiagnosticsStore';
 import { usePageStore } from './usePageStore';
@@ -94,74 +99,22 @@ async function pumpQueue() {
   }
 }
 
-function buildTranslationJobSignature(pageId: string, regionIds?: string[]) {
-  return `${pageId}:${(regionIds ?? []).slice().sort().join(',')}`;
-}
-
-function buildOcrJobSignature(pageId: string, regionIds?: string[]) {
-  return `${pageId}:${(regionIds ?? []).slice().sort().join(',')}`;
-}
-
-function buildExportJobSignature(pageId: string) {
-  return pageId;
-}
-
 export const useJobStore = create<JobState>((set, get) => ({
   jobs: [],
   processing: false,
 
   queueOcrJobs: (targets) => {
-    const normalizedTargets = targets
-      .filter((target) => target.pageId)
-      .map((target) => ({
-        pageId: target.pageId,
-        ...(target.regionIds?.length ? { regionIds: Array.from(new Set(target.regionIds)) } : {}),
-      }));
-    const activeSignatures = new Set(
-      get()
-        .jobs.filter(
-          (job) => job.stage === 'ocr' && (job.status === 'queued' || job.status === 'running'),
-        )
-        .map((job) => buildOcrJobSignature(job.pageId, job.regionIds)),
-    );
+    const normalizedTargets = normalizeQueueTargets('ocr', targets);
     const pagesById = new Map(
       usePageStore.getState().pages.map((page) => [page.id, page] as const),
     );
-    const filteredTargets = normalizedTargets.filter(
-      (target) => !activeSignatures.has(buildOcrJobSignature(target.pageId, target.regionIds)),
-    );
+    const filteredTargets = filterQueueTargets('ocr', normalizedTargets, get().jobs);
 
     if (filteredTargets.length === 0) {
       return 0;
     }
 
-    const createdAt = Date.now();
-    const newJobs: JobRecord[] = filteredTargets
-      .map((target, index) => {
-        const page = pagesById.get(target.pageId);
-        if (!page) {
-          return null;
-        }
-
-        return {
-          id: uuid(),
-          stage: 'ocr' as const,
-          status: 'queued' as const,
-          pageId: target.pageId,
-          pageName: page.fileName,
-          ...(target.regionIds?.length ? { regionIds: target.regionIds } : {}),
-          createdAt: createdAt + index,
-          startedAt: null,
-          finishedAt: null,
-          progress: 0,
-          message: target.regionIds?.length
-            ? `Queued OCR for ${target.regionIds.length} region(s)`
-            : 'Queued for OCR',
-          error: null,
-          result: null,
-        };
-      })
-      .filter((job): job is JobRecord => job !== null);
+    const newJobs = buildQueuedJobs('ocr', filteredTargets, pagesById, Date.now());
 
     if (newJobs.length === 0) {
       return 0;
@@ -182,58 +135,17 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   queueTranslationJobs: (targets) => {
-    const normalizedTargets = targets
-      .filter((target) => target.pageId)
-      .map((target) => ({
-        pageId: target.pageId,
-        ...(target.regionIds?.length ? { regionIds: Array.from(new Set(target.regionIds)) } : {}),
-      }));
-    const activeSignatures = new Set(
-      get()
-        .jobs.filter(
-          (job) =>
-            job.stage === 'translate' && (job.status === 'queued' || job.status === 'running'),
-        )
-        .map((job) => buildTranslationJobSignature(job.pageId, job.regionIds)),
-    );
+    const normalizedTargets = normalizeQueueTargets('translate', targets);
     const pagesById = new Map(
       usePageStore.getState().pages.map((page) => [page.id, page] as const),
     );
-    const filteredTargets = normalizedTargets.filter(
-      (target) => !activeSignatures.has(buildTranslationJobSignature(target.pageId, target.regionIds)),
-    );
+    const filteredTargets = filterQueueTargets('translate', normalizedTargets, get().jobs);
 
     if (filteredTargets.length === 0) {
       return 0;
     }
 
-    const createdAt = Date.now();
-    const newJobs: JobRecord[] = filteredTargets
-      .map((target, index) => {
-        const page = pagesById.get(target.pageId);
-        if (!page) {
-          return null;
-        }
-
-        return {
-          id: uuid(),
-          stage: 'translate' as const,
-          status: 'queued' as const,
-          pageId: target.pageId,
-          pageName: page.fileName,
-          ...(target.regionIds?.length ? { regionIds: target.regionIds } : {}),
-          createdAt: createdAt + index,
-          startedAt: null,
-          finishedAt: null,
-          progress: 0,
-          message: target.regionIds?.length
-            ? `Queued translation for ${target.regionIds.length} region(s)`
-            : 'Queued for translation',
-          error: null,
-          result: null,
-        };
-      })
-      .filter((job): job is JobRecord => job !== null);
+    const newJobs = buildQueuedJobs('translate', filteredTargets, pagesById, Date.now());
 
     if (newJobs.length === 0) {
       return 0;
@@ -247,50 +159,17 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   queueExportJobs: (targets) => {
-    const normalizedTargets = targets.filter((target) => target.pageId);
-    const activeSignatures = new Set(
-      get()
-        .jobs.filter(
-          (job) => job.stage === 'export' && (job.status === 'queued' || job.status === 'running'),
-        )
-        .map((job) => buildExportJobSignature(job.pageId)),
-    );
+    const normalizedTargets = normalizeQueueTargets('export', targets);
     const pagesById = new Map(
       usePageStore.getState().pages.map((page) => [page.id, page] as const),
     );
-    const filteredTargets = normalizedTargets.filter(
-      (target) => !activeSignatures.has(buildExportJobSignature(target.pageId)),
-    );
+    const filteredTargets = filterQueueTargets('export', normalizedTargets, get().jobs);
 
     if (filteredTargets.length === 0) {
       return 0;
     }
 
-    const createdAt = Date.now();
-    const newJobs: JobRecord[] = filteredTargets
-      .map((target, index) => {
-        const page = pagesById.get(target.pageId);
-        if (!page) {
-          return null;
-        }
-
-        return {
-          id: uuid(),
-          stage: 'export' as const,
-          status: 'queued' as const,
-          pageId: target.pageId,
-          pageName: page.fileName,
-          ...(target.outputPath ? { outputPath: target.outputPath } : {}),
-          createdAt: createdAt + index,
-          startedAt: null,
-          finishedAt: null,
-          progress: 0,
-          message: 'Queued for rendered export',
-          error: null,
-          result: null,
-        };
-      })
-      .filter((job): job is JobRecord => job !== null);
+    const newJobs = buildQueuedJobs('export', filteredTargets, pagesById, Date.now());
 
     if (newJobs.length === 0) {
       return 0;
@@ -346,13 +225,10 @@ export const useJobStore = create<JobState>((set, get) => ({
     const job = get().jobs.find((item) => item.id === jobId);
     if (!job) return;
 
+    const target = buildRetryTarget(job);
+
     if (job.stage === 'translate') {
-      get().queueTranslationJobs([
-        {
-          pageId: job.pageId,
-          ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
-        },
-      ]);
+      get().queueTranslationJobs([target]);
       return;
     }
 
@@ -363,12 +239,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       return;
     }
 
-    get().queueOcrJobs([
-      {
-        pageId: job.pageId,
-        ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
-      },
-    ]);
+    get().queueOcrJobs([target]);
   },
 
   clearFinished: () =>

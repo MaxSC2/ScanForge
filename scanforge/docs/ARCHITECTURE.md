@@ -72,6 +72,7 @@ Current responsibilities:
 
 - OCR and translation execution entry points
 - queued job execution and pipeline-stage dispatch
+- queue-target normalization and queued-job construction helpers
 - project sync before pipeline actions
 - job result summarization
 - rendered export helper logic
@@ -83,6 +84,7 @@ Stage 4 note:
 
 - `useJobStore` should orchestrate queue state, retries, and user intent
 - provider/repository-heavy execution paths should live in service modules such as `src/services/jobExecution.ts`
+- queue fabrication details such as target normalization, active-signature dedupe, and queued-job creation can live in pure service modules such as `src/services/jobQueue.ts`
 - component-adjacent orchestration such as toolbar actions or target derivation can live in feature hooks/helpers such as `src/features/toolbar/useToolbarActions.ts` and `src/features/toolbar/toolbarTargets.ts`
 - inspector-specific state and reusable UI pieces can live in feature-local modules such as `src/features/inspector/useRegionInspector.ts`, `src/features/inspector/RegionDetailsPanel.tsx`, and `src/features/inspector/inspectorShared.tsx`
 - jobs-sidebar state selection, formatting, and section rendering can live in feature-local modules such as `src/features/sidebar/useJobsPanel.ts`, `src/features/sidebar/jobsPanelFormatting.ts`, `src/features/sidebar/JobQueueSection.tsx`, and `src/features/sidebar/DiagnosticsSection.tsx`
