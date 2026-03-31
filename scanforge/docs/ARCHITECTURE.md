@@ -88,6 +88,7 @@ Stage 4 note:
 - component-adjacent orchestration such as toolbar actions or target derivation can live in feature hooks/helpers such as `src/features/toolbar/useToolbarActions.ts` and `src/features/toolbar/toolbarTargets.ts`
 - inspector-specific state and reusable UI pieces can live in feature-local modules such as `src/features/inspector/useRegionInspector.ts`, `src/features/inspector/RegionDetailsPanel.tsx`, and `src/features/inspector/inspectorShared.tsx`
 - jobs-sidebar state selection, formatting, and section rendering can live in feature-local modules such as `src/features/sidebar/useJobsPanel.ts`, `src/features/sidebar/jobsPanelFormatting.ts`, `src/features/sidebar/JobQueueSection.tsx`, and `src/features/sidebar/DiagnosticsSection.tsx`
+- pages-sidebar tab switching and page-list rendering can live in feature-local modules such as `src/features/sidebar/SidebarTabs.tsx` and `src/features/sidebar/PagesPanel.tsx`
 - canvas-specific runtime state and presentation can live in feature-local modules such as `src/features/canvas/useEditorCanvas.tsx` and `src/features/canvas/CanvasEmptyState.tsx`
 
 ### Repository Layer

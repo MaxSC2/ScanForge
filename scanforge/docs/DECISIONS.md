@@ -195,3 +195,19 @@ Consequences:
 - `useJobStore` stays closer to orchestration, retries, and user intent
 - queue fabrication logic becomes reusable and testable without mutating store state
 - future queueing changes should prefer `src/services/jobQueue.ts` before growing `useJobStore` with another copy of target-processing logic
+
+### 2026-04-01 - Sidebar switchers should split tab controls and content panels before turning into nested monoliths
+
+Decision:
+
+- move sidebar tabs and pages-list rendering out of `PagesSidebar.tsx` into dedicated sidebar modules
+
+Context:
+
+- `PagesSidebar.tsx` had started combining view switching, project refresh bootstrapping, tab rendering, and the full draggable pages list in one file
+
+Consequences:
+
+- `PagesSidebar.tsx` stays focused on high-level view selection and composition
+- sidebar tab UI and page-list rendering can evolve independently
+- future sidebar work should extend modules such as `SidebarTabs.tsx` and `PagesPanel.tsx` before growing the switcher container again

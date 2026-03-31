@@ -77,6 +77,7 @@ If there is a conflict, the current stage scope wins over ad-hoc ideas.
 - jobs sidebar formatting, queue rendering, diagnostics rendering, and sidebar state selection have been split into feature-local modules so `JobsPanel.tsx` stays a thin composition layer
 - editor canvas state, viewport handlers, drawing flow, and context-menu state have been extracted into a dedicated feature hook so `EditorCanvas.tsx` focuses on stage composition instead of owning the whole canvas runtime
 - job target normalization, active-queue signature checks, retry-target derivation, and queued-job creation have been extracted into a dedicated queue service so `useJobStore` stays closer to queue orchestration than queue fabrication details
+- pages sidebar tabs and page-list rendering have been split into dedicated sidebar modules so `PagesSidebar.tsx` now stays focused on high-level view switching and composition
 
 Recent commits on this branch:
 
@@ -116,6 +117,7 @@ Keep hardening Workstream G:
 - keep sidebar-heavy containers such as `JobsPanel.tsx` thin by separating formatting, section rendering, and sidebar state selection into feature-local modules
 - keep canvas-heavy containers such as `EditorCanvas.tsx` thin by moving viewport state, drawing handlers, and runtime-only coordination into feature-local hooks/components
 - keep `useJobStore` focused on queue orchestration by pushing target normalization and queued-job construction into pure queue services
+- keep sidebar switchers such as `PagesSidebar.tsx` thin by moving tabs and page-list rendering into dedicated sidebar modules
 - keep stores focused on queue orchestration and user intent rather than provider/repository implementation detail
 - avoid behavior changes unless they directly improve stability or keep existing semantics intact
 
