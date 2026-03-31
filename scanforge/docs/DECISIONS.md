@@ -163,3 +163,19 @@ Consequences:
 - `JobsPanel.tsx` stays focused on layout and section composition
 - formatting logic becomes reusable and testable without rendering the sidebar
 - future jobs-sidebar changes should prefer modules such as `useJobsPanel.ts`, `jobsPanelFormatting.ts`, `JobQueueSection.tsx`, and `DiagnosticsSection.tsx` before growing the container again
+
+### 2026-04-01 - Canvas containers should split runtime hooks and empty-state presentation before becoming mini-frameworks
+
+Decision:
+
+- move editor-canvas runtime state and handlers out of `EditorCanvas.tsx` into a dedicated feature hook and split the empty canvas state into its own component
+
+Context:
+
+- `EditorCanvas.tsx` had accumulated viewport fitting, pointer tracking, draw-mode behavior, drag/drop state, context-menu state, and empty-state presentation in one file on top of the actual Konva stage composition
+
+Consequences:
+
+- `EditorCanvas.tsx` stays focused on stage rendering and visible layer composition
+- canvas runtime behavior is easier to evolve without rewriting the whole container
+- future canvas work should prefer modules such as `useEditorCanvas.tsx` and `CanvasEmptyState.tsx` before growing the stage container again
