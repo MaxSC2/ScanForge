@@ -35,6 +35,7 @@ export function ImageProcessingPanel() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const generatePreview = useCallback(async (url: string, opts: ImageProcessOptions) => {
@@ -96,7 +97,11 @@ export function ImageProcessingPanel() {
 
   const previewImage = processing
     ? null
-    : previewUrl ?? activePage?.imageUrl ?? null;
+    : showOriginal
+      ? activePage?.imageUrl ?? null
+      : previewUrl ?? activePage?.imageUrl ?? null;
+
+  const isDifferent = previewUrl && activePage && previewUrl !== activePage.imageUrl;
 
   return (
     <AccordionSection
@@ -107,11 +112,21 @@ export function ImageProcessingPanel() {
       <div className="space-y-3">
         <div className="relative flex items-center justify-center overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/50">
           {previewImage ? (
-            <img
-              src={previewImage}
-              alt="Preview"
-              className="max-h-32 w-full object-contain"
-            />
+            <>
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="max-h-32 w-full object-contain"
+              />
+              {isDifferent && (
+                <button
+                  onClick={() => setShowOriginal((v) => !v)}
+                  className="absolute bottom-1 right-1 rounded border border-zinc-700/60 bg-zinc-900/80 px-1.5 py-0.5 text-[8px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  {showOriginal ? 'После' : 'До'}
+                </button>
+              )}
+            </>
           ) : (
             <div className="flex h-20 items-center justify-center">
               {processing ? (

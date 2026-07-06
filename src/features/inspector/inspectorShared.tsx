@@ -208,6 +208,7 @@ export function RegionListPanel({
 }) {
   const [filter, setFilter] = useState('');
   const selectRegion = useRegionStore((state) => state.selectRegion);
+  const selectAllRegions = useRegionStore((state) => state.selectAllRegions);
   const updateRegion = useRegionStore((state) => state.updateRegion);
   const batchUpdateRegions = useRegionStore((state) => state.batchUpdateRegions);
   const reorderRegions = useRegionStore((state) => state.reorderRegions);
@@ -247,6 +248,27 @@ export function RegionListPanel({
           Регионы
         </span>
         <span className="text-[10px] tabular-nums text-zinc-600">{regions.length}</span>
+      </div>
+
+      <div className="flex gap-1 px-2 pb-1.5">
+        <button
+          onClick={() => batchUpdateRegions(pageId, regions.map((r) => r.id), { visible: true })}
+          className="rounded px-1.5 py-0.5 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+        >
+          Показать все
+        </button>
+        <button
+          onClick={() => batchUpdateRegions(pageId, regions.map((r) => r.id), { visible: false })}
+          className="rounded px-1.5 py-0.5 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+        >
+          Скрыть все
+        </button>
+        <button
+          onClick={() => selectAllRegions()}
+          className="rounded px-1.5 py-0.5 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+        >
+          Выбрать все
+        </button>
       </div>
 
       {regions.length > 4 && (

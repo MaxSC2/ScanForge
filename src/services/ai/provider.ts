@@ -31,7 +31,7 @@ class OpenAIProvider implements AiProvider {
       }));
     }
 
-    const res = await fetch(`${this.config.endpoint}/chat/completions`, {
+    const res = await fetch(`${this.config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -81,7 +81,7 @@ class AnthropicProvider implements AiProvider {
       }));
     }
 
-    const res = await fetch(this.config.endpoint, {
+    const res = await fetch(this.config.baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ class OllamaProvider implements AiProvider {
       }));
     }
 
-    const res = await fetch(`${this.config.endpoint}/api/chat`, {
+    const res = await fetch(`${this.config.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -152,7 +152,7 @@ class OllamaProvider implements AiProvider {
     return {
       content: json.message?.content ?? '',
       toolCalls: (json.message?.tool_calls ?? []).map((tc: Record<string, unknown>) => ({
-        id: tc.id as string ?? `ollama-${Date.now()}`,
+        id: String(tc?.id ?? `ollama-${Date.now()}`),
         name: (tc.function as Record<string, string>).name,
         arguments: (tc.function as Record<string, unknown>).arguments as Record<string, unknown>,
       })),

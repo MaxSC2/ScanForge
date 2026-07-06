@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Book } from 'lucide-react';
 import { PlusIcon, SearchIcon, Trash2Icon } from '../icons';
 import { useGlossaryStore } from '../stores/useGlossaryStore';
@@ -10,12 +10,15 @@ export function GlossaryPanel() {
   const updateEntry = useGlossaryStore((s) => s.updateEntry);
   const removeEntry = useGlossaryStore((s) => s.removeEntry);
   const search = useGlossaryStore((s) => s.search);
+  const importJSON = useGlossaryStore((s) => s.importJSON);
+  const exportJSON = useGlossaryStore((s) => s.exportJSON);
 
   const [query, setQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [source, setSource] = useState('');
   const [translated, setTranslated] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   const filtered = query.trim() ? search(query) : entries;
 
@@ -60,6 +63,46 @@ export function GlossaryPanel() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск в глоссарии..."
             className="w-full rounded-md border border-zinc-800 bg-zinc-900 py-1 pl-6 pr-2 text-[10px] text-zinc-300 placeholder-zinc-600"
+          />
+        </div>
+
+        <div className="flex gap-1">
+          <button
+            onClick={() => importRef.current?.click()}
+            className="flex-1 rounded border border-zinc-800 py-1 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            Импорт JSON
+          </button>
+          <button
+            onClick={() => {
+              const json = exportJSON();
+              const blob = new Blob([json], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'glossary.json';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex-1 rounded border border-zinc-800 py-1 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            Экспорт JSON
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                importJSON(await file.text());
+              } catch (err) {
+                alert(err instanceof Error ? err.message : 'Ошибка импорта');
+              }
+              e.target.value = '';
+            }}
           />
         </div>
 

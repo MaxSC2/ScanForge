@@ -10,6 +10,8 @@ interface GlossaryState {
   removeEntry: (id: string) => void;
   lookup: (source: string, language?: string) => string | undefined;
   search: (query: string) => GlossaryEntry[];
+  importJSON: (json: string) => void;
+  exportJSON: () => string;
 }
 
 function loadEntries(): GlossaryEntry[] {
@@ -88,5 +90,22 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
         e.source.toLowerCase().includes(q) ||
         e.translated.toLowerCase().includes(q),
     );
+  },
+
+  importJSON: (json) => {
+    try {
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed)) throw new Error('Expected array');
+      const entries = parsed as GlossaryEntry[];
+      persistEntries(entries);
+      set({ entries });
+    } catch (err) {
+      throw new Error(`Ошибка импорта: ${err instanceof Error ? err.message : 'Invalid format'}`);
+    }
+  },
+
+  exportJSON: () => {
+    const { entries } = get();
+    return JSON.stringify(entries, null, 2);
   },
 }));

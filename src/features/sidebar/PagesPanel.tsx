@@ -26,6 +26,7 @@ export function PagesPanel() {
   const selectedPageIds = usePageStore((state) => state.selectedPageIds);
   const selectPage = usePageStore((state) => state.selectPage);
   const removePage = usePageStore((state) => state.removePage);
+  const removePages = usePageStore((state) => state.removePages);
   const duplicatePage = usePageStore((state) => state.duplicatePage);
   const reorderPage = usePageStore((state) => state.reorderPage);
   const clearPageSelection = usePageStore((state) => state.clearPageSelection);
@@ -218,7 +219,7 @@ export function PagesPanel() {
         confirmLabel={`Удалить (${selectedPageIds.length})`}
         destructive
         onConfirm={() => {
-          for (const id of selectedPageIds) removePage(id);
+          removePages(selectedPageIds);
           setConfirmBatchDelete(false);
         }}
         onCancel={() => setConfirmBatchDelete(false)}

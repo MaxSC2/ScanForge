@@ -452,17 +452,21 @@ function AiSettings() {
   const [apiKey, setApiKey] = useState(config?.apiKey ?? '');
   const [baseUrl, setBaseUrl] = useState(config?.baseUrl ?? '');
   const [model, setModel] = useState(config?.model ?? 'gpt-4o');
+  const [maxTokens, setMaxTokens] = useState(config?.maxTokens ?? 4096);
+  const [temperature, setTemperature] = useState(config?.temperature ?? 0.7);
 
   const inputClass =
     'w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2 text-[11px] text-zinc-200 placeholder-zinc-600 focus:border-indigo-500/50 focus:outline-none';
 
   const handleSave = () => {
-    if (!apiKey.trim()) return;
+    if (!apiKey.trim() && provider !== 'ollama') return;
     setConfig({
       provider: provider as 'openai' | 'anthropic' | 'ollama',
       apiKey: apiKey.trim(),
-      baseUrl: baseUrl.trim() || undefined,
-      model: model.trim() || undefined,
+      baseUrl: baseUrl.trim() || getDefaultBaseUrl(provider),
+      model: model.trim() || getDefaultModel(provider),
+      maxTokens,
+      temperature,
     });
   };
 
@@ -471,7 +475,21 @@ function AiSettings() {
     setApiKey('');
     setBaseUrl('');
     setModel('gpt-4o');
+    setMaxTokens(4096);
+    setTemperature(0.7);
   };
+
+  function getDefaultBaseUrl(p: string): string {
+    if (p === 'ollama') return 'http://localhost:11434/v1';
+    if (p === 'anthropic') return 'https://api.anthropic.com/v1';
+    return 'https://api.openai.com/v1';
+  }
+
+  function getDefaultModel(p: string): string {
+    if (p === 'ollama') return 'llama3.2';
+    if (p === 'anthropic') return 'claude-sonnet-4-20250514';
+    return 'gpt-4o';
+  }
 
   return (
     <div className="p-5">
@@ -543,6 +561,36 @@ function AiSettings() {
           <span className="text-[9px] text-zinc-600">
             Полное имя модели, например: gpt-4o, claude-sonnet-4-20250514, llama3.2
           </span>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Max tokens
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={128000}
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(Number(e.target.value))}
+              className={inputClass}
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Temperature
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={2}
+              step={0.1}
+              value={temperature}
+              onChange={(e) => setTemperature(Number(e.target.value))}
+              className={inputClass}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 pt-1">

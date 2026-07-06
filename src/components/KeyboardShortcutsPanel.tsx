@@ -20,6 +20,7 @@ const SECTIONS: { title: string; items: ShortcutEntry[] }[] = [
     title: 'Регионы',
     items: [
       { keys: ['Del'], label: 'Удалить выбранный регион' },
+      { keys: ['Ctrl+Shift+A'], label: 'Выбрать все регионы на странице' },
       { keys: ['↑ ↓ ← →'], label: 'Сдвинуть регион на 1px' },
       { keys: ['Shift', '↑ ↓ ← →'], label: 'Сдвинуть регион на 10px' },
       { keys: ['Alt', '↑ ↓ ← →'], label: 'Изменить размер региона' },

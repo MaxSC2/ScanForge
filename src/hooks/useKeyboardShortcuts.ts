@@ -232,6 +232,12 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (ctrl && event.shiftKey && key === 'a') {
+        event.preventDefault();
+        useRegionStore.getState().selectAllRegions();
+        return;
+      }
+
       if (ctrl && key === 'd') {
         event.preventDefault();
         const pageId = usePageStore.getState().activePageId;

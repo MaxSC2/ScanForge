@@ -28,6 +28,7 @@ interface PageState {
 
   addPages: (files: File[]) => Promise<void>;
   removePage: (id: string) => void;
+  removePages: (ids: string[]) => void;
   duplicatePage: (pageId: string) => void;
   setActivePage: (id: string | null) => void;
   goToAdjacentPage: (direction: 'previous' | 'next') => void;
@@ -162,6 +163,39 @@ export const usePageStore = create<PageState>((set, get) => ({
         selectedPageIds: s.selectedPageIds.filter((pageId) => pageId !== id),
         lastSelectedPageId:
           s.lastSelectedPageId === id ? (remaining[0]?.id ?? null) : s.lastSelectedPageId,
+      };
+    });
+    useProjectStore.getState().touch();
+  },
+
+  removePages: (ids: string[]) => {
+    const { pages } = get();
+    const idSet = new Set(ids);
+    for (const id of ids) {
+      const page = pages.find((p) => p.id === id);
+      if (page && !page.imagePath.startsWith('data:') && isDesktopRuntime()) {
+        const projectId = useProjectStore.getState().meta.localProjectId;
+        if (projectId) {
+          invoke('delete_page_image', { projectId, pageId: id }).catch(() => {});
+        }
+      }
+    }
+
+    useHistoryStore.getState().capture();
+    set((s) => {
+      const remaining = s.pages.filter((p) => !idSet.has(p.id));
+      const activePageId =
+        s.activePageId && idSet.has(s.activePageId)
+          ? (remaining[0]?.id ?? null)
+          : s.activePageId;
+      return {
+        pages: remaining,
+        activePageId,
+        selectedPageIds: s.selectedPageIds.filter((pid) => !idSet.has(pid)),
+        lastSelectedPageId:
+          s.lastSelectedPageId && idSet.has(s.lastSelectedPageId)
+            ? (remaining[0]?.id ?? null)
+            : s.lastSelectedPageId,
       };
     });
     useProjectStore.getState().touch();

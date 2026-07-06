@@ -3,7 +3,7 @@ export type AiProviderId = 'openai' | 'anthropic' | 'ollama';
 export interface AiConfig {
   provider: AiProviderId;
   apiKey: string;
-  endpoint: string;
+  baseUrl: string;
   model: string;
   maxTokens: number;
   temperature: number;

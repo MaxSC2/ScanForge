@@ -14,6 +14,7 @@ interface RegionState {
   multiSelectedRegionIds: string[];
 
   selectRegion: (id: string | null, shift?: boolean) => void;
+  selectAllRegions: () => void;
   getSelectedRegion: () => Region | undefined;
   getMultiSelectedRegions: () => Region[];
   clearMultiSelect: () => void;
@@ -51,6 +52,13 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     } else {
       set({ selectedRegionId: id, multiSelectedRegionIds: [] });
     }
+  },
+
+  selectAllRegions: () => {
+    const page = usePageStore.getState().getActivePage();
+    if (!page || page.regions.length === 0) return;
+    const ids = [...page.regions].sort((a, b) => a.order - b.order).map((r) => r.id);
+    set({ selectedRegionId: ids[0] ?? null, multiSelectedRegionIds: ids });
   },
 
   getSelectedRegion: () => {
