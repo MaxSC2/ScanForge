@@ -1,20 +1,22 @@
 import {
   AlertTriangle,
   CheckCircle2,
-  Eye,
-  EyeOff,
-  Focus,
-  Grid3X3,
-  Languages,
-  Layers,
   LoaderCircle,
   Map,
-  MousePointer2,
-  Save,
-  ScanText,
   Tag,
-  ZoomIn,
 } from 'lucide-react';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  FocusIcon,
+  Grid3X3Icon,
+  LanguagesIcon,
+  LayersIcon,
+  MousePointer2Icon,
+  SaveIcon,
+  ScanTextIcon,
+  ZoomInIcon,
+} from '../icons';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
@@ -102,7 +104,7 @@ export function StatusBar() {
         ? {
             label: 'Автосохранение ожидает',
             title: 'Изменения проекта стоят в очереди на автосохранение',
-            icon: <Save size={11} />,
+            icon: <SaveIcon size={11} />,
             className: 'text-zinc-400',
           }
         : saveState === 'error'
@@ -125,7 +127,7 @@ export function StatusBar() {
     <footer className="flex h-7 flex-none select-none items-center gap-0 border-t border-zinc-800 bg-zinc-900 px-1 text-[11px] text-zinc-500">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="flex items-center gap-1 pl-1">
-          <MousePointer2 size={11} />
+          <MousePointer2Icon size={11} />
           {toolLabels[tool]}
         </span>
 
@@ -148,7 +150,7 @@ export function StatusBar() {
         )}
 
         <span className="flex items-center gap-1">
-          <Layers size={11} />
+          <LayersIcon size={11} />
           Регионов: {regionCount}
         </span>
 
@@ -160,14 +162,14 @@ export function StatusBar() {
 
         {(runningJobs > 0 || queuedJobs > 0) && (
           <span className="flex items-center gap-1 text-zinc-400">
-            <ScanText size={11} />
+            <ScanTextIcon size={11} />
             Задачи: {runningJobs} в работе / {queuedJobs} в очереди
           </span>
         )}
 
         {translationQueued > 0 && (
           <span className="flex items-center gap-1 text-zinc-400">
-            <Languages size={11} />
+            <LanguagesIcon size={11} />
             Перевод: {translationQueued}
           </span>
         )}
@@ -178,7 +180,7 @@ export function StatusBar() {
 
         {focusMode && (
           <span className="flex items-center gap-1 text-zinc-400">
-            <Focus size={11} />
+            <FocusIcon size={11} />
             Фокус-режим
           </span>
         )}
@@ -202,16 +204,18 @@ export function StatusBar() {
       <div className="flex items-center gap-1">
         <button
           onClick={toggleGrid}
+          aria-label="Сетка (G)"
           className={`rounded p-1 transition-colors ${
             gridVisible ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'
           }`}
           title="Сетка (G)"
         >
-          <Grid3X3 size={12} />
+          <Grid3X3Icon size={12} />
         </button>
 
         <button
           onClick={toggleLabels}
+          aria-label="Подписи регионов"
           className={`rounded p-1 transition-colors ${
             labelsVisible ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'
           }`}
@@ -222,16 +226,18 @@ export function StatusBar() {
 
         <button
           onClick={toggleRegionOverlays}
+          aria-label="Показать или скрыть оверлеи регионов"
           className={`rounded p-1 transition-colors ${
             regionOverlaysVisible ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'
           }`}
           title="Показать или скрыть оверлеи регионов"
         >
-          {regionOverlaysVisible ? <Eye size={12} /> : <EyeOff size={12} />}
+          {regionOverlaysVisible ? <EyeIcon size={12} /> : <EyeOffIcon size={12} />}
         </button>
 
         <button
           onClick={toggleMinimap}
+          aria-label="Миникарта"
           className={`rounded p-1 transition-colors ${
             minimapVisible ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'
           }`}
@@ -249,7 +255,7 @@ export function StatusBar() {
         <div className="mx-1 h-3.5 w-px bg-zinc-800" />
 
         <span className="flex w-16 items-center justify-end gap-1 pr-1 tabular-nums">
-          <ZoomIn size={11} />
+          <ZoomInIcon size={11} />
           {Math.round(zoom * 100)}%
         </span>
       </div>

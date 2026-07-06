@@ -1,18 +1,25 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { pageRepository } from '../repositories/pageRepository';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import { regionRepository } from '../repositories/regionRepository';
 import { useDiagnosticsStore } from '../stores/useDiagnosticsStore';
 import { useProjectStore } from '../stores/useProjectStore';
-import type { OcrEngineId, OcrPageResult, Page, RegionRecord } from '../types';
+import type {
+  OcrEngineId,
+  OcrErrorDetail,
+  OcrPageResult,
+  OcrProgressCallback,
+  OcrProgressEvent,
+  OcrRegionResult,
+  OcrRunOptions,
+  OcrRunOptionsWithAbort,
+  Page,
+  RegionRecord,
+} from '../types';
 import { isDesktopRuntime } from '../utils/runtime';
 
-type OcrProgressCallback = (progress: number, message: string) => void;
-
-export interface OcrRunOptions {
-  regionIds?: string[];
-  overwriteExisting?: boolean;
-}
+export type { OcrRunOptions, OcrRunOptionsWithAbort };
 
 interface StoredOcrContext {
   fileName: string;
@@ -69,8 +76,31 @@ function buildPreviewText(context: StoredOcrContext, region: StoredOcrContext['r
   return `OCR preview: ${pageStem(context.fileName)} / text / ${label} / ${coverage}%`;
 }
 
+function emitError(
+  pageId: string,
+  detail: OcrErrorDetail,
+) {
+  console.error(`[ScanForge][OCR] ${detail.provider}: ${detail.message}`);
+  useDiagnosticsStore.getState().record({
+    scope: 'ocr',
+    level: 'error',
+    message: `[${detail.provider}] ${detail.message}`,
+    detail: `recoverable: ${detail.recoverable}`,
+    ...(useProjectStore.getState().meta.localProjectId
+      ? { projectId: useProjectStore.getState().meta.localProjectId }
+      : {}),
+    pageId,
+  });
+}
+
+function assertNotAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw new DOMException('OCR cancelled', 'AbortError');
+  }
+}
+
 function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext {
-  const fallbackRecords = page.regions.map((region, index) => ({
+  const fallbackRecords: RegionRecord[] = page.regions.map((region, index) => ({
     id: region.id,
     pageId: page.id,
     x: region.x,
@@ -102,6 +132,9 @@ function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext
     ...(typeof region.ocrConfidence === 'number'
       ? { ocrConfidence: region.ocrConfidence }
       : {}),
+    ...(typeof region.ocrOverwriteEnabled === 'boolean'
+      ? { ocrOverwriteEnabled: region.ocrOverwriteEnabled }
+      : {}),
   }));
 
   return {
@@ -118,11 +151,15 @@ function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext
   };
 }
 
-async function loadStoredOcrContext(page: Page, options: OcrRunOptions): Promise<StoredOcrContext> {
+async function loadStoredOcrContext(page: Page, options: OcrRunOptions, signal?: AbortSignal): Promise<StoredOcrContext> {
+  assertNotAborted(signal);
+
   const [pageRecord, regionRecords] = await Promise.all([
     pageRepository.getById(page.id),
     regionRepository.getByPage(page.id),
   ]);
+
+  assertNotAborted(signal);
 
   if (!pageRecord || regionRecords.length === 0) {
     return toFallbackContext(page, options);
@@ -144,10 +181,21 @@ async function loadStoredOcrContext(page: Page, options: OcrRunOptions): Promise
   };
 }
 
+export function computeAverageConfidence(results: OcrRegionResult[]): number | undefined {
+  const withConfidence = results.filter(
+    (r): r is OcrRegionResult & { confidence: number } =>
+      !r.skipped && typeof r.confidence === 'number',
+  );
+  if (withConfidence.length === 0) return undefined;
+  const sum = withConfidence.reduce((acc, r) => acc + r.confidence, 0);
+  return Math.round((sum / withConfidence.length) * 100) / 100;
+}
+
 async function applyBrowserOcrResult(
   context: StoredOcrContext,
   regions: StoredOcrContext['regions'],
   results: OcrPageResult['results'],
+  signal?: AbortSignal,
 ) {
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
@@ -155,6 +203,8 @@ async function applyBrowserOcrResult(
 
   await Promise.all(
     regions.map(async ({ record }) => {
+      assertNotAborted(signal);
+
       const result = resultMap.get(record.id);
       if (!result) {
         return;
@@ -194,15 +244,18 @@ async function applyBrowserOcrResult(
 
 async function runBrowserPreviewOcr(
   page: Page,
-  options: OcrRunOptions = {},
+  options: OcrRunOptionsWithAbort = {},
   onProgress?: OcrProgressCallback,
 ): Promise<OcrPageResult> {
-  const context = await loadStoredOcrContext(page, options);
+  const { signal, ...runOptions } = options;
+  assertNotAborted(signal);
+
+  const context = await loadStoredOcrContext(page, runOptions, signal);
   if (context.regions.length === 0) {
     throw new Error('No regions selected for OCR');
   }
 
-  const overwriteExisting = options.overwriteExisting ?? false;
+  const overwriteExisting = runOptions.overwriteExisting ?? false;
   const engineName = toPreviewEngineName(String(context.ocrEngine));
   const providerPath =
     context.ocrEngine === 'mock' ? [engineName] : [String(context.ocrEngine), engineName];
@@ -223,12 +276,16 @@ async function runBrowserPreviewOcr(
       pageId: page.id,
     });
   }
-  const results: OcrPageResult['results'] = [];
+  const results: OcrRegionResult[] = [];
 
   for (let index = 0; index < context.regions.length; index += 1) {
+    assertNotAborted(signal);
     const region = context.regions[index];
     await new Promise((resolve) => window.setTimeout(resolve, 90));
 
+    assertNotAborted(signal);
+
+    const regionOverwrite = region.record.ocrOverwriteEnabled ?? false;
     if (region.record.locked) {
       results.push({
         regionId: region.record.id,
@@ -236,7 +293,7 @@ async function runBrowserPreviewOcr(
         skipped: true,
         reason: 'locked',
       });
-    } else if (!overwriteExisting && region.record.sourceText.trim()) {
+    } else if (!(overwriteExisting || regionOverwrite) && region.record.sourceText.trim()) {
       results.push({
         regionId: region.record.id,
         text: null,
@@ -267,8 +324,10 @@ async function runBrowserPreviewOcr(
 
   const filledCount = results.filter((item) => !item.skipped && item.text).length;
   const skippedCount = results.length - filledCount;
+  const failedCount = results.filter((item) => item.reason === 'invalid_bounds' || item.reason === 'no_text').length;
+  const averageConfidence = computeAverageConfidence(results);
 
-  await applyBrowserOcrResult(context, context.regions, results);
+  await applyBrowserOcrResult(context, context.regions, results, signal);
 
   return {
     engine: engineName,
@@ -276,25 +335,77 @@ async function runBrowserPreviewOcr(
     regionsProcessed: results.length,
     filledCount,
     skippedCount,
+    failedCount,
     results,
+    averageConfidence,
   };
 }
 
 export async function runPageOcr(
   page: Page,
-  options: OcrRunOptions = {},
+  options: OcrRunOptionsWithAbort = {},
   onProgress?: OcrProgressCallback,
 ): Promise<OcrPageResult> {
-  if (!isDesktopRuntime()) {
-    onProgress?.(0.2, 'Running browser OCR preview');
-    return runBrowserPreviewOcr(page, options, onProgress);
+  const { signal } = options;
+
+  if (signal?.aborted) {
+    throw new DOMException('OCR cancelled before start', 'AbortError');
   }
 
-  onProgress?.(0.25, 'Reading OCR input from domain storage');
-  onProgress?.(0.55, 'Running Tauri OCR backend');
-  return invoke<OcrPageResult>('run_page_ocr', {
-    pageId: page.id,
-    regionIds: options.regionIds,
-    overwriteExisting: options.overwriteExisting ?? false,
-  });
+  if (!isDesktopRuntime()) {
+    onProgress?.(0.2, 'Running browser OCR preview');
+    try {
+      return await runBrowserPreviewOcr(page, options, onProgress);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+      const detail: OcrErrorDetail = {
+        provider: 'browser-preview',
+        message: error instanceof Error ? error.message : 'Unknown browser OCR error',
+        recoverable: true,
+      };
+      emitError(page.id, detail);
+      throw detail;
+    }
+  }
+
+  onProgress?.(0.05, 'Starting OCR');
+
+  let unlisten: UnlistenFn | undefined;
+  try {
+    unlisten = await listen<OcrProgressEvent>('ocr-progress', (event) => {
+      onProgress?.(event.payload.progress, event.payload.message);
+    });
+
+    onProgress?.(0.25, 'Running Tauri OCR backend');
+
+    const result = await invoke<OcrPageResult>('run_page_ocr', {
+      pageId: page.id,
+      regionIds: options.regionIds,
+      overwriteExisting: options.overwriteExisting ?? false,
+    });
+
+    return {
+      ...result,
+      averageConfidence: computeAverageConfidence(result.results ?? []),
+      failedCount: result.results?.filter(
+        (r) => r.reason === 'invalid_bounds' || r.reason === 'no_text',
+      ).length,
+    };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+    const message = typeof error === 'string' ? error : error instanceof Error ? error.message : 'OCR backend error';
+    const detail: OcrErrorDetail = {
+      provider: 'tauri-backend',
+      message,
+      recoverable: true,
+    };
+    emitError(page.id, detail);
+    throw detail;
+  } finally {
+    unlisten?.();
+  }
 }

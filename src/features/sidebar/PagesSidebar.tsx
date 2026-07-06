@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AgentChat } from '../../components/AgentChat';
 import { JobsPanel } from './JobsPanel';
 import { PagesPanel } from './PagesPanel';
 import { ProjectLibrary } from './ProjectLibrary';
@@ -31,6 +32,8 @@ export function PagesSidebar() {
         ) : null}
 
         {activeView === 'pages' ? <PagesPanel /> : null}
+
+        {activeView === 'agent' ? <AgentChat /> : null}
       </div>
     </div>
   );

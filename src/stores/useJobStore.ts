@@ -5,11 +5,10 @@ import {
 } from '../repositories';
 import { pickRenderedPageExportPath } from '../features/export/renderExport';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
+import { useProjectDomainStore } from './useProjectDomainStore';
 import {
-  persistTranslationTargets,
   recordExportSelectionCanceled,
   runQueuedJob,
-  updateTranslationTargetsInEditor,
 } from '../services/jobExecution';
 import {
   buildQueuedJobs,
@@ -49,6 +48,8 @@ interface JobState {
   queueExportJobs: (targets: ExportJobTarget[]) => number;
   requestExportForPage: (pageId: string) => Promise<number>;
   retryJob: (jobId: string) => void;
+  cancelJob: (jobId: string) => void;
+  cancelOcrJobs: (pageId: string, regionIds?: string[]) => void;
   clearFinished: () => void;
   loadJobsForCurrentProject: () => Promise<void>;
 }
@@ -104,6 +105,10 @@ export const useJobStore = create<JobState>((set, get) => ({
   processing: false,
 
   queueOcrJobs: (targets) => {
+    const engine = useProjectDomainStore.getState().settings?.ocrEngine;
+    if (!engine || engine === 'mock') {
+      useToastStore.getState().push('Выберите движок OCR в настройках (сейчас mock)', 'warning');
+    }
     const normalizedTargets = normalizeQueueTargets('ocr', targets);
     const pagesById = new Map(
       usePageStore.getState().pages.map((page) => [page.id, page] as const),
@@ -120,13 +125,6 @@ export const useJobStore = create<JobState>((set, get) => ({
       return 0;
     }
 
-    for (const job of newJobs) {
-      updateTranslationTargetsInEditor(job.pageId, job.regionIds, () => ({
-        translationStatus: 'queued',
-      }));
-      void persistTranslationTargets(job.pageId);
-    }
-
     setJobsAndPersist((jobs) => [...newJobs, ...jobs]);
 
     useToastStore.getState().push(`OCR jobs queued: ${newJobs.length}`, 'info');
@@ -135,6 +133,10 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   queueTranslationJobs: (targets) => {
+    const provider = useProjectDomainStore.getState().settings?.translationProvider;
+    if (!provider || provider === 'mock') {
+      useToastStore.getState().push('Выберите провайдер перевода в настройках (сейчас mock)', 'warning');
+    }
     const normalizedTargets = normalizeQueueTargets('translate', targets);
     const pagesById = new Map(
       usePageStore.getState().pages.map((page) => [page.id, page] as const),
@@ -221,6 +223,45 @@ export const useJobStore = create<JobState>((set, get) => ({
     return queued;
   },
 
+  cancelJob: (jobId) => {
+    const job = get().jobs.find((item) => item.id === jobId);
+    if (!job || job.status !== 'queued' && job.status !== 'running') return;
+
+    setJobsAndPersist((jobs) =>
+      jobs.map((j) =>
+        j.id === jobId
+          ? { ...j, status: 'failed' as const, finishedAt: Date.now(), progress: 1, error: 'Cancelled', message: 'Job cancelled' }
+          : j,
+      ),
+    );
+  },
+
+  cancelOcrJobs: (pageId, regionIds) => {
+    const runningOrQueued = get().jobs.filter(
+      (job) =>
+        job.stage === 'ocr' &&
+        job.pageId === pageId &&
+        (job.status === 'queued' || job.status === 'running') &&
+        (!regionIds?.length || regionIds.some((rid) => job.regionIds?.includes(rid))),
+    );
+
+    if (runningOrQueued.length > 0) {
+      const cancelIds = new Set(runningOrQueued.map((j) => j.id));
+      const now = Date.now();
+      setJobsAndPersist((jobs) =>
+        jobs.map((j) =>
+          cancelIds.has(j.id)
+            ? { ...j, status: 'failed' as const, finishedAt: now, progress: 1, error: 'Cancelled', message: 'OCR cancelled' }
+            : j,
+        ),
+      );
+    }
+
+    if (runningOrQueued.length > 0) {
+      useToastStore.getState().push(`OCR cancelled: ${runningOrQueued.length} job(s)`, 'info');
+    }
+  },
+
   retryJob: (jobId) => {
     const job = get().jobs.find((item) => item.id === jobId);
     if (!job) return;
@@ -233,9 +274,7 @@ export const useJobStore = create<JobState>((set, get) => ({
     }
 
     if (job.stage === 'export') {
-      void (async () => {
-        await get().requestExportForPage(job.pageId);
-      })();
+      void get().requestExportForPage(job.pageId);
       return;
     }
 

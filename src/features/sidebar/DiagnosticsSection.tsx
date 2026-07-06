@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { ChevronDownIcon } from '../../icons';
 import type { DiagnosticEntry } from '../../types';
 import {
   diagnosticDotClass,
@@ -28,7 +29,7 @@ export function DiagnosticsSection({
           className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-200"
         >
           {diagnosticsOpen ? (
-            <ChevronDown size={12} className="text-zinc-500" />
+            <ChevronDownIcon size={12} className="text-zinc-500" />
           ) : (
             <ChevronRight size={12} className="text-zinc-500" />
           )}

@@ -125,8 +125,9 @@ function Invoke-RegionOcr {
     }
   }
 
+  $regionOverwrite = [bool]($Region.ocrOverwriteEnabled)
   if (
-    -not $request.overwriteExisting -and
+    -not ($request.overwriteExisting -or $regionOverwrite) -and
     -not [string]::IsNullOrWhiteSpace([string]$Region.sourceText)
   ) {
     return @{
@@ -202,10 +203,24 @@ function Invoke-RegionOcr {
       }
     }
 
+    $confidence = if ($result.Lines) {
+      $total = 0.0
+      $count = 0
+      foreach ($line in $result.Lines) {
+        foreach ($word in $line.Words) {
+          $total += [double]$word.Confidence
+          $count++
+        }
+      }
+      if ($count -gt 0) { [Math]::Round(($total / $count) / 100.0, 4) } else { $null }
+    } else {
+      $null
+    }
+
     return @{
       regionId = [string]$Region.id
       text = $text
-      confidence = $null
+      confidence = $confidence
       skipped = $false
       reason = $null
     }

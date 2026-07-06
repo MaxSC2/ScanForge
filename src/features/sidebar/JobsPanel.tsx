@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Workflow } from 'lucide-react';
+import { WorkflowIcon } from '../../icons';
 import { DiagnosticsSection } from './DiagnosticsSection';
 import { JobQueueSection } from './JobQueueSection';
 import { useJobsPanel } from './useJobsPanel';
@@ -22,7 +22,7 @@ export function JobsPanel() {
   return (
     <section className="flex-none border-b border-zinc-800">
       <div className="flex items-center gap-2 px-3 py-2">
-        <Workflow size={12} className="text-zinc-500" />
+        <WorkflowIcon size={12} className="text-zinc-500" />
         <h2 className="flex-1 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Задачи
         </h2>

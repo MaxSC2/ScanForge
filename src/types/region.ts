@@ -53,6 +53,8 @@ export interface Region {
   textStyleId?: string;
   /** Optional OCR confidence score */
   ocrConfidence?: number;
+  /** Whether OCR is allowed to overwrite this region on re-run */
+  ocrOverwriteEnabled?: boolean;
 }
 
 export type RegionHydrationInput = Omit<
@@ -130,6 +132,9 @@ export function normalizeRegion(region: RegionHydrationInput): Region {
     ...(region.textStyleId ? { textStyleId: region.textStyleId } : {}),
     ...(typeof region.ocrConfidence === 'number'
       ? { ocrConfidence: region.ocrConfidence }
+      : {}),
+    ...(typeof region.ocrOverwriteEnabled === 'boolean'
+      ? { ocrOverwriteEnabled: region.ocrOverwriteEnabled }
       : {}),
   };
 }

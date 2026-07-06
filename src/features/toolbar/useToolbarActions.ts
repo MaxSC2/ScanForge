@@ -101,7 +101,7 @@ export function useToolbarActions() {
     const files = Array.from(event.target.files ?? []);
     if (files.length > 0) {
       void addPages(files);
-      pushToast(`Р—Р°РіСЂСѓР¶РµРЅРѕ СЃС‚СЂР°РЅРёС†: ${files.length}`, 'success');
+      pushToast(`Загружено страниц: ${files.length}`, 'success');
     }
     event.target.value = '';
   };
@@ -111,7 +111,7 @@ export function useToolbarActions() {
     const page = await stitchPages(selectedPageIds, stitchOptions);
 
     if (!page) {
-      pushToast('Р’С‹Р±РµСЂРё РјРёРЅРёРјСѓРј РґРІРµ СЃС‚СЂР°РЅРёС†С‹ РґР»СЏ СЃРєР»РµР№РєРё', 'info');
+      pushToast('Выбери минимум две страницы для склейки', 'info');
       return;
     }
 
@@ -119,20 +119,20 @@ export function useToolbarActions() {
       await exportPageImage(page);
     }
 
-    pushToast(`РЎРѕР·РґР°РЅРѕ: ${page.fileName}. РЎС‚СЂР°РЅРёС†: ${selectedPageIds.length}`, 'success');
+    pushToast(`Создано: ${page.fileName}. Страниц: ${selectedPageIds.length}`, 'success');
   };
 
   const handleOcr = () => {
     const queued = queueOcrJobs(ocrTargets);
     if (queued === 0) {
-      pushToast('OCR СѓР¶Рµ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ РґР»СЏ РІС‹Р±СЂР°РЅРЅС‹С… СЃС‚СЂР°РЅРёС† РёР»Рё СЃС‚СЂР°РЅРёС†Р° РЅРµ РІС‹Р±СЂР°РЅС‹', 'warning');
+      pushToast('OCR уже выполняется для выбранных страниц или страница не выбраны', 'warning');
     }
   };
 
   const handleTranslate = () => {
     const queued = queueTranslationJobs(translationTargets);
     if (queued === 0) {
-      pushToast('РџРµСЂРµРІРѕРґ СѓР¶Рµ СЃС‚РѕРёС‚ РІ РѕС‡РµСЂРµРґРё РґР»СЏ РІС‹Р±СЂР°РЅРЅРѕР№ С†РµР»Рё РёР»Рё РЅРёС‡РµРіРѕ РЅРµ РІС‹Р±СЂР°РЅРѕ', 'warning');
+      pushToast('Перевод уже стоит в очереди для выбранной цели или ничего не выбрано', 'warning');
     }
   };
 
@@ -140,9 +140,9 @@ export function useToolbarActions() {
     try {
       const data = await toProjectFile();
       await saveProjectFile(data);
-      pushToast('РџСЂРѕРµРєС‚ СЃРѕС…СЂР°РЅРµРЅ', 'success');
+      pushToast('Проект сохранен', 'success');
     } catch {
-      pushToast('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕРµРєС‚', 'error');
+      pushToast('Не удалось сохранить проект', 'error');
     }
   };
 
@@ -161,7 +161,7 @@ export function useToolbarActions() {
       },
     ]);
     if (queued === 0) {
-      pushToast('Р­РєСЃРїРѕСЂС‚ СѓР¶Рµ СЃС‚РѕРёС‚ РІ РѕС‡РµСЂРµРґРё РґР»СЏ Р°РєС‚РёРІРЅРѕР№ СЃС‚СЂР°РЅРёС†С‹ РёР»Рё СЃС‚СЂР°РЅРёС†Р° РЅРµ РІС‹Р±СЂР°РЅР°', 'warning');
+      pushToast('Экспорт уже стоит в очереди для активной страницы или страница не выбрана', 'warning');
     }
   };
 
@@ -178,10 +178,10 @@ export function useToolbarActions() {
       });
       await useJobStore.getState().loadJobsForCurrentProject();
       clearHistory();
-      pushToast('РџСЂРѕРµРєС‚ Р·Р°РіСЂСѓР¶РµРЅ', 'success');
+      pushToast('Проект загружен', 'success');
       useEditorStore.getState().requestFitToPage();
     } catch {
-      pushToast('РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РїСЂРѕРµРєС‚', 'error');
+      pushToast('Не удалось открыть проект', 'error');
     }
   };
 

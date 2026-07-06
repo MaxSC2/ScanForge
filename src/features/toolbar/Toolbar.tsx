@@ -1,27 +1,31 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
-  Check,
-  ChevronDown,
-  Combine,
-  Download,
-  Eye,
-  EyeOff,
-  FileJson,
-  Focus,
-  FolderOpen,
-  Hand,
-  Languages,
-  Maximize,
-  MousePointer2,
-  Redo2,
-  Save,
-  ScanText,
-  Square,
-  Undo2,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+  CheckIcon,
+  ChevronDownIcon,
+  CombineIcon,
+  DownloadIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FileJsonIcon,
+  FocusIcon,
+  FolderOpenIcon,
+  HandIcon,
+  LanguagesIcon,
+  MaximizeIcon,
+  MousePointer2Icon,
+  Redo2Icon,
+  SaveIcon,
+  ScanTextIcon,
+  SettingsIcon,
+  SquareIcon,
+  Undo2Icon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from '../../icons';
 import { IconButton } from '../../components/IconButton';
+import { JobProgress } from '../../components/JobProgress';
+import { KeyboardShortcutsPanel } from '../../components/KeyboardShortcutsPanel';
+import { SettingsDialog } from '../../components/SettingsDialog';
 import { StitchDialog } from '../../components/StitchDialog';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
@@ -34,6 +38,7 @@ export function Toolbar() {
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const [stitchDialogOpen, setStitchDialogOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const undo = useHistoryStore((state) => state.undo);
   const redo = useHistoryStore((state) => state.redo);
@@ -86,9 +91,9 @@ export function Toolbar() {
   } as const;
 
   const tools: { id: EditorTool; icon: ReactNode; label: string; shortcut: string }[] = [
-    { id: 'select', icon: <MousePointer2 size={14} />, label: 'Выбор', shortcut: 'V' },
-    { id: 'draw', icon: <Square size={14} />, label: 'Рисование региона', shortcut: 'R' },
-    { id: 'pan', icon: <Hand size={14} />, label: 'Панорама', shortcut: 'H' },
+    { id: 'select', icon: <MousePointer2Icon size={14} />, label: 'Выбор', shortcut: 'V' },
+    { id: 'draw', icon: <SquareIcon size={14} />, label: 'Рисование региона', shortcut: 'R' },
+    { id: 'pan', icon: <HandIcon size={14} />, label: 'Панорама', shortcut: 'H' },
   ];
 
   useEffect(() => {
@@ -129,7 +134,7 @@ export function Toolbar() {
       <div className="h-5 w-px bg-zinc-700/60" />
 
       <IconButton onClick={() => fileRef.current?.click()} tooltip="Открыть изображения">
-        <FolderOpen size={14} />
+        <FolderOpenIcon size={14} />
         <span className="hidden sm:inline">Открыть</span>
       </IconButton>
 
@@ -143,12 +148,12 @@ export function Toolbar() {
       />
 
       <IconButton onClick={handleOpenProject} tooltip="Открыть файл проекта (.scanforge.json)">
-        <FileJson size={14} />
+        <FileJsonIcon size={14} />
         <span className="hidden xl:inline">Открыть проект</span>
       </IconButton>
 
       <IconButton onClick={handleSaveProject} tooltip="Сохранить проект">
-        <Save size={14} />
+        <SaveIcon size={14} />
         <span className="hidden xl:inline">Сохранить</span>
       </IconButton>
 
@@ -157,7 +162,7 @@ export function Toolbar() {
         tooltip="Экспорт рендера активной страницы в PNG (Ctrl+Shift+E)"
         disabled={!activePage}
       >
-        <Download size={14} />
+        <DownloadIcon size={14} />
         <span className="hidden xl:inline">Рендер PNG</span>
       </IconButton>
 
@@ -166,7 +171,7 @@ export function Toolbar() {
         tooltip="Запустить OCR по выбранным страницам (Ctrl+Shift+O)"
         disabled={!canRunOcr}
       >
-        <ScanText size={14} />
+        <ScanTextIcon size={14} />
         <span className="hidden xl:inline">OCR</span>
       </IconButton>
 
@@ -175,7 +180,7 @@ export function Toolbar() {
         tooltip="Запустить перевод для выбранной страницы или региона (Ctrl+Shift+T)"
         disabled={!canRunTranslation}
       >
-        <Languages size={14} />
+        <LanguagesIcon size={14} />
         <span className="hidden xl:inline">Перевод</span>
       </IconButton>
 
@@ -184,7 +189,7 @@ export function Toolbar() {
         tooltip="Склеить выбранные страницы (Ctrl+M)"
         disabled={!canStitch}
       >
-        <Combine size={14} />
+        <CombineIcon size={14} />
         <span className="hidden xl:inline">Склеить</span>
       </IconButton>
 
@@ -206,9 +211,11 @@ export function Toolbar() {
 
       <div className="flex-1" />
 
+      <JobProgress />
+
       <div className="mr-2 flex items-center gap-0.5">
         <IconButton onClick={undo} disabled={!canUndo} tooltip="Отменить (Ctrl+Z)" variant="ghost">
-          <Undo2 size={14} />
+          <Undo2Icon size={14} />
         </IconButton>
         <IconButton
           onClick={redo}
@@ -216,13 +223,13 @@ export function Toolbar() {
           tooltip="Повторить (Ctrl+Shift+Z)"
           variant="ghost"
         >
-          <Redo2 size={14} />
+          <Redo2Icon size={14} />
         </IconButton>
       </div>
 
       <div className="flex items-center gap-0.5">
         <IconButton onClick={zoomOut} tooltip="Уменьшить (Ctrl+-)" variant="ghost">
-          <ZoomOut size={14} />
+          <ZoomOutIcon size={14} />
         </IconButton>
 
         <button
@@ -234,7 +241,7 @@ export function Toolbar() {
         </button>
 
         <IconButton onClick={zoomIn} tooltip="Увеличить (Ctrl+=)" variant="ghost">
-          <ZoomIn size={14} />
+          <ZoomInIcon size={14} />
         </IconButton>
       </div>
 
@@ -245,12 +252,12 @@ export function Toolbar() {
           className="inline-flex h-8 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2.5 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
           title="Настройки просмотра"
         >
-          <Eye size={14} className="text-zinc-500" />
+          <EyeIcon size={14} className="text-zinc-500" />
           <span>Вид</span>
           <span className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
             {viewModeLabel[viewMode]}
           </span>
-          <ChevronDown
+          <ChevronDownIcon
             size={13}
             className={`text-zinc-500 transition-transform ${viewMenuOpen ? 'rotate-180' : ''}`}
           />
@@ -284,29 +291,42 @@ export function Toolbar() {
             <div className="my-1 h-px bg-zinc-800" />
 
             <ViewMenuItem
-              icon={regionOverlaysVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+              icon={regionOverlaysVisible ? <EyeIcon size={13} /> : <EyeOffIcon size={13} />}
               label="Оверлеи регионов"
               hint={regionOverlaysVisible ? 'Показаны' : 'Скрыты'}
               active={regionOverlaysVisible}
               onClick={toggleRegionOverlays}
             />
             <ViewMenuItem
-              icon={<Focus size={13} />}
+              icon={<FocusIcon size={13} />}
               label="Фокус-режим"
               hint="Ctrl+."
               active={focusMode}
               onClick={toggleFocusMode}
             />
             <ViewMenuItem
-              icon={<Maximize size={13} />}
+              icon={<MaximizeIcon size={13} />}
               label="Чистый режим"
               hint="Ctrl+Shift+."
               active={cleanView}
               onClick={toggleCleanView}
             />
+
+            <div className="my-1 h-px bg-zinc-800" />
+
+            <KeyboardShortcutsPanel onBeforeOpen={() => setViewMenuOpen(false)} />
+            <button
+              onClick={() => { setViewMenuOpen(false); setSettingsOpen(true); }}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+            >
+              <SettingsIcon size={12} className="text-zinc-500" />
+              Настройки
+            </button>
           </div>
         )}
       </div>
+
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <StitchDialog
         open={stitchDialogOpen}
@@ -379,7 +399,7 @@ function ViewMenuItem({
           active ? 'bg-indigo-500/10 text-indigo-300' : 'bg-zinc-900 text-zinc-500'
         }`}
       >
-        {icon ?? <Check size={12} className={active ? 'opacity-100' : 'opacity-0'} />}
+        {icon ?? <CheckIcon size={12} className={active ? 'opacity-100' : 'opacity-0'} />}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {hint ? <span className="text-[10px] text-zinc-500">{hint}</span> : null}

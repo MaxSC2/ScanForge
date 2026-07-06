@@ -19,8 +19,9 @@ use domain_storage::{
 use ocr::run_page_ocr;
 use std::io;
 use storage::{
-    list_project_summaries, load_latest_project_snapshot, load_project_snapshot,
-    save_project_snapshot, ProjectRepository,
+    delete_page_image, delete_project_assets, list_project_summaries, load_latest_project_snapshot,
+    load_page_image, load_project_snapshot, save_page_image, save_project_snapshot,
+    ProjectRepository,
 };
 use tauri::Manager;
 use translation::run_page_translation;
@@ -75,7 +76,11 @@ fn main() {
             delete_diagnostic_entity,
             delete_diagnostic_entities_by_project,
             run_page_ocr,
-            run_page_translation
+            run_page_translation,
+            save_page_image,
+            load_page_image,
+            delete_page_image,
+            delete_project_assets
         ])
         .run(tauri::generate_context!())
         .expect("error while running ScanForge");

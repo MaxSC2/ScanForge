@@ -1,8 +1,10 @@
 import { create } from 'zustand';
-import type { Page, ProjectMeta } from '../types';
+import type { Page, ProjectMeta, ProjectSettingsRecord, TextStyleRecord } from '../types';
 import { usePageStore } from './usePageStore';
+import { useProjectDomainStore } from './useProjectDomainStore';
 import { useRegionStore } from './useRegionStore';
 import { useProjectStore } from './useProjectStore';
+import { useToastStore } from './useToastStore';
 
 interface HistorySnapshot {
   pages: Page[];
@@ -10,6 +12,8 @@ interface HistorySnapshot {
   selectedPageIds: string[];
   selectedRegionId: string | null;
   meta: ProjectMeta;
+  settings: ProjectSettingsRecord | null;
+  textStyles: TextStyleRecord[];
 }
 
 export interface HistoryCaptureOptions {
@@ -37,12 +41,15 @@ function cloneSnapshot(): HistorySnapshot {
   const pageState = usePageStore.getState();
   const regionState = useRegionStore.getState();
   const projectState = useProjectStore.getState();
+  const domainState = useProjectDomainStore.getState();
   return {
     pages: structuredClone(pageState.pages),
     activePageId: pageState.activePageId,
     selectedPageIds: [...pageState.selectedPageIds],
     selectedRegionId: regionState.selectedRegionId,
     meta: structuredClone(projectState.meta),
+    settings: domainState.settings ? structuredClone(domainState.settings) : null,
+    textStyles: structuredClone(domainState.textStyles),
   };
 }
 
@@ -54,6 +61,10 @@ function applySnapshot(snapshot: HistorySnapshot) {
   });
   useRegionStore.setState({ selectedRegionId: snapshot.selectedRegionId });
   useProjectStore.setState({ meta: structuredClone(snapshot.meta) });
+  useProjectDomainStore.setState({
+    settings: snapshot.settings ? structuredClone(snapshot.settings) : null,
+    textStyles: structuredClone(snapshot.textStyles),
+  });
 }
 
 function buildSnapshotSignature(snapshot: HistorySnapshot) {
@@ -116,6 +127,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       canUndo: state.past.length - 1 > 0,
       canRedo: true,
     });
+    useToastStore.getState().push('Отменено · Ctrl+Z для отмены, Ctrl+Shift+Z для повтора', 'info');
   },
 
   redo: () => {
@@ -135,6 +147,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       canUndo: past.length > 0,
       canRedo: future.length > 0,
     });
+    useToastStore.getState().push('Повторено · Ctrl+Z для отмены, Ctrl+Shift+Z для повтора', 'info');
   },
 
   clear: () => {

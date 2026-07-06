@@ -88,6 +88,7 @@ pub struct RegionRecord {
     pub visible: bool,
     pub text_style_id: Option<String>,
     pub ocr_confidence: Option<f64>,
+    pub ocr_overwrite_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,7 +192,8 @@ impl DomainRepository {
                   locked INTEGER,
                   visible INTEGER,
                   text_style_id TEXT,
-                  ocr_confidence REAL
+                  ocr_confidence REAL,
+                  ocr_overwrite_enabled INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -273,6 +275,7 @@ impl DomainRepository {
         ensure_table_column(&connection, "regions", "translation_updated_at", "INTEGER")?;
         ensure_table_column(&connection, "regions", "notes", "TEXT DEFAULT ''")?;
         ensure_table_column(&connection, "regions", "text_style_id", "TEXT")?;
+        ensure_table_column(&connection, "regions", "ocr_overwrite_enabled", "INTEGER NOT NULL DEFAULT 0")?;
         ensure_table_column(&connection, "jobs", "region_ids", "TEXT")?;
         ensure_table_column(&connection, "jobs", "summary", "TEXT")?;
         ensure_table_column(&connection, "jobs", "result_json", "TEXT")?;
@@ -794,11 +797,12 @@ impl DomainRepository {
                   locked,
                   visible,
                   text_style_id,
-                  ocr_confidence
+                  ocr_confidence,
+                  ocr_overwrite_enabled
                 )
                 VALUES (
                   ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                  ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+                  ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28
                 )
                 ON CONFLICT(id) DO UPDATE SET
                   page_id = excluded.page_id,
@@ -826,7 +830,8 @@ impl DomainRepository {
                   locked = excluded.locked,
                   visible = excluded.visible,
                   text_style_id = excluded.text_style_id,
-                  ocr_confidence = excluded.ocr_confidence
+                  ocr_confidence = excluded.ocr_confidence,
+                  ocr_overwrite_enabled = excluded.ocr_overwrite_enabled
                 ",
                 params![
                     region.id,
@@ -856,6 +861,7 @@ impl DomainRepository {
                     bool_to_sql(region.visible),
                     region.text_style_id,
                     region.ocr_confidence,
+                    bool_to_sql(region.ocr_overwrite_enabled),
                 ],
             )
             .map_err(|error| error.to_string())?;

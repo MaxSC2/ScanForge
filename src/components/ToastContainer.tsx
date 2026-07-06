@@ -1,5 +1,6 @@
 import { useToastStore, type ToastKind } from '../stores/useToastStore';
-import { X, CheckCircle, AlertTriangle, Info, XCircle } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Info, XCircle } from 'lucide-react';
+import { XIcon } from '../icons';
 
 const kindStyles: Record<ToastKind, { bg: string; border: string; icon: React.ReactNode }> = {
   info: {
@@ -45,7 +46,7 @@ export function ToastContainer() {
               onClick={() => dismiss(t.id)}
               className="text-zinc-500 hover:text-zinc-300 ml-2"
             >
-              <X size={12} />
+              <XIcon size={12} />
             </button>
           </div>
         );

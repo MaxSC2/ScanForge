@@ -1,8 +1,10 @@
+use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -18,6 +20,7 @@ const LEGACY_PROJECTS_UPDATED_INDEX: &str = "idx_projects_updated_at";
 #[derive(Debug, Clone)]
 pub struct ProjectRepository {
     db_path: PathBuf,
+    app_data_dir: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,8 +190,10 @@ impl ProjectRepository {
             .map_err(|error| error.to_string())?;
         fs::create_dir_all(&app_dir).map_err(|error| error.to_string())?;
 
+        let db_path = app_dir.join(DB_FILE_NAME);
         let repository = Self {
-            db_path: app_dir.join(DB_FILE_NAME),
+            db_path,
+            app_data_dir: app_dir,
         };
         repository.init()?;
         Ok(repository)
@@ -581,6 +586,80 @@ impl ProjectRepository {
 
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
+    }
+
+    fn assets_dir(&self, project_id: &str) -> PathBuf {
+        self.app_data_dir.join("assets").join(project_id)
+    }
+
+    pub fn save_page_image_from_data_url(
+        &self,
+        project_id: &str,
+        page_id: &str,
+        data_url: &str,
+    ) -> Result<String, String> {
+        let encoded = data_url
+            .split(',')
+            .nth(1)
+            .ok_or_else(|| "Invalid data URL format".to_string())?;
+
+        let image_bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|e| format!("Failed to decode image data: {e}"))?;
+
+        let dir = self.assets_dir(project_id);
+        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create assets dir: {e}"))?;
+
+        let file_path = dir.join(format!("{page_id}.png"));
+        let mut file = fs::File::create(&file_path)
+            .map_err(|e| format!("Failed to create image file: {e}"))?;
+        file.write_all(&image_bytes)
+            .map_err(|e| format!("Failed to write image file: {e}"))?;
+
+        file_path.to_str()
+            .ok_or_else(|| "Invalid file path".to_string())
+            .map(|s| s.to_string())
+    }
+
+    pub fn load_page_image_as_data_url(&self, image_path: &str) -> Result<String, String> {
+        let path = Path::new(image_path);
+        if !path.exists() {
+            return Err(format!("Image file not found: {image_path}"));
+        }
+
+        let image_bytes = fs::read(path)
+            .map_err(|e| format!("Failed to read image file: {e}"))?;
+
+        let mime = if image_path.ends_with(".png") {
+            "image/png"
+        } else if image_path.ends_with(".jpg") || image_path.ends_with(".jpeg") {
+            "image/jpeg"
+        } else if image_path.ends_with(".webp") {
+            "image/webp"
+        } else {
+            "image/png"
+        };
+
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
+        Ok(format!("data:{mime};base64,{encoded}"))
+    }
+
+    pub fn delete_project_assets(&self, project_id: &str) -> Result<(), String> {
+        let dir = self.assets_dir(project_id);
+        if dir.exists() {
+            fs::remove_dir_all(&dir).map_err(|e| format!("Failed to delete assets: {e}"))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn delete_page_asset(&self, project_id: &str, page_id: &str) -> Result<(), String> {
+        let file_path = self.assets_dir(project_id).join(format!("{page_id}.png"));
+        if file_path.exists() {
+            fs::remove_file(&file_path).map_err(|e| format!("Failed to delete page asset: {e}"))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -1302,4 +1381,39 @@ pub fn list_project_summaries(
     repository: State<'_, ProjectRepository>,
 ) -> Result<Vec<LocalProjectSummary>, String> {
     repository.list_projects()
+}
+
+#[tauri::command]
+pub fn save_page_image(
+    project_id: String,
+    page_id: String,
+    data_url: String,
+    repository: State<'_, ProjectRepository>,
+) -> Result<String, String> {
+    repository.save_page_image_from_data_url(&project_id, &page_id, &data_url)
+}
+
+#[tauri::command]
+pub fn load_page_image(
+    image_path: String,
+    repository: State<'_, ProjectRepository>,
+) -> Result<String, String> {
+    repository.load_page_image_as_data_url(&image_path)
+}
+
+#[tauri::command]
+pub fn delete_project_assets(
+    project_id: String,
+    repository: State<'_, ProjectRepository>,
+) -> Result<(), String> {
+    repository.delete_project_assets(&project_id)
+}
+
+#[tauri::command]
+pub fn delete_page_image(
+    project_id: String,
+    page_id: String,
+    repository: State<'_, ProjectRepository>,
+) -> Result<(), String> {
+    repository.delete_page_asset(&project_id, &page_id)
 }

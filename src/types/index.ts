@@ -27,10 +27,13 @@ export type {
   TranslationRegionResult,
 } from './translation';
 export type {
-  OcrPagePayload,
+  OcrAbortOptions,
+  OcrErrorDetail,
   OcrPageResult,
-  OcrRegionInput,
+  OcrProgressCallback,
   OcrRegionResult,
+  OcrRunOptions,
+  OcrRunOptionsWithAbort,
 } from './ocr';
 export type {
   ProjectMeta,

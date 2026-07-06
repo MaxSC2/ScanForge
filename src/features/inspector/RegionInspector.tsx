@@ -1,4 +1,5 @@
-import { Crosshair, Layers, Settings2 } from 'lucide-react';
+import { Crosshair } from 'lucide-react';
+import { LayersIcon, SettingsIcon } from '../../icons';
 import { ProjectSettingsPanel } from '../settings/ProjectSettingsPanel';
 import { RegionDetailsPanel } from './RegionDetailsPanel';
 import {
@@ -23,7 +24,7 @@ export function RegionInspector() {
   if (!activePage) {
     return (
       <InspectorEmptyState
-        icon={<Settings2 size={20} className="text-zinc-600" />}
+        icon={<SettingsIcon size={20} className="text-zinc-600" />}
         title="Страница не открыта"
         description="Открой страницу или проект, чтобы редактировать регионы."
       />
@@ -52,7 +53,7 @@ export function RegionInspector() {
           />
         ) : (
           <InspectorEmptyState
-            icon={<Layers size={20} className="text-zinc-600" />}
+            icon={<LayersIcon size={20} className="text-zinc-600" />}
             title="Регионов пока нет"
             description="Нарисуй регион на холсте, и он появится в списке."
           />

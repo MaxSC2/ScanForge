@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { Database, Layers, Workflow } from 'lucide-react';
+import { BotIcon, DatabaseIcon, LayersIcon, WorkflowIcon } from '../../icons';
+import { useAgentStore } from '../../stores/useAgentStore';
 import { useJobStore } from '../../stores/useJobStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useProjectLibraryStore } from '../../stores/useProjectLibraryStore';
 
-export type SidebarView = 'pages' | 'projects' | 'jobs';
+export type SidebarView = 'pages' | 'projects' | 'jobs' | 'agent';
 
 export function SidebarTabs({
   activeView,
@@ -16,6 +17,7 @@ export function SidebarTabs({
   const pageCount = usePageStore((state) => state.pages.length);
   const projectCount = useProjectLibraryStore((state) => state.summaries.length);
   const jobCount = useJobStore((state) => state.jobs.length);
+  const hasAiConfig = useAgentStore((state) => !!state.config);
 
   const items: {
     id: SidebarView;
@@ -23,9 +25,10 @@ export function SidebarTabs({
     count: number;
     icon: ReactNode;
   }[] = [
-    { id: 'pages', label: 'Страницы', count: pageCount, icon: <Layers size={13} /> },
-    { id: 'projects', label: 'Проекты', count: projectCount, icon: <Database size={13} /> },
-    { id: 'jobs', label: 'Задачи', count: jobCount, icon: <Workflow size={13} /> },
+    { id: 'pages', label: 'Страницы', count: pageCount, icon: <LayersIcon size={13} /> },
+    { id: 'projects', label: 'Проекты', count: projectCount, icon: <DatabaseIcon size={13} /> },
+    { id: 'jobs', label: 'Задачи', count: jobCount, icon: <WorkflowIcon size={13} /> },
+    { id: 'agent', label: 'AI', count: 0, icon: <BotIcon size={13} className={hasAiConfig ? 'text-indigo-400' : ''} /> },
   ];
 
   return (

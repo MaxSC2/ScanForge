@@ -120,7 +120,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   zoomOut: () => set((s) => ({ zoom: clampZoom(s.zoom - ZOOM_STEP), viewMode: 'manual' })),
   resetZoom: () => set({ zoom: 1, stagePosition: { x: 0, y: 0 }, viewMode: 'manual' }),
   setStagePosition: (stagePosition) => set({ stagePosition, viewMode: 'manual' }),
-  applyViewportTransform: ({ zoom, stagePosition }) => set({ zoom: clampZoom(zoom), stagePosition }),
+  applyViewportTransform: ({ zoom, stagePosition }) => set({ zoom: clampZoom(zoom), stagePosition, viewMode: 'manual' }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   setSidebarOpen: (value) => set({ sidebarOpen: value }),
@@ -139,8 +139,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   setFocusMode: (value) =>
     set((state) => ({
       focusMode: value,
-      sidebarOpen: value ? state.sidebarOpen : false,
-      inspectorOpen: value ? state.inspectorOpen : false,
+      sidebarOpen: value ? false : state.sidebarOpen,
+      inspectorOpen: value ? false : state.inspectorOpen,
     })),
   toggleCleanView: () =>
     set((state) => ({

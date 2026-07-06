@@ -14,7 +14,7 @@ import { exportRenderedPageAsPng } from '../features/export/renderExport';
 import { runPageOcr } from './ocr';
 import { ensureProjectDomainStatePersisted } from './projectSync';
 import { runPageTranslation } from './translation';
-import type { JobRecord, JobResultSummary, Region } from '../types';
+import type { JobRecord, JobResultSummary, OcrErrorDetail, Region } from '../types';
 import { useDiagnosticsStore } from '../stores/useDiagnosticsStore';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useHistoryStore } from '../stores/useHistoryStore';
@@ -170,6 +170,8 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
     return;
   }
 
+  const abortController = new AbortController();
+
   try {
     await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().ocrOverwrite;
@@ -178,6 +180,7 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       {
         ...(job.regionIds?.length ? { regionIds: job.regionIds } : {}),
         overwriteExisting,
+        signal: abortController.signal,
       },
       (progress, message) => {
         updateJob(job.id, { progress, message });
@@ -213,6 +216,32 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       error: outcome.error,
     });
   } catch (error) {
+    const isCancellation = error instanceof DOMException && error.name === 'AbortError';
+
+    if (isCancellation) {
+      recordJobDiagnostic(
+        job,
+        'warning',
+        'OCR cancelled',
+        'OCR job was cancelled by user',
+      );
+      updateJob(job.id, {
+        status: 'failed',
+        finishedAt: Date.now(),
+        progress: 1,
+        error: 'Cancelled',
+        message: 'OCR cancelled',
+        result: null,
+      });
+      return;
+    }
+
+    const errorMessage = typeof error === 'object' && error !== null && 'message' in error
+      ? (error as OcrErrorDetail).message
+      : error instanceof Error
+        ? error.message
+        : 'OCR backend error';
+
     recordJobDiagnostic(
       job,
       'error',
@@ -223,7 +252,7 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       status: 'failed',
       finishedAt: Date.now(),
       progress: 1,
-      error: error instanceof Error ? error.message : 'OCR backend error',
+      error: errorMessage,
       message: 'OCR job failed',
       result: null,
     });

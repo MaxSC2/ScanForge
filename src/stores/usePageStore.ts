@@ -1,7 +1,9 @@
+import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
 import type { Page, ProjectFile, StitchOptions } from '../types';
 import { buildStitchRenderPlans, computeStitchOutputSize } from '../utils/stitch';
+import { isDesktopRuntime } from '../utils/runtime';
 import { useHistoryStore } from './useHistoryStore';
 import { useProjectStore } from './useProjectStore';
 
@@ -54,27 +56,47 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /** Helper: read a File into a stable data-url and resolve natural dimensions */
-function loadImage(file: File): Promise<Omit<Page, 'regions'>> {
-  return new Promise((resolve, reject) => {
+async function loadImage(file: File): Promise<Omit<Page, 'regions'>> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    const img = new Image();
-    reader.onload = () => {
-      const dataUrl = String(reader.result);
-      img.onload = () =>
-        resolve({
-          id: uuid(),
-          fileName: file.name,
-          imagePath: dataUrl,
-          imageUrl: dataUrl,
-          naturalWidth: img.naturalWidth,
-          naturalHeight: img.naturalHeight,
-        });
-      img.onerror = () => reject(new Error(`Failed to load ${file.name}`));
-      img.src = dataUrl;
-    };
+    reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
     reader.readAsDataURL(file);
   });
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load ${file.name}`));
+    img.src = dataUrl;
+  });
+
+  const pageId = uuid();
+  let imagePath = dataUrl;
+
+  if (isDesktopRuntime()) {
+    const projectId = useProjectStore.getState().meta.localProjectId;
+    if (projectId) {
+      try {
+        imagePath = await invoke<string>('save_page_image', {
+          projectId,
+          pageId,
+          dataUrl,
+        });
+      } catch {
+        imagePath = dataUrl;
+      }
+    }
+  }
+
+  return {
+    id: pageId,
+    fileName: file.name,
+    imagePath,
+    imageUrl: dataUrl,
+    naturalWidth: img.naturalWidth,
+    naturalHeight: img.naturalHeight,
+  };
 }
 
 function loadImageElement(url: string): Promise<HTMLImageElement> {
@@ -88,7 +110,9 @@ function loadImageElement(url: string): Promise<HTMLImageElement> {
 
 function sortPagesByProjectOrder(pageIds: string[], pages: Page[]): Page[] {
   const idSet = new Set(pageIds);
-  return pages.filter((page) => idSet.has(page.id));
+  return pages
+    .filter((page) => idSet.has(page.id))
+    .sort((a, b) => pageIds.indexOf(a.id) - pageIds.indexOf(b.id));
 }
 
 export const usePageStore = create<PageState>((set, get) => ({
@@ -100,12 +124,11 @@ export const usePageStore = create<PageState>((set, get) => ({
   stitchOptions: DEFAULT_STITCH_OPTIONS,
 
   addPages: async (files) => {
-    useHistoryStore.getState().capture();
     const loaded = await Promise.all(files.map(loadImage));
     const newPages: Page[] = loaded.map((p) => ({ ...p, regions: [] }));
     set((s) => {
+      useHistoryStore.getState().capture();
       const pages = [...s.pages, ...newPages];
-      useProjectStore.getState().touch();
       return {
         pages,
         activePageId: s.activePageId ?? newPages[0]?.id ?? null,
@@ -113,23 +136,34 @@ export const usePageStore = create<PageState>((set, get) => ({
         lastSelectedPageId: newPages[0]?.id ?? s.lastSelectedPageId,
       };
     });
+    useProjectStore.getState().touch();
   },
 
-  removePage: (id) =>
+  removePage: (id) => {
+    const { pages } = get();
+    const page = pages.find((p) => p.id === id);
+    if (page && !page.imagePath.startsWith('data:') && isDesktopRuntime()) {
+      const projectId = useProjectStore.getState().meta.localProjectId;
+      if (projectId) {
+        invoke('delete_page_image', { projectId, pageId: id }).catch(() => {});
+      }
+    }
+
+    useHistoryStore.getState().capture();
     set((s) => {
-      useHistoryStore.getState().capture();
-      const pages = s.pages.filter((p) => p.id !== id);
+      const remaining = s.pages.filter((p) => p.id !== id);
       const activePageId =
-        s.activePageId === id ? (pages[0]?.id ?? null) : s.activePageId;
-      useProjectStore.getState().touch();
+        s.activePageId === id ? (remaining[0]?.id ?? null) : s.activePageId;
       return {
-        pages,
+        pages: remaining,
         activePageId,
         selectedPageIds: s.selectedPageIds.filter((pageId) => pageId !== id),
         lastSelectedPageId:
-          s.lastSelectedPageId === id ? (pages[0]?.id ?? null) : s.lastSelectedPageId,
+          s.lastSelectedPageId === id ? (remaining[0]?.id ?? null) : s.lastSelectedPageId,
       };
-    }),
+    });
+    useProjectStore.getState().touch();
+  },
 
   setActivePage: (id) =>
     set(() => ({
@@ -177,15 +211,16 @@ export const usePageStore = create<PageState>((set, get) => ({
     return pages.find((p) => p.id === activePageId);
   },
 
-  reorderPage: (fromIndex, toIndex) =>
+  reorderPage: (fromIndex, toIndex) => {
+    useHistoryStore.getState().capture();
     set((s) => {
-      useHistoryStore.getState().capture();
       const pages = [...s.pages];
       const [moved] = pages.splice(fromIndex, 1);
       pages.splice(toIndex, 0, moved);
-      useProjectStore.getState().touch();
       return { pages };
-    }),
+    });
+    useProjectStore.getState().touch();
+  },
 
   selectPage: (id, mode = 'replace') =>
     set((s) => {
@@ -294,10 +329,28 @@ export const usePageStore = create<PageState>((set, get) => ({
       if (!blob) throw new Error('Failed to produce stitched image blob');
 
       const imageDataUrl = await blobToDataUrl(blob);
+      const stitchedId = uuid();
+      let stitchedPath = imageDataUrl;
+
+      if (isDesktopRuntime()) {
+        const projectId = useProjectStore.getState().meta.localProjectId;
+        if (projectId) {
+          try {
+            stitchedPath = await invoke<string>('save_page_image', {
+              projectId,
+              pageId: stitchedId,
+              dataUrl: imageDataUrl,
+            });
+          } catch {
+            stitchedPath = imageDataUrl;
+          }
+        }
+      }
+
       const stitchedPage: Page = {
-        id: uuid(),
+        id: stitchedId,
         fileName: `stitched-${stitch.direction}-${sourcePages.length}-pages.png`,
-        imagePath: imageDataUrl,
+        imagePath: stitchedPath,
         imageUrl: imageDataUrl,
         naturalWidth: width,
         naturalHeight: height,
@@ -330,11 +383,10 @@ export const usePageStore = create<PageState>((set, get) => ({
     const { pages, activePageId } = get();
     const pageData = await Promise.all(
       pages.map(async (page) => {
-        const imageDataUrl = page.imagePath.startsWith('data:')
+        const isDataUrl = page.imagePath.startsWith('data:');
+        const imageDataUrl = isDataUrl
           ? page.imagePath
-          : await fetch(page.imageUrl)
-              .then((r) => r.blob())
-              .then(blobToDataUrl);
+          : page.imagePath;
         return {
           id: page.id,
           fileName: page.fileName,

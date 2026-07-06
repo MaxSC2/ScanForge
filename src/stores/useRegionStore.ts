@@ -11,12 +11,16 @@ import { useProjectStore } from './useProjectStore';
 
 interface RegionState {
   selectedRegionId: string | null;
+  multiSelectedRegionIds: string[];
 
-  selectRegion: (id: string | null) => void;
+  selectRegion: (id: string | null, shift?: boolean) => void;
   getSelectedRegion: () => Region | undefined;
+  getMultiSelectedRegions: () => Region[];
+  clearMultiSelect: () => void;
 
   addRegion: (pageId: string, rect: { x: number; y: number; width: number; height: number }) => Region;
   updateRegion: (pageId: string, regionId: string, patch: Partial<Region>) => void;
+  batchUpdateRegions: (pageId: string, regionIds: string[], patch: Partial<Region>) => void;
   deleteRegion: (pageId: string, regionId: string) => void;
   duplicateRegion: (pageId: string, regionId: string) => void;
   reorderRegions: (pageId: string, fromIndex: number, toIndex: number) => void;
@@ -33,8 +37,21 @@ function mutatePage(pageId: string, fn: (regions: Region[]) => Region[]) {
 
 export const useRegionStore = create<RegionState>((set, get) => ({
   selectedRegionId: null,
+  multiSelectedRegionIds: [],
 
-  selectRegion: (id) => set({ selectedRegionId: id }),
+  selectRegion: (id, shift = false) => {
+    if (shift && id) {
+      set((s) => {
+        const exists = s.multiSelectedRegionIds.includes(id);
+        const multi = exists
+          ? s.multiSelectedRegionIds.filter((rid) => rid !== id)
+          : [...s.multiSelectedRegionIds, id];
+        return { selectedRegionId: id, multiSelectedRegionIds: multi.length > 0 ? multi : [] };
+      });
+    } else {
+      set({ selectedRegionId: id, multiSelectedRegionIds: [] });
+    }
+  },
 
   getSelectedRegion: () => {
     const { selectedRegionId } = get();
@@ -42,6 +59,16 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     const page = usePageStore.getState().getActivePage();
     return page?.regions.find((r) => r.id === selectedRegionId);
   },
+
+  getMultiSelectedRegions: () => {
+    const { multiSelectedRegionIds } = get();
+    if (multiSelectedRegionIds.length === 0) return [];
+    const page = usePageStore.getState().getActivePage();
+    if (!page) return [];
+    return page.regions.filter((r) => multiSelectedRegionIds.includes(r.id));
+  },
+
+  clearMultiSelect: () => set({ multiSelectedRegionIds: [] }),
 
   addRegion: (pageId, rect) => {
     useHistoryStore.getState().capture();
@@ -86,6 +113,18 @@ export const useRegionStore = create<RegionState>((set, get) => ({
         )
         .sort((a, b) => a.order - b.order)
         .map((r, i) => ({ ...r, order: i + 1 })),
+    );
+    useProjectStore.getState().touch();
+  },
+
+  batchUpdateRegions: (pageId, regionIds, patch) => {
+    useHistoryStore.getState().capture();
+    mutatePage(pageId, (regions) =>
+      regions.map((r) =>
+        regionIds.includes(r.id)
+          ? normalizeRegion({ ...r, ...patch })
+          : r,
+      ),
     );
     useProjectStore.getState().touch();
   },

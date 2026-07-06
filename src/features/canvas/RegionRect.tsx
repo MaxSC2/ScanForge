@@ -6,6 +6,7 @@ import { getRegionColor } from '../../types';
 import { useRegionStore } from '../../stores/useRegionStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useEditorStore } from '../../stores/useEditorStore';
+import { snapRect, SNAP_THRESHOLD, GRID_STEP } from '../../utils/snapping';
 
 interface RegionRectProps {
   region: Region;
@@ -25,6 +26,10 @@ export function RegionRect({
   const selectRegion = useRegionStore((s) => s.selectRegion);
   const updateRegion = useRegionStore((s) => s.updateRegion);
   const activePageId = usePageStore((s) => s.activePageId);
+  const activePage = usePageStore((s) => {
+    const id = s.activePageId;
+    return id ? s.pages.find((p) => p.id === id) : undefined;
+  });
   const tool = useEditorStore((s) => s.tool);
 
   useEffect(() => {
@@ -41,11 +46,24 @@ export function RegionRect({
     selectRegion(region.id);
   };
 
+  const gridVisible = useEditorStore((s) => s.gridVisible);
+
+  const otherRegions = (activePage?.regions ?? [])
+    .filter((r) => r.id !== region.id && r.visible)
+    .map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!activePageId || region.locked) return;
+    const snapped = snapRect(
+      { x: e.target.x(), y: e.target.y(), width: region.width, height: region.height },
+      gridVisible,
+      GRID_STEP,
+      SNAP_THRESHOLD,
+      otherRegions,
+    );
     updateRegion(activePageId, region.id, {
-      x: Math.round(e.target.x()),
-      y: Math.round(e.target.y()),
+      x: Math.round(snapped.x),
+      y: Math.round(snapped.y),
     });
   };
 
@@ -56,11 +74,23 @@ export function RegionRect({
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
+    const snapped = snapRect(
+      {
+        x: node.x(),
+        y: node.y(),
+        width: node.width() * scaleX,
+        height: node.height() * scaleY,
+      },
+      gridVisible,
+      GRID_STEP,
+      SNAP_THRESHOLD,
+      otherRegions,
+    );
     updateRegion(activePageId, region.id, {
-      x: Math.round(node.x()),
-      y: Math.round(node.y()),
-      width: Math.round(Math.max(5, node.width() * scaleX)),
-      height: Math.round(Math.max(5, node.height() * scaleY)),
+      x: Math.round(snapped.x),
+      y: Math.round(snapped.y),
+      width: Math.round(Math.max(5, snapped.width)),
+      height: Math.round(Math.max(5, snapped.height)),
     });
   };
 

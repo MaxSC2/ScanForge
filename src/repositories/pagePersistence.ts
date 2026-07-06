@@ -1,8 +1,10 @@
+import { invoke } from '@tauri-apps/api/core';
 import type { Page, ProjectMeta, ProjectRecord } from '../types';
 import { ensureProjectDomainDefaults } from './projectDefaults';
 import { pageRepository } from './pageRepository';
 import { projectRepository } from './projectRepository';
 import { regionRepository } from './regionRepository';
+import { isDesktopRuntime } from '../utils/runtime';
 
 function buildProjectRecord(meta: ProjectMeta): ProjectRecord | null {
   const projectId = meta.localProjectId;
@@ -81,18 +83,35 @@ export async function mergePagesWithRepository(meta: ProjectMeta, fallbackPages:
 
   const fallbackMap = new Map(fallbackPages.map((page) => [page.id, page] as const));
 
-  return records
-    .sort((left, right) => left.order - right.order)
-    .map((record) => {
-      const fallback = fallbackMap.get(record.id);
-      return {
-        id: record.id,
-        fileName: deriveFileName(fallback, record.order, record.imagePath),
-        imagePath: record.imagePath,
-        imageUrl: record.imagePath,
-        naturalWidth: record.width,
-        naturalHeight: record.height,
-        regions: fallback?.regions ?? [],
-      } satisfies Page;
-    });
+  const resolvedRecords = await Promise.all(
+    records
+      .sort((left, right) => left.order - right.order)
+      .map(async (record) => {
+        const isDataUrl = record.imagePath.startsWith('data:');
+        let imageUrl = record.imagePath;
+
+        if (!isDataUrl && isDesktopRuntime()) {
+          try {
+            imageUrl = await invoke<string>('load_page_image', {
+              imagePath: record.imagePath,
+            });
+          } catch {
+            imageUrl = record.imagePath;
+          }
+        }
+
+        const fallback = fallbackMap.get(record.id);
+        return {
+          id: record.id,
+          fileName: deriveFileName(fallback, record.order, record.imagePath),
+          imagePath: record.imagePath,
+          imageUrl,
+          naturalWidth: record.width,
+          naturalHeight: record.height,
+          regions: fallback?.regions ?? [],
+        } satisfies Page;
+      }),
+  );
+
+  return resolvedRecords;
 }

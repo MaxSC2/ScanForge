@@ -1,22 +1,19 @@
+pub mod manga;
+pub mod paddle;
+pub mod preview;
+pub mod provider;
+pub mod tesseract;
+pub mod windows;
+
 use crate::domain_storage::{DomainRepository, RegionRecord};
+use crate::storage::ProjectRepository;
+use provider::{build_provider_request, run_provider_chain, OcrError, OcrProvider, OcrProviderRequest};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::State;
-use uuid::Uuid;
+use tauri::{Emitter, State};
 
-const WINDOWS_OCR_SCRIPT: &str = include_str!("ocr/windows_ocr.ps1");
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OcrRegionResult {
-    pub region_id: String,
-    pub text: Option<String>,
-    pub confidence: Option<f64>,
-    pub skipped: bool,
-    pub reason: Option<String>,
-}
+// Re-export types needed by the Tauri command
+pub use provider::OcrRegionResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,49 +26,13 @@ pub struct OcrPageResult {
     pub results: Vec<OcrRegionResult>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct OcrProviderRequest {
-    image_data_url: String,
-    source_language: Option<String>,
-    overwrite_existing: bool,
-    regions: Vec<OcrProviderRegionInput>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OcrProviderRegionInput {
-    id: String,
-    label: String,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    rotation: f64,
-    orientation: String,
-    source_text: String,
-    locked: bool,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OcrProviderResponse {
-    engine: String,
-    results: Vec<OcrRegionResult>,
-}
-
-enum OcrProviderAttempt {
-    Windows { label: String },
-    Preview { label: String },
-    Unavailable { label: String, reason: String },
-}
-
-fn preview_engine_name(engine: &str) -> String {
-    if engine == "mock" {
-        "scanforge-preview".to_string()
-    } else {
-        format!("scanforge-{engine}-preview")
-    }
+pub struct OcrProgressEvent {
+    pub page_id: String,
+    pub region_id: Option<String>,
+    pub progress: f64,
+    pub message: String,
 }
 
 fn now_ms() -> i64 {
@@ -81,13 +42,6 @@ fn now_ms() -> i64 {
         .unwrap_or_default()
 }
 
-fn file_stem(file_name: &str) -> &str {
-    file_name
-        .rsplit_once('.')
-        .map(|(stem, _)| stem)
-        .unwrap_or(file_name)
-}
-
 fn page_label(image_path: &str, page_id: &str) -> String {
     if image_path.starts_with("data:") {
         return format!("page-{}", page_id.chars().take(8).collect::<String>());
@@ -95,277 +49,45 @@ fn page_label(image_path: &str, page_id: &str) -> String {
 
     let normalized = image_path.replace('\\', "/");
     let file_name = normalized.rsplit('/').next().unwrap_or(image_path);
-    file_stem(file_name).to_string()
+    file_name
+        .rsplit_once('.')
+        .map(|(stem, _)| stem.to_string())
+        .unwrap_or_else(|| file_name.to_string())
 }
 
-fn build_preview_text(page_name: &str, page_width: i64, page_height: i64, region: &RegionRecord) -> String {
-    let page_area = (page_width.max(1) * page_height.max(1)) as f64;
-    let region_area = (region.width.max(1.0) * region.height.max(1.0)).max(1.0);
-    let coverage = ((region_area / page_area) * 1000.0).round() / 10.0;
-    let label = if region.label.trim().is_empty() {
-        format!("region {}", region.order.max(1))
-    } else {
-        region.label.to_lowercase()
+fn build_providers_for_engine(engine: &str) -> Vec<Box<dyn OcrProvider>> {
+    let preview = || -> Box<dyn OcrProvider> {
+        Box::new(preview::PreviewOcrProvider::new(engine))
+    };
+    let windows = || -> Box<dyn OcrProvider> {
+        Box::new(windows::WindowsOcrProvider)
+    };
+    let manga = || -> Box<dyn OcrProvider> {
+        Box::new(manga::MangaOcrProvider)
+    };
+    let paddle = || -> Box<dyn OcrProvider> {
+        Box::new(paddle::PaddleOcrProvider)
+    };
+    let unavailable = |name: &str, msg: String| -> Box<dyn OcrProvider> {
+        Box::new(provider::UnavailableOcrProvider::new(name, msg))
     };
 
-    format!(
-        "OCR preview: {} / text / {} / {:.1}%",
-        page_name,
-        label,
-        coverage.max(0.1)
-    )
-}
-
-fn build_provider_chain(requested_engine: &str) -> Vec<OcrProviderAttempt> {
-    let preview = || OcrProviderAttempt::Preview {
-        label: preview_engine_name("mock"),
-    };
-    let windows = || OcrProviderAttempt::Windows {
-        label: "windows".into(),
-    };
-    let unavailable = |label: &str, reason: String| OcrProviderAttempt::Unavailable {
-        label: label.into(),
-        reason,
-    };
-
-    match requested_engine {
+    match engine {
         "mock" => vec![preview()],
         "windows" => vec![windows(), preview()],
         "tesseract" => vec![
-            unavailable(
-                "tesseract",
-                "Tesseract OCR is not implemented yet, falling back.".into(),
-            ),
+            Box::new(tesseract::TesseractOcrProvider),
             windows(),
             preview(),
         ],
-        "paddle" => vec![
-            unavailable(
-                "paddle",
-                "Paddle OCR is not implemented yet, falling back.".into(),
-            ),
-            windows(),
-            preview(),
-        ],
-        "manga-ocr" => vec![
-            unavailable(
-                "manga-ocr",
-                "Manga OCR is not implemented yet, falling back.".into(),
-            ),
-            unavailable(
-                "paddle",
-                "Paddle OCR is not implemented yet, falling back.".into(),
-            ),
-            windows(),
-            preview(),
-        ],
+        "paddle" => vec![paddle(), windows(), preview()],
+        "manga-ocr" => vec![manga(), paddle(), windows(), preview()],
         other => vec![
-            unavailable(
-                other,
-                format!("Unsupported OCR engine '{}', falling back.", other),
-            ),
+            unavailable(other, format!("Unsupported OCR engine '{other}', falling back.")),
             windows(),
             preview(),
         ],
     }
-}
-
-fn build_provider_request(
-    page_image_data_url: String,
-    source_language: Option<String>,
-    regions: &[RegionRecord],
-    overwrite_existing: bool,
-) -> OcrProviderRequest {
-    OcrProviderRequest {
-        image_data_url: page_image_data_url,
-        source_language,
-        overwrite_existing,
-        regions: regions
-            .iter()
-            .map(|region| OcrProviderRegionInput {
-                id: region.id.clone(),
-                label: region.label.clone(),
-                x: region.x,
-                y: region.y,
-                width: region.width,
-                height: region.height,
-                rotation: region.rotation,
-                orientation: region.orientation.clone(),
-                source_text: region.source_text.clone(),
-                locked: region.locked,
-            })
-            .collect(),
-    }
-}
-
-fn run_preview_provider(
-    page_name: &str,
-    page_width: i64,
-    page_height: i64,
-    regions: &[RegionRecord],
-    engine_name: String,
-    overwrite_existing: bool,
-) -> OcrProviderResponse {
-    let results = regions
-        .iter()
-        .map(|region| {
-            if region.locked {
-                return OcrRegionResult {
-                    region_id: region.id.clone(),
-                    text: None,
-                    confidence: None,
-                    skipped: true,
-                    reason: Some("locked".into()),
-                };
-            }
-
-            if !overwrite_existing && !region.source_text.trim().is_empty() {
-                return OcrRegionResult {
-                    region_id: region.id.clone(),
-                    text: None,
-                    confidence: None,
-                    skipped: true,
-                    reason: Some("already_filled".into()),
-                };
-            }
-
-            if region.width <= 0.0 || region.height <= 0.0 {
-                return OcrRegionResult {
-                    region_id: region.id.clone(),
-                    text: None,
-                    confidence: None,
-                    skipped: true,
-                    reason: Some("invalid_bounds".into()),
-                };
-            }
-
-            OcrRegionResult {
-                region_id: region.id.clone(),
-                text: Some(build_preview_text(page_name, page_width, page_height, region)),
-                confidence: None,
-                skipped: false,
-                reason: None,
-            }
-        })
-        .collect();
-
-    OcrProviderResponse {
-        engine: engine_name,
-        results,
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn run_windows_provider(request: &OcrProviderRequest) -> Result<OcrProviderResponse, String> {
-    let temp_dir = std::env::temp_dir().join(format!("scanforge-ocr-{}", Uuid::new_v4()));
-    fs::create_dir_all(&temp_dir).map_err(|error| error.to_string())?;
-
-    let request_path = temp_dir.join("request.json");
-    let script_path = temp_dir.join("windows_ocr.ps1");
-
-    let execution = (|| {
-        let request_json =
-            serde_json::to_string(request).map_err(|error| error.to_string())?;
-        fs::write(&request_path, request_json).map_err(|error| error.to_string())?;
-        fs::write(&script_path, WINDOWS_OCR_SCRIPT).map_err(|error| error.to_string())?;
-
-        let output = Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-            ])
-            .arg(&script_path)
-            .arg(&request_path)
-            .output()
-            .map_err(|error| format!("Failed to start Windows OCR provider: {error}"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let detail = if !stderr.is_empty() { stderr } else { stdout };
-            return Err(format!("Windows OCR provider failed: {}", detail));
-        }
-
-        let stdout = String::from_utf8(output.stdout)
-            .map_err(|error| format!("Windows OCR provider returned invalid UTF-8: {error}"))?;
-        let payload = stdout.trim();
-        serde_json::from_str::<OcrProviderResponse>(payload)
-            .map_err(|error| format!("Failed to parse Windows OCR output: {error}"))
-    })();
-
-    let _ = fs::remove_dir_all(&temp_dir);
-    execution
-}
-
-#[cfg(not(target_os = "windows"))]
-fn run_windows_provider(_request: &OcrProviderRequest) -> Result<OcrProviderResponse, String> {
-    Err("Windows OCR provider is only available on Windows.".into())
-}
-
-fn run_provider_chain(
-    requested_engine: &str,
-    request: &OcrProviderRequest,
-    page_name: &str,
-    page_width: i64,
-    page_height: i64,
-    regions: &[RegionRecord],
-    overwrite_existing: bool,
-) -> Result<(OcrProviderResponse, Vec<String>), String> {
-    let chain = build_provider_chain(requested_engine);
-    let mut provider_path = Vec::new();
-    let mut failures = Vec::new();
-
-    for attempt in chain {
-        match attempt {
-            OcrProviderAttempt::Unavailable { label, reason } => {
-                provider_path.push(label.clone());
-                eprintln!("[ScanForge][OCR] provider unavailable: {}", reason);
-                failures.push(reason);
-            }
-            OcrProviderAttempt::Windows { label } => {
-                provider_path.push(label);
-                match run_windows_provider(request) {
-                    Ok(response) => {
-                        if let Some(last) = provider_path.last_mut() {
-                            *last = response.engine.clone();
-                        }
-                        return Ok((response, provider_path));
-                    }
-                    Err(error) => {
-                        eprintln!("[ScanForge][OCR] windows provider failed: {}", error);
-                        failures.push(error);
-                    }
-                }
-            }
-            OcrProviderAttempt::Preview { label } => {
-                provider_path.push(label.clone());
-                if provider_path.len() > 1 {
-                    eprintln!(
-                        "[ScanForge][OCR] using preview fallback after: {}",
-                        provider_path[..provider_path.len() - 1].join(" -> ")
-                    );
-                }
-                let response = run_preview_provider(
-                    page_name,
-                    page_width,
-                    page_height,
-                    regions,
-                    label,
-                    overwrite_existing,
-                );
-                return Ok((response, provider_path));
-            }
-        }
-    }
-
-    Err(if failures.is_empty() {
-        "No OCR providers available".into()
-    } else {
-        failures.join(" | ")
-    })
 }
 
 fn apply_ocr_result_to_region(
@@ -375,7 +97,7 @@ fn apply_ocr_result_to_region(
     engine_name: &str,
     source_language: Option<String>,
     processed_at: i64,
-) -> Result<(), String> {
+) -> Result<(), OcrError> {
     let mut updated_region = region.clone();
 
     if let Some(text) = result.text.clone() {
@@ -390,7 +112,9 @@ fn apply_ocr_result_to_region(
         updated_region.source_language = source_language;
         updated_region.ocr_updated_at = Some(processed_at);
         updated_region.ocr_confidence = result.confidence;
-        return repository.upsert_region(updated_region).map(|_| ());
+        return repository.upsert_region(updated_region).map_err(|e| {
+            OcrError::new("storage", format!("Failed to update region: {e}"), false)
+        });
     }
 
     match result.reason.as_deref() {
@@ -400,44 +124,73 @@ fn apply_ocr_result_to_region(
             updated_region.source_language = source_language;
             updated_region.ocr_updated_at = Some(processed_at);
             updated_region.ocr_confidence = result.confidence;
-            repository.upsert_region(updated_region).map(|_| ())
+            repository.upsert_region(updated_region).map_err(|e| {
+                OcrError::new("storage", format!("Failed to update region: {e}"), false)
+            })
         }
         _ => Ok(()),
     }
 }
 
+fn emit_progress(
+    app_handle: &tauri::AppHandle,
+    page_id: &str,
+    region_id: Option<String>,
+    progress: f64,
+    message: String,
+) {
+    let _ = app_handle.emit("ocr-progress", OcrProgressEvent {
+        page_id: page_id.to_string(),
+        region_id,
+        progress,
+        message,
+    });
+}
+
 #[tauri::command]
 pub fn run_page_ocr(
+    app_handle: tauri::AppHandle,
     page_id: String,
     region_ids: Option<Vec<String>>,
     overwrite_existing: Option<bool>,
     repository: State<'_, DomainRepository>,
 ) -> Result<OcrPageResult, String> {
+    emit_progress(&app_handle, &page_id, None, 0.05, "Starting OCR".into());
+
     let page = repository
-        .get_page(page_id.clone())?
+        .get_page(page_id.clone())
+        .map_err(|e| format!("Database error loading page: {e}"))?
         .ok_or_else(|| "Page not found".to_string())?;
+
+    emit_progress(&app_handle, &page_id, None, 0.15, "Loading page data".into());
 
     if page.width <= 0 || page.height <= 0 {
         return Err("Invalid page dimensions".into());
     }
 
-    if !page.image_path.starts_with("data:image/") {
-        return Err("OCR backend expects a data:image payload".into());
-    }
+    let image_data = if page.image_path.starts_with("data:") {
+        page.image_path.clone()
+    } else {
+        let storage = app_handle.state::<ProjectRepository>();
+        storage.load_page_image_as_data_url(&page.image_path)
+            .map_err(|e| format!("Failed to load page image for OCR: {e}"))?
+    };
 
-    let settings = repository.get_project_settings(page.project_id.clone())?;
+    let settings = repository.get_project_settings(page.project_id.clone()).map_err(|e| format!("Database error loading settings: {e}"))?;
     let requested_engine = settings
         .as_ref()
         .map(|settings| settings.ocr_engine.as_str())
         .unwrap_or("windows");
     let source_language = settings
         .as_ref()
-        .and_then(|settings| (settings.source_language != "auto").then(|| settings.source_language.clone()));
+        .and_then(|s| (s.source_language != "auto").then(|| s.source_language.clone()));
+
+    emit_progress(&app_handle, &page_id, None, 0.25, format!("Running {}", requested_engine));
 
     let page_name = page_label(&page.image_path, &page.id);
-    let all_regions = repository.list_regions_by_page(page_id)?;
+    let all_regions = repository.list_regions_by_page(page_id.clone()).map_err(|e| format!("Database error loading regions: {e}"))?;
     let regions = if let Some(region_ids) = region_ids {
-        let target_ids = region_ids.into_iter().collect::<std::collections::HashSet<_>>();
+        let target_ids: std::collections::HashSet<_> = region_ids.into_iter().collect();
         all_regions
             .into_iter()
             .filter(|region| target_ids.contains(&region.id))
@@ -452,30 +205,35 @@ pub fn run_page_ocr(
 
     let overwrite_existing = overwrite_existing.unwrap_or(false);
     let provider_request = build_provider_request(
-        page.image_path.clone(),
+        image_data,
         source_language.clone(),
         &regions,
         overwrite_existing,
     );
 
+    let providers = build_providers_for_engine(requested_engine);
     let (provider_output, provider_path) = run_provider_chain(
-        requested_engine,
+        &providers,
         &provider_request,
         &page_name,
         page.width,
         page.height,
         &regions,
         overwrite_existing,
-    )?;
+    )
+    .map_err(|e| {
+        format!("OCR failed: {e}")
+    })?;
 
     let processed_at = now_ms();
-    let result_by_id = provider_output
+    let result_by_id: std::collections::HashMap<&str, &OcrRegionResult> = provider_output
         .results
         .iter()
         .map(|result| (result.region_id.as_str(), result))
-        .collect::<std::collections::HashMap<_, _>>();
+        .collect();
 
-    for region in &regions {
+    let total = regions.len() as f64;
+    for (index, region) in regions.iter().enumerate() {
         if let Some(result) = result_by_id.get(region.id.as_str()) {
             apply_ocr_result_to_region(
                 &repository,
@@ -484,9 +242,20 @@ pub fn run_page_ocr(
                 &provider_output.engine,
                 source_language.clone(),
                 processed_at,
-            )?;
+            ).map_err(|e| format!("Failed to apply OCR result: {e}"))?;
         }
+        let region_progress = 0.35 + ((index + 1) as f64 / total) * 0.6;
+        let status = if region.locked { "skipped (locked)" } else { "done" };
+        emit_progress(
+            &app_handle,
+            &page_id,
+            Some(region.id.clone()),
+            region_progress,
+            format!("Region {}/{}: {}", index + 1, total, status),
+        );
     }
+
+    emit_progress(&app_handle, &page_id, None, 1.0, "OCR complete".into());
 
     let filled_count = provider_output
         .results

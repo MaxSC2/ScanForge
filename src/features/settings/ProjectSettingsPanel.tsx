@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Languages, ScanText, Settings2, WandSparkles } from 'lucide-react';
+import { WandSparkles } from 'lucide-react';
+import { LanguagesIcon, ScanTextIcon, SettingsIcon } from '../../icons';
 import {
   type OcrEngineId,
   type ProjectSourceLanguage,
@@ -23,11 +24,11 @@ const TARGET_LANGUAGE_OPTIONS: Array<{ value: ProjectTargetLanguage; label: stri
 ];
 
 const OCR_ENGINE_OPTIONS: Array<{ value: OcrEngineId; label: string }> = [
+  { value: 'manga-ocr', label: 'Manga OCR (Python)' },
+  { value: 'paddle', label: 'Paddle OCR (Python)' },
   { value: 'windows', label: 'Windows OCR' },
   { value: 'mock', label: 'Превью OCR' },
-  { value: 'tesseract', label: 'Tesseract (позже)' },
-  { value: 'paddle', label: 'Paddle (позже)' },
-  { value: 'manga-ocr', label: 'Manga OCR (позже)' },
+  { value: 'tesseract', label: 'Tesseract (не готов)' },
 ];
 
 const TRANSLATION_PROVIDER_OPTIONS: Array<{
@@ -53,7 +54,7 @@ export function ProjectSettingsPanel() {
   return (
     <section className="px-3 py-3.5">
       <div className="mb-3 flex items-center gap-2">
-        <Settings2 size={12} className="text-zinc-500" />
+        <SettingsIcon size={12} className="text-zinc-500" />
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
           Настройки пайплайна
         </h3>
@@ -68,7 +69,7 @@ export function ProjectSettingsPanel() {
           <div className="grid grid-cols-1 gap-3">
             <SelectField
               label="Источник"
-              icon={<Languages size={11} className="text-zinc-500" />}
+              icon={<LanguagesIcon size={11} className="text-zinc-500" />}
               value={settings.sourceLanguage}
               disabled={disabled}
               options={SOURCE_LANGUAGE_OPTIONS}
@@ -79,7 +80,7 @@ export function ProjectSettingsPanel() {
 
             <SelectField
               label="Цель"
-              icon={<Languages size={11} className="text-zinc-500" />}
+              icon={<LanguagesIcon size={11} className="text-zinc-500" />}
               value={settings.targetLanguage}
               disabled={disabled}
               options={TARGET_LANGUAGE_OPTIONS}
@@ -90,7 +91,7 @@ export function ProjectSettingsPanel() {
 
             <SelectField
               label="OCR"
-              icon={<ScanText size={11} className="text-zinc-500" />}
+              icon={<ScanTextIcon size={11} className="text-zinc-500" />}
               value={settings.ocrEngine}
               disabled={disabled}
               options={OCR_ENGINE_OPTIONS}

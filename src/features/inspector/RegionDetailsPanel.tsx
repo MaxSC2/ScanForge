@@ -1,16 +1,20 @@
+import { useState } from 'react';
 import {
-  Box,
   Copy,
-  Eye,
-  EyeOff,
-  Languages,
-  Lock,
   MessageSquare,
-  ScanText,
   StickyNote,
-  Trash2,
   Unlock,
 } from 'lucide-react';
+import {
+  BoxIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LanguagesIcon,
+  LockIcon,
+  ScanTextIcon,
+  Trash2Icon,
+} from '../../icons';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { REGION_KIND_OPTIONS, type Region, type RegionKind } from '../../types';
 import {
   AccordionSection,
@@ -34,11 +38,14 @@ export function RegionDetailsPanel({
   onDelete: (pageId: string, regionId: string) => void;
   onRerunOcr: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-1 border-b border-zinc-800/60 px-3 py-2">
         <button
           onClick={() => update({ locked: !region.locked })}
+          aria-label={region.locked ? 'Разблокировать' : 'Заблокировать'}
           className={`rounded p-1.5 transition-colors ${
             region.locked
               ? 'bg-amber-500/10 text-amber-400'
@@ -46,11 +53,12 @@ export function RegionDetailsPanel({
           }`}
           title={region.locked ? 'Разблокировать' : 'Заблокировать'}
         >
-          {region.locked ? <Lock size={13} /> : <Unlock size={13} />}
+          {region.locked ? <LockIcon size={13} /> : <Unlock size={13} />}
         </button>
 
         <button
           onClick={() => update({ visible: !region.visible })}
+          aria-label={region.visible ? 'Скрыть' : 'Показать'}
           className={`rounded p-1.5 transition-colors ${
             !region.visible
               ? 'bg-zinc-800 text-zinc-500'
@@ -58,11 +66,12 @@ export function RegionDetailsPanel({
           }`}
           title={region.visible ? 'Скрыть' : 'Показать'}
         >
-          {region.visible ? <Eye size={13} /> : <EyeOff size={13} />}
+          {region.visible ? <EyeIcon size={13} /> : <EyeOffIcon size={13} />}
         </button>
 
         <button
           onClick={() => onDuplicate(pageId, region.id)}
+          aria-label="Дублировать"
           className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
           title="Дублировать"
         >
@@ -72,13 +81,27 @@ export function RegionDetailsPanel({
         <div className="flex-1" />
 
         <button
-          onClick={() => onDelete(pageId, region.id)}
+          onClick={() => setConfirmDelete(true)}
+          aria-label="Удалить регион"
           className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
           title="Удалить регион"
         >
-          <Trash2 size={13} />
+          <Trash2Icon size={13} />
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Удалить «${region.label}»?`}
+        message="Регион и его данные будут безвозвратно удалены."
+        confirmLabel="Удалить"
+        destructive
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete(pageId, region.id);
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <AccordionSection title="Свойства" icon={<span className="text-[12px]">T</span>} defaultOpen>
@@ -135,7 +158,7 @@ export function RegionDetailsPanel({
           </div>
         </AccordionSection>
 
-        <AccordionSection title="Геометрия" icon={<Box size={12} />} defaultOpen>
+        <AccordionSection title="Геометрия" icon={<BoxIcon size={12} />} defaultOpen>
           <div className="grid grid-cols-2 gap-2">
             <NumField label="X" value={region.x} onChange={(value) => update({ x: value })} />
             <NumField label="Y" value={region.y} onChange={(value) => update({ y: value })} />
@@ -164,16 +187,35 @@ export function RegionDetailsPanel({
             <StatusPill label={`OCR ${region.ocrStatus}`} />
             {region.ocrEngine ? <StatusPill label={region.ocrEngine} /> : null}
             {typeof region.ocrConfidence === 'number' ? (
-              <StatusPill label={`conf ${Math.round(region.ocrConfidence * 100)}%`} />
+              <span
+                className={`rounded-full border border-zinc-800 bg-zinc-950/70 px-2 py-0.5 text-[10px] ${
+                  region.ocrConfidence >= 0.8
+                    ? 'text-emerald-400'
+                    : region.ocrConfidence >= 0.5
+                      ? 'text-amber-400'
+                      : 'text-red-400'
+                }`}
+              >
+                {Math.round(region.ocrConfidence * 100)}%
+              </span>
             ) : null}
           </div>
-          <div className="mt-2 flex">
+          <div className="mt-2 flex items-center justify-between">
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={!!region.ocrOverwriteEnabled}
+                onChange={(event) => update({ ocrOverwriteEnabled: event.target.checked })}
+                className="h-3 w-3 rounded border-zinc-700 bg-zinc-800 text-indigo-500 focus:ring-0"
+              />
+              Перезаписывать при OCR
+            </label>
             <button
               onClick={onRerunOcr}
               className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
               title="Запустить OCR заново для этого региона"
             >
-              <ScanText size={12} />
+              <ScanTextIcon size={12} />
               <span>Re-run OCR</span>
             </button>
           </div>
@@ -182,7 +224,7 @@ export function RegionDetailsPanel({
           ) : null}
         </AccordionSection>
 
-        <AccordionSection title="Перевод" icon={<Languages size={12} />} defaultOpen>
+        <AccordionSection title="Перевод" icon={<LanguagesIcon size={12} />} defaultOpen>
           <textarea
             rows={4}
             value={region.translatedText}

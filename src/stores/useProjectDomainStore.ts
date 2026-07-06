@@ -10,6 +10,7 @@ import {
 import { projectSettingsRepository } from '../repositories/projectSettingsRepository';
 import { textStyleRepository } from '../repositories/textStyleRepository';
 import { useDiagnosticsStore } from './useDiagnosticsStore';
+import { useHistoryStore } from './useHistoryStore';
 
 interface ProjectDomainState {
   projectId: string | null;
@@ -74,6 +75,7 @@ export const useProjectDomainStore = create<ProjectDomainState>((set, get) => ({
       return null;
     }
 
+    useHistoryStore.getState().capture();
     const nextSettings: ProjectSettingsRecord = {
       ...settings,
       ...patch,
@@ -90,6 +92,7 @@ export const useProjectDomainStore = create<ProjectDomainState>((set, get) => ({
       return null;
     }
 
+    useHistoryStore.getState().capture();
     const saved = await textStyleRepository.update({
       ...style,
       projectId,
@@ -104,6 +107,7 @@ export const useProjectDomainStore = create<ProjectDomainState>((set, get) => ({
 
   deleteTextStyle: async (id) => {
     const { settings, textStyles } = get();
+    useHistoryStore.getState().capture();
     await textStyleRepository.delete(id);
 
     const remainingStyles = textStyles.filter((style) => style.id !== id);
@@ -111,9 +115,7 @@ export const useProjectDomainStore = create<ProjectDomainState>((set, get) => ({
 
     if (settings?.defaultTextStyleId === id) {
       const fallbackId = remainingStyles[0]?.id;
-      if (fallbackId) {
-        await get().updateSettings({ defaultTextStyleId: fallbackId });
-      }
+      await get().updateSettings({ defaultTextStyleId: fallbackId ?? undefined });
     }
   },
 

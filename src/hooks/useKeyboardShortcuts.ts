@@ -232,6 +232,31 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      if (ctrl && key === 'd') {
+        event.preventDefault();
+        const pageId = usePageStore.getState().activePageId;
+        const regionId = useRegionStore.getState().selectedRegionId;
+        if (pageId && regionId) {
+          useRegionStore.getState().duplicateRegion(pageId, regionId);
+        }
+        return;
+      }
+
+      if (event.key === 'Tab' && !ctrl) {
+        event.preventDefault();
+        const page = usePageStore.getState().getActivePage();
+        if (!page || page.regions.length === 0) return;
+        const sortedRegions = [...page.regions].sort((a, b) => a.order - b.order);
+        const currentIdx = useRegionStore.getState().selectedRegionId
+          ? sortedRegions.findIndex((r) => r.id === useRegionStore.getState().selectedRegionId)
+          : -1;
+        const nextIdx = event.shiftKey
+          ? (currentIdx - 1 + sortedRegions.length) % sortedRegions.length
+          : (currentIdx + 1) % sortedRegions.length;
+        useRegionStore.getState().selectRegion(sortedRegions[nextIdx].id);
+        return;
+      }
+
       if (!ctrl && key === 'g') {
         event.preventDefault();
         useEditorStore.getState().toggleGrid();

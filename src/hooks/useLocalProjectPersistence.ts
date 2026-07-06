@@ -96,7 +96,6 @@ export function useLocalProjectPersistence() {
         }
         pushToast('Восстановлен локальный снимок проекта', 'info');
       } catch (error) {
-        console.warn('Local project restore skipped:', error);
         useDiagnosticsStore.getState().record({
           scope: 'recovery',
           level: 'error',
@@ -151,7 +150,6 @@ export function useLocalProjectPersistence() {
           void useProjectLibraryStore.getState().refresh();
           usePersistenceStore.getState().markSaved(result.project.meta.updatedAt);
         } catch (error) {
-          console.warn('Local project autosave failed:', error);
           useDiagnosticsStore.getState().record({
             scope: 'autosave',
             level: 'error',

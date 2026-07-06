@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { Page, ProjectFile, ProjectMeta } from '../types';
@@ -24,12 +25,25 @@ function readImageSize(src: string): Promise<{ width: number; height: number }> 
 export async function hydrateProjectFile(contents: ProjectFile): Promise<HydratedProjectState> {
   const pages = await Promise.all(
     contents.pages.map(async (page) => {
-      const actual = await readImageSize(page.imageDataUrl);
+      const isDataUrl = page.imageDataUrl.startsWith('data:');
+      let imageUrl = page.imageDataUrl;
+
+      if (!isDataUrl && isDesktopRuntime()) {
+        try {
+          imageUrl = await invoke<string>('load_page_image', {
+            imagePath: page.imageDataUrl,
+          });
+        } catch {
+          imageUrl = page.imageDataUrl;
+        }
+      }
+
+      const actual = await readImageSize(imageUrl);
       return {
         id: page.id,
         fileName: page.fileName,
         imagePath: page.imageDataUrl,
-        imageUrl: page.imageDataUrl,
+        imageUrl,
         naturalWidth: actual.width,
         naturalHeight: actual.height,
         regions: page.regions.map((region) => normalizeRegion(region)),

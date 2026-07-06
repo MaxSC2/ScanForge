@@ -9,14 +9,16 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  Eye,
-  EyeOff,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
-  X,
 } from 'lucide-react';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  XIcon,
+} from '../icons';
 import { useEditorStore } from '../stores/useEditorStore';
 import { usePageStore } from '../stores/usePageStore';
 
@@ -150,44 +152,6 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
       )}
 
       <div className="relative flex min-h-0 flex-1">
-        {false && !cleanView && inspectorOpen && !focusMode && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Изменить ширину инспектора"
-            onPointerDown={startInspectorResize}
-            className={`group relative w-1.5 flex-none cursor-col-resize bg-zinc-900 transition-colors ${
-              inspectorResizing ? 'bg-indigo-500/30' : 'hover:bg-zinc-800'
-            }`}
-            title="Потяни, чтобы изменить ширину инспектора"
-          >
-            <div
-              className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${
-                inspectorResizing ? 'bg-indigo-400/80' : 'bg-zinc-800 group-hover:bg-zinc-600'
-              }`}
-            />
-          </div>
-        )}
-
-        {false && !cleanView && inspectorOpen && !focusMode && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Изменить ширину инспектора"
-            onPointerDown={startInspectorResize}
-            className={`group relative w-1.5 flex-none cursor-col-resize bg-zinc-900 transition-colors ${
-              inspectorResizing ? 'bg-indigo-500/30' : 'hover:bg-zinc-800'
-            }`}
-            title="Потяни, чтобы изменить ширину инспектора"
-          >
-            <div
-              className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${
-                inspectorResizing ? 'bg-indigo-400/80' : 'bg-zinc-800 group-hover:bg-zinc-600'
-              }`}
-            />
-          </div>
-        )}
-
         {!cleanView && (
           <aside
             className={`overflow-hidden bg-zinc-900 transition-[width,transform,opacity] duration-200 ease-out ${
@@ -206,6 +170,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
         {!cleanView && !focusMode && (
           <button
             onClick={toggleSidebar}
+            aria-label={sidebarOpen ? 'Свернуть левую панель' : 'Развернуть левую панель'}
             className="flex w-5 flex-none items-center justify-center border-r border-zinc-800 bg-zinc-900 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
             title={sidebarOpen ? 'Свернуть левую панель (Ctrl+B)' : 'Развернуть левую панель (Ctrl+B)'}
           >
@@ -232,6 +197,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
             <>
               <button
                 onClick={toggleSidebar}
+                aria-label={sidebarOpen ? 'Скрыть левую панель' : 'Показать левую панель'}
                 className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/92 text-zinc-500 shadow-lg backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-200"
                 title={sidebarOpen ? 'Скрыть левую панель (Ctrl+B)' : 'Показать левую панель (Ctrl+B)'}
               >
@@ -240,6 +206,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
 
               <button
                 onClick={toggleInspector}
+                aria-label={inspectorOpen ? 'Скрыть инспектор' : 'Показать инспектор'}
                 className="absolute right-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/92 text-zinc-500 shadow-lg backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-200"
                 title={inspectorOpen ? 'Скрыть инспектор (Ctrl+I)' : 'Показать инспектор (Ctrl+I)'}
               >
@@ -273,6 +240,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
                 <button
                   onClick={() => goToAdjacentPage('previous')}
                   disabled={!hasPreviousPage}
+                  aria-label="Предыдущая страница"
                   className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-30"
                   title="Предыдущая страница (Left / Up / PageUp)"
                 >
@@ -286,6 +254,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
                 <button
                   onClick={() => goToAdjacentPage('next')}
                   disabled={!hasNextPage}
+                  aria-label="Следующая страница"
                   className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-30"
                   title="Следующая страница (Right / Down / Space)"
                 >
@@ -302,18 +271,20 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
 
                 <button
                   onClick={toggleRegionOverlays}
+                  aria-label={regionOverlaysVisible ? 'Скрыть оверлеи регионов' : 'Показать оверлеи регионов'}
                   className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-zinc-800 hover:text-zinc-100"
                   title={regionOverlaysVisible ? 'Скрыть оверлеи регионов' : 'Показать оверлеи регионов'}
                 >
-                  {regionOverlaysVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+                  {regionOverlaysVisible ? <EyeIcon size={13} /> : <EyeOffIcon size={13} />}
                 </button>
 
                 <button
                   onClick={toggleCleanView}
+                  aria-label="Выйти из чистого режима"
                   className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800/80 text-zinc-200 transition-colors hover:bg-zinc-700"
                   title="Выйти из чистого режима (Esc)"
                 >
-                  <X size={13} />
+                  <XIcon size={13} />
                 </button>
               </div>
             </div>
@@ -325,6 +296,7 @@ export function Layout({ sidebar, canvas, inspector, toolbar, statusBar }: Layou
         {!cleanView && !focusMode && (
           <button
             onClick={toggleInspector}
+            aria-label={inspectorOpen ? 'Свернуть инспектор' : 'Развернуть инспектор'}
             className="flex w-5 flex-none items-center justify-center border-l border-zinc-800 bg-zinc-900 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
             title={inspectorOpen ? 'Свернуть инспектор (Ctrl+I)' : 'Развернуть инспектор (Ctrl+I)'}
           >

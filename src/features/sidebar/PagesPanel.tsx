@@ -4,16 +4,21 @@ import {
   Droppable,
   type DropResult,
 } from '@hello-pangea/dnd';
+import { useState } from 'react';
 import {
   GripVertical,
   ImagePlus,
-  Layers,
-  Trash2,
 } from 'lucide-react';
+import {
+  LayersIcon,
+  Trash2Icon,
+} from '../../icons';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { usePageStore } from '../../stores/usePageStore';
 import { useRegionStore } from '../../stores/useRegionStore';
 
 export function PagesPanel() {
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const pages = usePageStore((state) => state.pages);
   const activePageId = usePageStore((state) => state.activePageId);
   const selectedPageIds = usePageStore((state) => state.selectedPageIds);
@@ -32,7 +37,7 @@ export function PagesPanel() {
   return (
     <section className="flex h-full min-h-0 flex-col">
       <div className="flex items-center border-b border-zinc-800 px-3 py-2">
-        <Layers size={12} className="mr-1.5 text-zinc-500" />
+        <LayersIcon size={12} className="mr-1.5 text-zinc-500" />
         <h2 className="flex-1 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Страницы
         </h2>
@@ -118,6 +123,7 @@ export function PagesPanel() {
 
                           <input
                             type="checkbox"
+                            aria-label="Выбрать страницу для пакетных операций"
                             checked={isSelectedForBatch}
                             onChange={() => selectPage(page.id, 'toggle')}
                             onClick={(event) => event.stopPropagation()}
@@ -128,7 +134,7 @@ export function PagesPanel() {
                           <img
                             src={page.imageUrl}
                             alt=""
-                            className="h-12 w-9 flex-none rounded border border-zinc-700/50 object-cover"
+                            className="h-14 w-10 flex-none rounded border border-zinc-700/50 object-cover transition-all duration-150 group-hover:h-20 group-hover:w-14 group-hover:shadow-lg group-hover:shadow-black/30"
                           />
 
                           <div className="min-w-0 flex-1 py-0.5">
@@ -141,7 +147,7 @@ export function PagesPanel() {
                             {page.regions.length > 0 ? (
                               <div className="mt-1 flex items-center gap-1">
                                 <span className="inline-flex items-center gap-0.5 rounded-full bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-400">
-                                  <Layers size={8} />
+                                  <LayersIcon size={8} />
                                   {page.regions.length}
                                 </span>
                               </div>
@@ -151,12 +157,13 @@ export function PagesPanel() {
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              removePage(page.id);
+                              setConfirmDelete(page.id);
                             }}
+                            aria-label="Удалить страницу"
                             className="flex-none rounded p-1 text-zinc-500 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400"
                             title="Удалить страницу"
                           >
-                            <Trash2 size={12} />
+                            <Trash2Icon size={12} />
                           </button>
                         </li>
                       )}
@@ -169,6 +176,19 @@ export function PagesPanel() {
           )}
         </Droppable>
       </DragDropContext>
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Удалить страницу?"
+        message="Страница и все её регионы будут безвозвратно удалены."
+        confirmLabel="Удалить"
+        destructive
+        onConfirm={() => {
+          if (confirmDelete) removePage(confirmDelete);
+          setConfirmDelete(null);
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </section>
   );
 }

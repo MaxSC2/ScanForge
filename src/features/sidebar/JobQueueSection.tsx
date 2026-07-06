@@ -1,13 +1,15 @@
 import {
   CircleAlert,
   CircleCheckBig,
-  Download,
   Eraser,
-  Languages,
   LoaderCircle,
   RotateCcw,
-  ScanText,
 } from 'lucide-react';
+import {
+  DownloadIcon,
+  LanguagesIcon,
+  ScanTextIcon,
+} from '../../icons';
 import type { JobRecord } from '../../types';
 import {
   formatClock,
@@ -46,7 +48,7 @@ export function JobQueueSection({
           {processing ? (
             <LoaderCircle size={11} className="animate-spin text-indigo-400" />
           ) : (
-            <ScanText size={11} className="text-zinc-500" />
+            <ScanTextIcon size={11} className="text-zinc-500" />
           )}
           {processing ? 'Пайплайн активен' : 'Пайплайн ожидает'}
         </div>
@@ -107,11 +109,11 @@ function JobListItem({
     ) : job.status === 'failed' ? (
       <CircleAlert size={12} className="text-amber-400" />
     ) : job.stage === 'export' ? (
-      <Download size={12} className="text-zinc-500" />
+      <DownloadIcon size={12} className="text-zinc-500" />
     ) : job.stage === 'translate' ? (
-      <Languages size={12} className="text-zinc-500" />
+      <LanguagesIcon size={12} className="text-zinc-500" />
     ) : (
-      <ScanText size={12} className="text-zinc-500" />
+      <ScanTextIcon size={12} className="text-zinc-500" />
     );
 
   return (

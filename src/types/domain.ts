@@ -61,6 +61,7 @@ export interface RegionRecord {
   visible: boolean;
   textStyleId?: string;
   ocrConfidence?: number;
+  ocrOverwriteEnabled?: boolean;
 }
 
 export type ProjectSettingsRecord = ProjectSettings;

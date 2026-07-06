@@ -1,27 +1,3 @@
-import type { RegionKind } from './region';
-
-export interface OcrRegionInput {
-  id: string;
-  label: string;
-  kind: RegionKind;
-  order: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  sourceText: string;
-  locked: boolean;
-}
-
-export interface OcrPagePayload {
-  pageId: string;
-  fileName: string;
-  imageDataUrl: string;
-  naturalWidth: number;
-  naturalHeight: number;
-  regions: OcrRegionInput[];
-}
-
 export interface OcrRegionResult {
   regionId: string;
   text: string | null;
@@ -36,5 +12,33 @@ export interface OcrPageResult {
   regionsProcessed: number;
   filledCount: number;
   skippedCount: number;
+  failedCount?: number;
   results: OcrRegionResult[];
+  averageConfidence?: number;
+}
+
+export interface OcrErrorDetail {
+  provider: string;
+  message: string;
+  recoverable: boolean;
+}
+
+export interface OcrAbortOptions {
+  signal?: AbortSignal;
+}
+
+export interface OcrRunOptions {
+  regionIds?: string[];
+  overwriteExisting?: boolean;
+}
+
+export interface OcrRunOptionsWithAbort extends OcrRunOptions, OcrAbortOptions {}
+
+export type OcrProgressCallback = (progress: number, message: string) => void;
+
+export interface OcrProgressEvent {
+  pageId: string;
+  regionId?: string | null;
+  progress: number;
+  message: string;
 }

@@ -2,14 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type Konva from 'konva';
 import {
   Copy,
-  Eye,
-  EyeOff,
-  Lock,
-  Trash2,
   Unlock,
 } from 'lucide-react';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  LockIcon,
+  ScanTextIcon,
+  Trash2Icon,
+} from '../../icons';
 import { usePageStore } from '../../stores/usePageStore';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
+import { useJobStore } from '../../stores/useJobStore';
 import { useRegionStore } from '../../stores/useRegionStore';
 import { useImageLoader } from '../../hooks/useImageLoader';
 import { useCanvasInteraction } from '../../hooks/useCanvasInteraction';
@@ -18,6 +22,7 @@ import {
   getCanvasViewportBounds,
   isRegionWithinViewport,
 } from './canvasPerformance';
+import { snapRect, SNAP_THRESHOLD, GRID_STEP } from '../../utils/snapping';
 
 interface CtxMenuState {
   x: number;
@@ -217,13 +222,14 @@ export function useEditorCanvas() {
     const rect = drawRect;
     setDrawRect(null);
     if (!rect || rect.width < 8 || rect.height < 8 || !activePageId) return;
+    const snapped = snapRect(rect, gridVisible, GRID_STEP, SNAP_THRESHOLD);
     addRegion(activePageId, {
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
+      x: Math.round(snapped.x),
+      y: Math.round(snapped.y),
+      width: Math.round(snapped.width),
+      height: Math.round(snapped.height),
     });
-  }, [tool, drawRect, activePageId, addRegion]);
+  }, [tool, drawRect, activePageId, addRegion, gridVisible]);
 
   const handleStageClick = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -260,13 +266,20 @@ export function useEditorCanvas() {
 
     return [
       {
+        label: 'OCR региона',
+        icon: <ScanTextIcon size={13} />,
+        onClick: () => {
+          useJobStore.getState().queueOcrJobs([{ pageId: activePageId, regionIds: [region.id] }]);
+        },
+      },
+      {
         label: region.locked ? 'Разблокировать' : 'Заблокировать',
-        icon: region.locked ? <Unlock size={13} /> : <Lock size={13} />,
+        icon: region.locked ? <Unlock size={13} /> : <LockIcon size={13} />,
         onClick: () => updateRegion(activePageId, region.id, { locked: !region.locked }),
       },
       {
         label: region.visible ? 'Скрыть' : 'Показать',
-        icon: region.visible ? <EyeOff size={13} /> : <Eye size={13} />,
+        icon: region.visible ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />,
         onClick: () => updateRegion(activePageId, region.id, { visible: !region.visible }),
       },
       {
@@ -277,7 +290,7 @@ export function useEditorCanvas() {
       },
       {
         label: 'Удалить',
-        icon: <Trash2 size={13} />,
+        icon: <Trash2Icon size={13} />,
         shortcut: 'Del',
         danger: true,
         onClick: () => deleteRegion(activePageId, region.id),
