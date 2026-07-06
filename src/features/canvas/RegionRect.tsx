@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { Rect, Transformer, Group, Text } from 'react-konva';
 import type Konva from 'konva';
 import type { Region } from '../../types';
@@ -31,6 +31,7 @@ export function RegionRect({
     return id ? s.pages.find((p) => p.id === id) : undefined;
   });
   const tool = useEditorStore((s) => s.tool);
+  const setEditingRegionId = useEditorStore((s) => s.setEditingRegionId);
 
   useEffect(() => {
     if (isSelected && trRef.current && shapeRef.current) {
@@ -44,6 +45,7 @@ export function RegionRect({
   const handleSelect = () => {
     if (tool !== 'select') return;
     selectRegion(region.id);
+    setEditingRegionId(null);
   };
 
   const gridVisible = useEditorStore((s) => s.gridVisible);
@@ -66,6 +68,11 @@ export function RegionRect({
       y: Math.round(snapped.y),
     });
   };
+
+  const handleDblClick = useCallback(() => {
+    if (tool !== 'select') return;
+    setEditingRegionId(region.id);
+  }, [region.id, tool, setEditingRegionId]);
 
   const handleTransformEnd = () => {
     const node = shapeRef.current;
@@ -112,6 +119,8 @@ export function RegionRect({
         draggable={canManipulate}
         onClick={handleSelect}
         onTap={handleSelect}
+        onDblClick={handleDblClick}
+        onDblTap={handleDblClick}
         onDragEnd={handleDragEnd}
         onTransformEnd={handleTransformEnd}
         onContextMenu={onContextMenu}
@@ -151,6 +160,38 @@ export function RegionRect({
           fontSize={10}
           fill="#f59e0b"
           fontStyle="bold"
+          listening={false}
+        />
+      )}
+
+      {/* Source text display */}
+      {region.sourceText && (
+        <Text
+          x={region.x + 4}
+          y={region.y + region.height - 18}
+          width={region.width - 8}
+          text={region.sourceText}
+          fontSize={10}
+          fontFamily="Inter, system-ui, sans-serif"
+          fill="rgba(255,255,255,0.35)"
+          fontStyle="italic"
+          ellipsis
+          listening={false}
+        />
+      )}
+
+      {/* Translated text display */}
+      {region.translatedText && (
+        <Text
+          x={region.x + 4}
+          y={region.y + 4}
+          width={region.width - 8}
+          height={region.height - (region.sourceText ? 22 : 8)}
+          text={region.translatedText}
+          fontSize={11}
+          fontFamily="Inter, system-ui, sans-serif"
+          fill="rgba(255,255,255,0.8)"
+          ellipsis
           listening={false}
         />
       )}

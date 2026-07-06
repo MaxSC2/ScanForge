@@ -24,6 +24,8 @@ interface EditorState {
   /** Cursor canvas coords (for status bar) */
   cursorPosition: { x: number; y: number };
   viewRequestNonce: number;
+  /** Region currently being edited on canvas (null = none) */
+  editingRegionId: string | null;
 
   setTool: (tool: EditorTool) => void;
   setZoom: (zoom: number) => void;
@@ -56,6 +58,7 @@ interface EditorState {
   setTranslationOverwrite: (value: boolean) => void;
   setCursorPosition: (pos: { x: number; y: number }) => void;
   requestFitToPage: () => void;
+  setEditingRegionId: (id: string | null) => void;
 }
 
 const ZOOM_STEP = 0.15;
@@ -113,6 +116,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   translationOverwrite: false,
   cursorPosition: { x: 0, y: 0 },
   viewRequestNonce: 0,
+  editingRegionId: null,
 
   setTool: (tool) => set({ tool }),
   setZoom: (zoom) => set({ zoom: clampZoom(zoom), viewMode: 'manual' }),
@@ -183,4 +187,5 @@ export const useEditorStore = create<EditorState>((set) => ({
       viewMode: 'fit-page',
       viewRequestNonce: s.viewRequestNonce + 1,
     })),
+  setEditingRegionId: (id) => set({ editingRegionId: id }),
 }));

@@ -6,6 +6,7 @@ import { CanvasGrid } from './CanvasGrid';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import { Minimap } from './Minimap';
 import { RegionRect } from './RegionRect';
+import { RegionTextOverlay } from './RegionTextOverlay';
 import { useEditorCanvas } from './useEditorCanvas';
 
 export function EditorCanvas() {
@@ -187,6 +188,8 @@ export function EditorCanvas() {
           onClose={() => setCtxMenu(null)}
         />
       ) : null}
+
+      <RegionTextOverlay />
     </div>
   );
 }

@@ -75,6 +75,7 @@ export function useEditorCanvas() {
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
   const viewRequestNonce = useEditorStore((s) => s.viewRequestNonce);
   const applyViewportTransform = useEditorStore((s) => s.applyViewportTransform);
+  const setEditingRegionId = useEditorStore((s) => s.setEditingRegionId);
 
   const selectedRegionId = useRegionStore((s) => s.selectedRegionId);
   const selectRegion = useRegionStore((s) => s.selectRegion);
@@ -235,10 +236,11 @@ export function useEditorCanvas() {
     (event: Konva.KonvaEventObject<MouseEvent>) => {
       if (event.target === event.target.getStage()) {
         selectRegion(null);
+        setEditingRegionId(null);
         setCtxMenu(null);
       }
     },
-    [selectRegion],
+    [selectRegion, setEditingRegionId],
   );
 
   const handleRegionContextMenu = useCallback(
