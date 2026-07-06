@@ -1,3 +1,4 @@
+import { BatchExportDialog } from '../export/BatchExportDialog';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   CheckIcon,
@@ -29,6 +30,7 @@ import { SettingsDialog } from '../../components/SettingsDialog';
 import { StitchDialog } from '../../components/StitchDialog';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
+import { usePageStore } from '../../stores/usePageStore';
 import { useToastStore } from '../../stores/useToastStore';
 import { exportPageImage } from '../../utils/persistence';
 import { useToolbarActions } from './useToolbarActions';
@@ -37,6 +39,7 @@ export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const [stitchDialogOpen, setStitchDialogOpen] = useState(false);
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -62,6 +65,7 @@ export function Toolbar() {
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetZoom = useEditorStore((state) => state.resetZoom);
 
+  const pages = usePageStore((state) => state.pages);
   const pushToast = useToastStore((state) => state.push);
   const {
     activePage,
@@ -164,6 +168,15 @@ export function Toolbar() {
       >
         <DownloadIcon size={14} />
         <span className="hidden xl:inline">Рендер PNG</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setBatchDialogOpen(true)}
+        tooltip="Пакетный экспорт нескольких страниц"
+        disabled={pages.length === 0}
+      >
+        <DownloadIcon size={14} />
+        <span className="hidden xl:inline">Пакетный</span>
       </IconButton>
 
       <IconButton
@@ -327,6 +340,11 @@ export function Toolbar() {
       </div>
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      <BatchExportDialog
+        open={batchDialogOpen}
+        onClose={() => setBatchDialogOpen(false)}
+      />
 
       <StitchDialog
         open={stitchDialogOpen}

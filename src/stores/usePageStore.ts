@@ -38,6 +38,7 @@ interface PageState {
   clearPageSelection: () => void;
   selectAllPages: () => void;
   setStitchOptions: (patch: Partial<StitchOptions>) => void;
+  updatePageImage: (pageId: string, dataUrl: string) => Promise<void>;
   stitchPages: (pageIds: string[], options?: StitchOptions) => Promise<Page | null>;
   setProjectState: (payload: {
     pages: Page[];
@@ -288,6 +289,43 @@ export const usePageStore = create<PageState>((set, get) => ({
 
   setStitchOptions: (patch) =>
     set((s) => ({ stitchOptions: { ...s.stitchOptions, ...patch } })),
+
+  updatePageImage: async (pageId, dataUrl) => {
+    const img = await loadImageElement(dataUrl);
+
+    useHistoryStore.getState().capture();
+
+    let imagePath = dataUrl;
+    if (isDesktopRuntime()) {
+      const projectId = useProjectStore.getState().meta.localProjectId;
+      if (projectId) {
+        try {
+          imagePath = await invoke<string>('save_page_image', {
+            projectId,
+            pageId,
+            dataUrl,
+          });
+        } catch {
+          imagePath = dataUrl;
+        }
+      }
+    }
+
+    set((s) => ({
+      pages: s.pages.map((p) =>
+        p.id === pageId
+          ? {
+              ...p,
+              imageUrl: dataUrl,
+              imagePath,
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+            }
+          : p,
+      ),
+    }));
+    useProjectStore.getState().touch();
+  },
 
   stitchPages: async (pageIds, options) => {
     const uniqueIds = Array.from(new Set(pageIds));

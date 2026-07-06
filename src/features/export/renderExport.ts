@@ -270,7 +270,7 @@ function drawRegionText(
   context.restore();
 }
 
-async function renderPageToBlob(page: Page) {
+export async function renderPageToBlob(page: Page) {
   await ensureProjectDomainStatePersisted();
 
   const pageRecord = await pageRepository.getById(page.id);
