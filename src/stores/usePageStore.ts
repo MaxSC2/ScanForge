@@ -28,6 +28,7 @@ interface PageState {
 
   addPages: (files: File[]) => Promise<void>;
   removePage: (id: string) => void;
+  duplicatePage: (pageId: string) => void;
   setActivePage: (id: string | null) => void;
   goToAdjacentPage: (direction: 'previous' | 'next') => void;
   getActivePage: () => Page | undefined;
@@ -161,6 +162,29 @@ export const usePageStore = create<PageState>((set, get) => ({
         lastSelectedPageId:
           s.lastSelectedPageId === id ? (remaining[0]?.id ?? null) : s.lastSelectedPageId,
       };
+    });
+    useProjectStore.getState().touch();
+  },
+
+  duplicatePage: (pageId) => {
+    const { pages } = get();
+    const source = pages.find((p) => p.id === pageId);
+    if (!source) return;
+
+    useHistoryStore.getState().capture();
+
+    const clonedPage: Page = {
+      ...source,
+      id: uuid(),
+      fileName: `${source.fileName} (копия)`,
+      regions: source.regions.map((r) => ({ ...r, id: uuid() })),
+    };
+
+    set((s) => {
+      const idx = s.pages.findIndex((p) => p.id === pageId);
+      const newPages = [...s.pages];
+      newPages.splice(idx + 1, 0, clonedPage);
+      return { pages: newPages, selectedPageIds: [clonedPage.id], activePageId: clonedPage.id, lastSelectedPageId: clonedPage.id };
     });
     useProjectStore.getState().touch();
   },

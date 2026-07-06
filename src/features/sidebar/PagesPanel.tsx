@@ -6,6 +6,7 @@ import {
 } from '@hello-pangea/dnd';
 import { useState } from 'react';
 import {
+  Copy,
   GripVertical,
   ImagePlus,
 } from 'lucide-react';
@@ -19,11 +20,13 @@ import { useRegionStore } from '../../stores/useRegionStore';
 
 export function PagesPanel() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const pages = usePageStore((state) => state.pages);
   const activePageId = usePageStore((state) => state.activePageId);
   const selectedPageIds = usePageStore((state) => state.selectedPageIds);
   const selectPage = usePageStore((state) => state.selectPage);
   const removePage = usePageStore((state) => state.removePage);
+  const duplicatePage = usePageStore((state) => state.duplicatePage);
   const reorderPage = usePageStore((state) => state.reorderPage);
   const clearPageSelection = usePageStore((state) => state.clearPageSelection);
   const selectAllPages = usePageStore((state) => state.selectAllPages);
@@ -58,6 +61,14 @@ export function PagesPanel() {
           >
             Сброс
           </button>
+          {selectedPageIds.length > 0 && (
+            <button
+              onClick={() => setConfirmBatchDelete(true)}
+              className="rounded px-1.5 py-0.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+            >
+              Удалить выбранные ({selectedPageIds.length})
+            </button>
+          )}
           <span className="ml-auto tabular-nums text-zinc-600">Выбрано: {selectedPageIds.length}</span>
         </div>
       ) : null}
@@ -157,6 +168,17 @@ export function PagesPanel() {
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
+                              duplicatePage(page.id);
+                            }}
+                            aria-label="Дублировать страницу"
+                            className="flex-none rounded p-1 text-zinc-500 opacity-0 transition-all group-hover:opacity-100 hover:bg-zinc-700 hover:text-zinc-300"
+                            title="Дублировать страницу"
+                          >
+                            <Copy size={12} />
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setConfirmDelete(page.id);
                             }}
                             aria-label="Удалить страницу"
@@ -188,6 +210,18 @@ export function PagesPanel() {
           setConfirmDelete(null);
         }}
         onCancel={() => setConfirmDelete(null)}
+      />
+      <ConfirmDialog
+        open={confirmBatchDelete}
+        title={`Удалить ${selectedPageIds.length} страниц${selectedPageIds.length === 1 ? 'у' : selectedPageIds.length < 5 ? 'ы' : ''}?`}
+        message="Выбранные страницы и все их регионы будут безвозвратно удалены."
+        confirmLabel={`Удалить (${selectedPageIds.length})`}
+        destructive
+        onConfirm={() => {
+          for (const id of selectedPageIds) removePage(id);
+          setConfirmBatchDelete(false);
+        }}
+        onCancel={() => setConfirmBatchDelete(false)}
       />
     </section>
   );

@@ -1,4 +1,5 @@
 import type { ProjectTargetLanguage } from '../types';
+import { useGlossaryStore } from '../stores/useGlossaryStore';
 
 const EN_TO_RU: Record<string, string> = {
   hello: 'привет',
@@ -87,6 +88,11 @@ function preserveCase(source: string, translated: string) {
 
 function translateKnownWord(token: string, targetLanguage: ProjectTargetLanguage) {
   const normalized = token.toLowerCase();
+  const languagePair = targetLanguage === 'ru' ? 'en→ru' : 'ru→en';
+  const glossaryMatch = useGlossaryStore.getState().lookup(normalized, languagePair);
+  if (glossaryMatch) {
+    return preserveCase(token, glossaryMatch);
+  }
   const dictionary = targetLanguage === 'ru' ? EN_TO_RU : RU_TO_EN;
   const translated = dictionary[normalized];
   return translated ? preserveCase(token, translated) : null;

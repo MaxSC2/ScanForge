@@ -1,5 +1,6 @@
 import { Crosshair } from 'lucide-react';
 import { LayersIcon, SettingsIcon } from '../../icons';
+import { GlossaryPanel } from '../../components/GlossaryPanel';
 import { ProjectSettingsPanel } from '../settings/ProjectSettingsPanel';
 import { RegionDetailsPanel } from './RegionDetailsPanel';
 import {
@@ -42,6 +43,7 @@ export function RegionInspector() {
       {activeView === 'pipeline' ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ProjectSettingsPanel />
+          <GlossaryPanel />
         </div>
       ) : activeView === 'regions' ? (
         activePage.regions.length > 0 ? (
