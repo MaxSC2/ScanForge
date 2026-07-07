@@ -1,6 +1,7 @@
 import { Crosshair } from 'lucide-react';
 import { LayersIcon, SettingsIcon } from '../../icons';
 import { GlossaryPanel } from '../../components/GlossaryPanel';
+import { MemoryPanel } from '../../components/MemoryPanel';
 import { ImageProcessingPanel } from '../../components/ImageProcessingPanel';
 import { ProjectSettingsPanel } from '../settings/ProjectSettingsPanel';
 import { RegionDetailsPanel } from './RegionDetailsPanel';
@@ -46,6 +47,7 @@ export function RegionInspector() {
           <ImageProcessingPanel />
           <ProjectSettingsPanel />
           <GlossaryPanel />
+          <MemoryPanel />
         </div>
       ) : activeView === 'regions' ? (
         activePage.regions.length > 0 ? (

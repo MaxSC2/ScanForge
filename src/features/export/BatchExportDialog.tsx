@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
+import { LoaderCircle } from 'lucide-react';
 import { XIcon } from '../../icons';
 import { useJobStore } from '../../stores/useJobStore';
 import { usePageStore } from '../../stores/usePageStore';
@@ -17,6 +18,13 @@ interface BatchExportDialogProps {
 
 type ExportFormat = 'png' | 'cbz';
 
+interface ExportProgress {
+  pageId: string;
+  fileName: string;
+  status: 'pending' | 'rendering' | 'done' | 'failed';
+  error?: string;
+}
+
 export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
   const pages = usePageStore((state) => state.pages);
   const selectedPageIds = usePageStore((state) => state.selectedPageIds);
@@ -26,6 +34,8 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [format, setFormat] = useState<ExportFormat>('png');
   const [exporting, setExporting] = useState(false);
+  const [progress, setProgress] = useState<ExportProgress[]>([]);
+  const abortRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -35,6 +45,8 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
           : new Set(pages.map((p) => p.id));
       setSelected(initial);
       setExporting(false);
+      setProgress([]);
+      abortRef.current = false;
     }
   }, [open, pages, selectedPageIds]);
 
@@ -84,76 +96,89 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
     }
 
     setExporting(true);
-    try {
-      if (format === 'png') {
-        const targets = selectedPages.map((page) => ({ pageId: page.id }));
-        const queued = queueExportJobs(targets);
-        if (queued === 0) {
-          pushToast(
-            'Экспорт уже стоит в очереди для выбранных страниц',
-            'warning',
-          );
-        } else {
-          pushToast(
-            `Экспорт поставлен в очередь: ${queued} страниц(ы)`,
-            'success',
-          );
-        }
-        onClose();
+    abortRef.current = false;
+
+    if (format === 'png') {
+      const targets = selectedPages.map((page) => ({ pageId: page.id }));
+      const queued = queueExportJobs(targets);
+      if (queued === 0) {
+        pushToast('Экспорт уже стоит в очереди для выбранных страниц', 'warning');
       } else {
-        const rendered: { fileName: string; data: ArrayBuffer }[] = [];
-        for (let i = 0; i < selectedPages.length; i++) {
-          const page = selectedPages[i];
-          try {
-            const { blob } = await renderPageToBlob(page);
-            const data = await blob.arrayBuffer();
-            const index = String(i + 1).padStart(3, '0');
-            rendered.push({ fileName: `page-${index}.png`, data });
-          } catch (err) {
-            const msg =
-              err instanceof Error ? err.message : 'Неизвестная ошибка';
-            pushToast(`Ошибка рендера ${page.fileName}: ${msg}`, 'error');
-          }
-        }
+        pushToast(`Экспорт поставлен в очередь: ${queued} страниц(ы)`, 'success');
+      }
+      onClose();
+      return;
+    }
 
-        if (rendered.length === 0) {
-          pushToast('Не удалось отрендерить ни одной страницы', 'error');
-          setExporting(false);
-          return;
-        }
+    setProgress(
+      selectedPages.map((p) => ({
+        pageId: p.id,
+        fileName: p.fileName,
+        status: 'pending' as const,
+      })),
+    );
 
-        const cbzBlob = await buildCbzBlob(rendered);
-        const suggestedName = `export.cbz`;
-
-        if (isDesktopRuntime()) {
-          const path = await save({
-            title: 'Сохранить CBZ архив',
-            defaultPath: suggestedName,
-            filters: [
-              { name: 'CBZ архив', extensions: ['cbz'] },
-            ],
-          });
-          if (path) {
-            const bytes = new Uint8Array(await cbzBlob.arrayBuffer());
-            await writeFile(path, bytes);
-            pushToast(
-              `CBZ архив сохранён: ${rendered.length} страниц(ы)`,
-              'success',
-            );
-          }
-        } else {
-          const url = URL.createObjectURL(cbzBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = suggestedName;
-          a.click();
-          URL.revokeObjectURL(url);
-          pushToast(
-            `CBZ архив скачан: ${rendered.length} страниц(ы)`,
-            'success',
+    try {
+      const rendered: { fileName: string; data: ArrayBuffer }[] = [];
+      for (let i = 0; i < selectedPages.length; i++) {
+        if (abortRef.current) break;
+        const page = selectedPages[i];
+        setProgress((prev) =>
+          prev.map((p) =>
+            p.pageId === page.id ? { ...p, status: 'rendering' as const } : p,
+          ),
+        );
+        try {
+          const { blob } = await renderPageToBlob(page);
+          const data = await blob.arrayBuffer();
+          const index = String(i + 1).padStart(3, '0');
+          rendered.push({ fileName: `page-${index}.png`, data });
+          setProgress((prev) =>
+            prev.map((p) =>
+              p.pageId === page.id ? { ...p, status: 'done' as const } : p,
+            ),
           );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Неизвестная ошибка';
+          setProgress((prev) =>
+            prev.map((p) =>
+              p.pageId === page.id
+                ? { ...p, status: 'failed' as const, error: msg }
+                : p,
+            ),
+          );
+          pushToast(`Ошибка рендера ${page.fileName}: ${msg}`, 'error');
         }
-        onClose();
+      }
+
+      if (rendered.length === 0) {
+        pushToast('Не удалось отрендерить ни одной страницы', 'error');
+        setExporting(false);
+        return;
+      }
+
+      const cbzBlob = await buildCbzBlob(rendered);
+      const suggestedName = `export.cbz`;
+
+      if (isDesktopRuntime()) {
+        const path = await save({
+          title: 'Сохранить CBZ архив',
+          defaultPath: suggestedName,
+          filters: [{ name: 'CBZ архив', extensions: ['cbz'] }],
+        });
+        if (path) {
+          const bytes = new Uint8Array(await cbzBlob.arrayBuffer());
+          await writeFile(path, bytes);
+          pushToast(`CBZ архив сохранён: ${rendered.length} страниц(ы)`, 'success');
+        }
+      } else {
+        const url = URL.createObjectURL(cbzBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = suggestedName;
+        a.click();
+        URL.revokeObjectURL(url);
+        pushToast(`CBZ архив скачан: ${rendered.length} страниц(ы)`, 'success');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -162,6 +187,10 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
       setExporting(false);
     }
   }, [pages, selected, format, queueExportJobs, pushToast, onClose]);
+
+  const doneCount = progress.filter((p) => p.status === 'done').length;
+  const failedCount = progress.filter((p) => p.status === 'failed').length;
+  const totalCount = progress.length;
 
   if (!open) return null;
 
@@ -263,20 +292,60 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
           </div>
         </div>
 
+        {exporting && progress.length > 0 && (
+          <div className="space-y-1 px-4 py-2">
+            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+              <LoaderCircle size={11} className="animate-spin text-indigo-400" />
+              <span className="flex-1">Рендер страниц</span>
+              <span>{doneCount + failedCount}/{totalCount}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                style={{ width: `${(totalCount > 0 ? (doneCount + failedCount) / totalCount : 0) * 100}%` }}
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {progress.map((p) => (
+                <span
+                  key={p.pageId}
+                  className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[8px] ${
+                    p.status === 'done'
+                      ? 'bg-emerald-500/10 text-emerald-400'
+                      : p.status === 'failed'
+                        ? 'bg-red-500/10 text-red-400'
+                        : p.status === 'rendering'
+                          ? 'bg-indigo-500/10 text-indigo-400'
+                          : 'bg-zinc-800 text-zinc-600'
+                  }`}
+                  title={p.error}
+                >
+                  {p.status === 'rendering' && <LoaderCircle size={7} className="animate-spin" />}
+                  {p.fileName}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-2 border-t border-zinc-800 px-4 py-3">
           <button
-            onClick={onClose}
-            disabled={exporting}
+            onClick={() => {
+              if (exporting) {
+                abortRef.current = true;
+              }
+              onClose();
+            }}
             className="h-8 rounded bg-zinc-800 px-3 text-xs text-zinc-300 disabled:opacity-50"
           >
-            Отмена
+            {exporting ? 'Прервать' : 'Отмена'}
           </button>
           <button
             onClick={handleExport}
             disabled={selectedCount === 0 || exporting}
             className="h-8 rounded bg-indigo-600 px-3 text-xs text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {exporting ? 'Экспорт...' : 'Экспортировать'}
+            {exporting ? `Рендер... ${doneCount + failedCount}/${totalCount}` : 'Экспортировать'}
           </button>
         </div>
       </div>

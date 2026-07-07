@@ -17,87 +17,15 @@ import {
   ZoomInIcon,
 } from '../icons';
 import { useAgentStore } from '../stores/useAgentStore';
+import { useAiPresetsStore } from '../stores/useAiPresetsStore';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useProjectDomainStore } from '../stores/useProjectDomainStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { usePersistenceStore } from '../stores/usePersistenceStore';
 import { SNAP_THRESHOLD, GRID_STEP } from '../utils/snapping';
+import { formatKeys, SHORTCUT_DEFS, useShortcutsStore } from '../stores/useShortcutsStore';
 
 type SettingsTab = 'editor' | 'pipeline' | 'shortcuts' | 'ai';
-
-const SECTIONS: { title: string; items: { keys: string[]; label: string }[] }[] = [
-  {
-    title: 'Инструменты',
-    items: [
-      { keys: ['V'], label: 'Инструмент «Выбор»' },
-      { keys: ['R'], label: 'Инструмент «Регион»' },
-      { keys: ['H'], label: 'Инструмент «Панорама»' },
-      { keys: ['G'], label: 'Переключить сетку' },
-    ],
-  },
-  {
-    title: 'Регионы',
-    items: [
-      { keys: ['Del'], label: 'Удалить выбранный регион' },
-      { keys: ['Tab'], label: 'Следующий регион' },
-      { keys: ['Shift+Tab'], label: 'Предыдущий регион' },
-      { keys: ['Ctrl+D'], label: 'Дублировать регион' },
-      { keys: ['↑ ↓ ← →'], label: 'Сдвинуть регион на 1px' },
-      { keys: ['Shift+↑ ↓ ← →'], label: 'Сдвинуть регион на 10px' },
-      { keys: ['Alt+↑ ↓ ← →'], label: 'Изменить размер региона' },
-    ],
-  },
-  {
-    title: 'OCR и перевод',
-    items: [
-      { keys: ['Ctrl+Shift+O'], label: 'Запустить OCR' },
-      { keys: ['Ctrl+Shift+T'], label: 'Запустить перевод' },
-    ],
-  },
-  {
-    title: 'Экспорт и склейка',
-    items: [
-      { keys: ['Ctrl+Shift+E'], label: 'Экспорт рендера в PNG' },
-      { keys: ['Ctrl+M'], label: 'Склеить выбранные страницы' },
-    ],
-  },
-  {
-    title: 'Масштаб',
-    items: [
-      { keys: ['Ctrl++'], label: 'Приблизить' },
-      { keys: ['Ctrl+-'], label: 'Отдалить' },
-      { keys: ['Ctrl+0'], label: 'Сброс масштаба' },
-      { keys: ['Ctrl+Shift+1'], label: 'Реальный размер (1:1)' },
-      { keys: ['Ctrl+Shift+W'], label: 'По ширине' },
-      { keys: ['Ctrl+Shift+F'], label: 'По странице' },
-    ],
-  },
-  {
-    title: 'Панели',
-    items: [
-      { keys: ['Ctrl+B'], label: 'Переключить боковую панель' },
-      { keys: ['Ctrl+I'], label: 'Переключить инспектор' },
-      { keys: ['Ctrl+.'], label: 'Фокус-режим' },
-      { keys: ['Ctrl+Shift+.'], label: 'Чистый режим' },
-      { keys: ['Ctrl+Shift+H'], label: 'Оверлеи регионов' },
-    ],
-  },
-  {
-    title: 'История',
-    items: [
-      { keys: ['Ctrl+Z'], label: 'Отменить' },
-      { keys: ['Ctrl+Shift+Z'], label: 'Повторить' },
-    ],
-  },
-  {
-    title: 'Навигация',
-    items: [
-      { keys: ['← / ↑ / PageUp'], label: 'Предыдущая страница' },
-      { keys: ['→ / ↓ / Space'], label: 'Следующая страница' },
-      { keys: ['Esc'], label: 'Выйти из чистого режима / снять выделение' },
-    ],
-  },
-];
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<SettingsTab>('editor');
@@ -447,6 +375,10 @@ function AiSettings() {
   const config = useAgentStore((s) => s.config);
   const setConfig = useAgentStore((s) => s.setConfig);
   const clearConfig = useAgentStore((s) => s.clearConfig);
+  const presets = useAiPresetsStore((s) => s.presets);
+  const addPreset = useAiPresetsStore((s) => s.add);
+  const removePreset = useAiPresetsStore((s) => s.remove);
+  const getPresetById = useAiPresetsStore((s) => s.getById);
 
   const [provider, setProvider] = useState(config?.provider ?? 'openai');
   const [apiKey, setApiKey] = useState(config?.apiKey ?? '');
@@ -454,9 +386,25 @@ function AiSettings() {
   const [model, setModel] = useState(config?.model ?? 'gpt-4o');
   const [maxTokens, setMaxTokens] = useState(config?.maxTokens ?? 4096);
   const [temperature, setTemperature] = useState(config?.temperature ?? 0.7);
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetName, setPresetName] = useState('');
 
   const inputClass =
     'w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2 text-[11px] text-zinc-200 placeholder-zinc-600 focus:border-indigo-500/50 focus:outline-none';
+
+  const applyPreset = (id: string) => {
+    const preset = getPresetById(id);
+    if (!preset) return;
+    setProvider(preset.config.provider);
+    setApiKey(preset.config.apiKey);
+    setBaseUrl(preset.config.baseUrl);
+    setModel(preset.config.model);
+    setMaxTokens(preset.config.maxTokens);
+    setTemperature(preset.config.temperature);
+    setSystemPrompt(preset.systemPrompt ?? '');
+    setSelectedPresetId(id);
+  };
 
   const handleSave = () => {
     if (!apiKey.trim() && provider !== 'ollama') return;
@@ -467,7 +415,20 @@ function AiSettings() {
       model: model.trim() || getDefaultModel(provider),
       maxTokens,
       temperature,
-    });
+    }, systemPrompt || undefined);
+  };
+
+  const handleSaveAsPreset = () => {
+    const name = presetName.trim() || `Пресет ${presets.length + 1}`;
+    addPreset(name, {
+      provider: provider as 'openai' | 'anthropic' | 'ollama',
+      apiKey: apiKey.trim(),
+      baseUrl: baseUrl.trim() || getDefaultBaseUrl(provider),
+      model: model.trim() || getDefaultModel(provider),
+      maxTokens,
+      temperature,
+    }, systemPrompt || undefined);
+    setPresetName('');
   };
 
   const handleClear = () => {
@@ -477,6 +438,8 @@ function AiSettings() {
     setModel('gpt-4o');
     setMaxTokens(4096);
     setTemperature(0.7);
+    setSystemPrompt('');
+    setSelectedPresetId('');
   };
 
   function getDefaultBaseUrl(p: string): string {
@@ -494,6 +457,34 @@ function AiSettings() {
   return (
     <div className="p-5">
       <div className="flex flex-col gap-4">
+        {presets.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Пресеты
+            </label>
+            <div className="flex gap-1">
+              <select
+                value={selectedPresetId}
+                onChange={(e) => applyPreset(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">— Выбрать пресет —</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {selectedPresetId && (
+                <button
+                  onClick={() => { removePreset(selectedPresetId); setSelectedPresetId(''); }}
+                  className="shrink-0 rounded-lg border border-red-900/30 px-2 text-[10px] text-red-400 hover:bg-red-500/10"
+                >
+                  Удалить
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
             Провайдер
@@ -593,6 +584,19 @@ function AiSettings() {
           </div>
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            Системный промпт (опционально)
+          </label>
+          <textarea
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            placeholder="Дополнительные инструкции для AI-агента..."
+            rows={3}
+            className={`${inputClass} resize-none`}
+          />
+        </div>
+
         <div className="flex items-center gap-2 pt-1">
           <button
             onClick={handleSave}
@@ -602,12 +606,28 @@ function AiSettings() {
             Сохранить
           </button>
 
+          <div className="flex-1" />
+
+          <input
+            type="text"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="Имя пресета..."
+            className={`${inputClass} max-w-40`}
+          />
+          <button
+            onClick={handleSaveAsPreset}
+            className="rounded-lg border border-zinc-800 px-3 py-2 text-[11px] text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+          >
+            + Пресет
+          </button>
+
           {config && (
             <button
               onClick={handleClear}
-              className="rounded-lg border border-zinc-800 px-4 py-2 text-[11px] text-zinc-500 transition-colors hover:text-red-400"
+              className="rounded-lg border border-zinc-800 px-3 py-2 text-[11px] text-zinc-500 transition-colors hover:text-red-400"
             >
-              Сбросить
+              Сброс
             </button>
           )}
         </div>
@@ -625,29 +645,38 @@ function AiSettings() {
 /* ─── Shortcuts Tab ─── */
 
 function ShortcutsTab() {
+  const getBinding = useShortcutsStore((s) => s.getBinding);
+
+  const sections = SHORTCUT_DEFS.reduce<
+    { title: string; items: typeof SHORTCUT_DEFS }
+  >((acc, def) => {
+    let section = acc.find((s) => s.title === def.category);
+    if (!section) {
+      section = { title: def.category, items: [] };
+      acc.push(section);
+    }
+    section.items.push(def);
+    return acc;
+  }, []);
+
   return (
     <div className="p-5">
-      {SECTIONS.map((section) => (
+      {sections.map((section) => (
         <div key={section.title} className="mb-4">
           <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
             {section.title}
           </div>
           <div className="space-y-0.5">
-            {section.items.map((item) => (
+            {section.items.map((def) => (
               <div
-                key={item.label}
+                key={def.id}
                 className="flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors hover:bg-zinc-900"
               >
-                <span className="text-[11px] text-zinc-300">{item.label}</span>
+                <span className="text-[11px] text-zinc-300">{def.label}</span>
                 <span className="ml-4 flex flex-none items-center gap-1">
-                  {item.keys.map((keyCombo) => (
-                    <kbd
-                      key={keyCombo}
-                      className="rounded-md border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
-                    >
-                      {keyCombo}
-                    </kbd>
-                  ))}
+                  <kbd className="rounded-md border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                    {formatKeys(getBinding(def.id))}
+                  </kbd>
                 </span>
               </div>
             ))}

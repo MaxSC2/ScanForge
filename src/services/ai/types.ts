@@ -9,9 +9,13 @@ export interface AiConfig {
   temperature: number;
 }
 
+export type AiContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface AiMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
+  content: string | AiContentPart[];
   toolCallId?: string;
   name?: string;
 }
@@ -37,7 +41,7 @@ export interface ToolResult {
 export interface AiChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | AiContentPart[];
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   timestamp: number;

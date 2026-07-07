@@ -3,14 +3,19 @@ import type Konva from 'konva';
 import {
   Copy,
   Unlock,
+  ClipboardList,
 } from 'lucide-react';
 import {
   EyeIcon,
   EyeOffIcon,
+  LanguagesIcon,
+  ListOrderedIcon,
   LockIcon,
   ScanTextIcon,
   Trash2Icon,
+  TypeIcon,
 } from '../../icons';
+import { REGION_KIND_OPTIONS } from '../../types/region';
 import { usePageStore } from '../../stores/usePageStore';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useJobStore } from '../../stores/useJobStore';
@@ -78,11 +83,16 @@ export function useEditorCanvas() {
   const setEditingRegionId = useEditorStore((s) => s.setEditingRegionId);
 
   const selectedRegionId = useRegionStore((s) => s.selectedRegionId);
+  const multiSelectedRegionIds = useRegionStore((s) => s.multiSelectedRegionIds);
   const selectRegion = useRegionStore((s) => s.selectRegion);
   const addRegion = useRegionStore((s) => s.addRegion);
   const updateRegion = useRegionStore((s) => s.updateRegion);
+  const batchUpdateRegions = useRegionStore((s) => s.batchUpdateRegions);
   const duplicateRegion = useRegionStore((s) => s.duplicateRegion);
   const deleteRegion = useRegionStore((s) => s.deleteRegion);
+  const reorderRegions = useRegionStore((s) => s.reorderRegions);
+  const queueOcrJobs = useJobStore((s) => s.queueOcrJobs);
+  const queueTranslationJobs = useJobStore((s) => s.queueTranslationJobs);
 
   const image = useImageLoader(activePage?.imageUrl);
   const { handleWheel, handleDragEnd } = useCanvasInteraction();
@@ -266,13 +276,33 @@ export function useEditorCanvas() {
     const region = activePage.regions.find((item) => item.id === ctxMenu.regionId);
     if (!region) return [];
 
+    const currentKindIndex = REGION_KIND_OPTIONS.findIndex((k) => k.value === region.kind);
+    const nextKind = REGION_KIND_OPTIONS[(currentKindIndex + 1) % REGION_KIND_OPTIONS.length];
+
+    const doAutoNumber = () => {
+      const sorted = [...activePage.regions].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+      for (let i = 0; i < sorted.length; i++) {
+        updateRegion(activePageId, sorted[i].id, { order: i + 1 });
+      }
+    };
+
     return [
       {
         label: 'OCR региона',
         icon: <ScanTextIcon size={13} />,
-        onClick: () => {
-          useJobStore.getState().queueOcrJobs([{ pageId: activePageId, regionIds: [region.id] }]);
-        },
+        onClick: () => queueOcrJobs([{ pageId: activePageId, regionIds: [region.id] }]),
+      },
+      {
+        label: 'Перевести регион',
+        icon: <LanguagesIcon size={13} />,
+        disabled: !region.sourceText,
+        onClick: () => queueTranslationJobs([{ pageId: activePageId, regionIds: [region.id] }]),
+      },
+      { separator: true },
+      {
+        label: `Тип: ${nextKind.label}`,
+        icon: <TypeIcon size={13} />,
+        onClick: () => updateRegion(activePageId, region.id, { kind: nextKind.value }),
       },
       {
         label: region.locked ? 'Разблокировать' : 'Заблокировать',
@@ -284,12 +314,67 @@ export function useEditorCanvas() {
         icon: region.visible ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />,
         onClick: () => updateRegion(activePageId, region.id, { visible: !region.visible }),
       },
+      { separator: true },
+      {
+        label: 'На передний план',
+        icon: <span className="text-[10px] font-bold">↑</span>,
+        onClick: () => {
+          const sorted = [...activePage.regions].sort((a, b) => a.order - b.order);
+          const idx = sorted.findIndex((r) => r.id === region.id);
+          if (idx < sorted.length - 1) {
+            reorderRegions(activePageId, idx, sorted.length - 1);
+          }
+        },
+      },
+      {
+        label: 'На задний план',
+        icon: <span className="text-[10px] font-bold">↓</span>,
+        onClick: () => {
+          const sorted = [...activePage.regions].sort((a, b) => a.order - b.order);
+          const idx = sorted.findIndex((r) => r.id === region.id);
+          if (idx > 0) {
+            reorderRegions(activePageId, idx, 0);
+          }
+        },
+      },
+      { separator: true },
+      {
+        label: region.groupId ? 'Разгруппировать' : 'Сгруппировать',
+        icon: <span className="text-[10px] font-bold">{region.groupId ? '∄' : '⊕'}</span>,
+        onClick: () => {
+          if (region.groupId) {
+            updateRegion(activePageId, region.id, { groupId: undefined });
+          } else {
+            const newGroupId = crypto.randomUUID?.() ?? `${Date.now()}-${region.id}`;
+            const targets = [region.id, ...multiSelectedRegionIds].filter(
+              (id) => id !== region.id,
+            );
+            updateRegion(activePageId, region.id, { groupId: newGroupId });
+            for (const tid of targets) {
+              updateRegion(activePageId, tid, { groupId: newGroupId });
+            }
+          }
+        },
+      },
+      { separator: true },
+      {
+        label: 'Автонумеровать страницу',
+        icon: <ListOrderedIcon size={13} />,
+        onClick: doAutoNumber,
+      },
+      {
+        label: 'Копировать текст',
+        icon: <ClipboardList size={13} />,
+        disabled: !region.sourceText,
+        onClick: () => navigator.clipboard?.writeText(region.sourceText),
+      },
       {
         label: 'Дублировать',
         icon: <Copy size={13} />,
         shortcut: 'Ctrl+D',
         onClick: () => duplicateRegion(activePageId, region.id),
       },
+      { separator: true },
       {
         label: 'Удалить',
         icon: <Trash2Icon size={13} />,
@@ -298,7 +383,7 @@ export function useEditorCanvas() {
         onClick: () => deleteRegion(activePageId, region.id),
       },
     ];
-  }, [ctxMenu, activePage, activePageId, updateRegion, duplicateRegion, deleteRegion]);
+  }, [ctxMenu, activePage, activePageId, updateRegion, duplicateRegion, deleteRegion, queueOcrJobs, queueTranslationJobs, reorderRegions, multiSelectedRegionIds]);
 
   const viewportBounds = useMemo(
     () =>
@@ -338,6 +423,7 @@ export function useEditorCanvas() {
     labelsVisible,
     minimapVisible,
     selectedRegionId,
+    multiSelectedRegionIds,
     image,
     isDragging,
     visibleRegions,

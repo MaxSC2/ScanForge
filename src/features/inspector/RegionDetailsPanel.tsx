@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Copy,
   MessageSquare,
+  Sparkles,
   StickyNote,
   Unlock,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ import {
   ScanTextIcon,
   Trash2Icon,
 } from '../../icons';
+import { useJobStore } from '../../stores/useJobStore';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { REGION_KIND_OPTIONS, type Region, type RegionKind } from '../../types';
 import {
@@ -38,6 +40,8 @@ export function RegionDetailsPanel({
   onDelete: (pageId: string, regionId: string) => void;
   onRerunOcr: () => void;
 }) {
+  const queueOcr = useJobStore((s) => s.queueOcrJobs);
+  const queueTranslate = useJobStore((s) => s.queueTranslationJobs);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
@@ -238,6 +242,30 @@ export function RegionDetailsPanel({
               <StatusPill label={region.translationProvider} />
             ) : null}
             {region.targetLanguage ? <StatusPill label={region.targetLanguage} /> : null}
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            {region.sourceText && (
+              <button
+                onClick={() => queueTranslate([{ pageId, regionIds: [region.id] }])}
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-medium text-zinc-300 transition-colors hover:border-indigo-700 hover:bg-indigo-900/20 hover:text-indigo-300"
+                title="Перевести AI"
+              >
+                <Sparkles size={10} />
+                <span>Перевести</span>
+              </button>
+            )}
+            {region.translatedText && (
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(region.translatedText);
+                }}
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+                title="Копировать перевод"
+              >
+                <Copy size={10} />
+                <span>Копировать</span>
+              </button>
+            )}
           </div>
           {region.translatedText ? (
             <p className="mt-1 text-[10px] text-zinc-600">

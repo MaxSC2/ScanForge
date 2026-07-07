@@ -26,6 +26,7 @@ export function EditorCanvas() {
     labelsVisible,
     minimapVisible,
     selectedRegionId,
+    multiSelectedRegionIds,
     image,
     isDragging,
     visibleRegions,
@@ -144,6 +145,7 @@ export function EditorCanvas() {
                   key={region.id}
                   region={region}
                   isSelected={region.id === selectedRegionId}
+                  isMultiSelected={multiSelectedRegionIds.includes(region.id)}
                   showLabelOverlay={shouldRenderRegionLabel({
                     labelsVisible,
                     zoom,

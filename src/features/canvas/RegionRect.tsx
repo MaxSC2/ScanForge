@@ -4,6 +4,7 @@ import type Konva from 'konva';
 import type { Region } from '../../types';
 import { getRegionColor } from '../../types';
 import { useRegionStore } from '../../stores/useRegionStore';
+import { useHistoryStore } from '../../stores/useHistoryStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useEditorStore } from '../../stores/useEditorStore';
 import { snapRect, SNAP_THRESHOLD, GRID_STEP } from '../../utils/snapping';
@@ -11,6 +12,7 @@ import { snapRect, SNAP_THRESHOLD, GRID_STEP } from '../../utils/snapping';
 interface RegionRectProps {
   region: Region;
   isSelected: boolean;
+  isMultiSelected?: boolean;
   showLabelOverlay: boolean;
   onContextMenu?: (e: Konva.KonvaEventObject<PointerEvent>) => void;
 }
@@ -18,6 +20,7 @@ interface RegionRectProps {
 export function RegionRect({
   region,
   isSelected,
+  isMultiSelected = false,
   showLabelOverlay,
   onContextMenu,
 }: RegionRectProps) {
@@ -42,9 +45,9 @@ export function RegionRect({
 
   if (!region.visible) return null;
 
-  const handleSelect = () => {
+  const handleSelect = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (tool !== 'select') return;
-    selectRegion(region.id);
+    selectRegion(region.id, e.evt?.shiftKey);
     setEditingRegionId(null);
   };
 
@@ -56,6 +59,7 @@ export function RegionRect({
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!activePageId || region.locked) return;
+    useHistoryStore.getState().capture();
     const snapped = snapRect(
       { x: e.target.x(), y: e.target.y(), width: region.width, height: region.height },
       gridVisible,
@@ -63,6 +67,19 @@ export function RegionRect({
       SNAP_THRESHOLD,
       otherRegions,
     );
+
+    // If region is grouped, offset all group members by the same delta
+    const dx = Math.round(snapped.x) - region.x;
+    const dy = Math.round(snapped.y) - region.y;
+    if (region.groupId && (dx !== 0 || dy !== 0)) {
+      const groupRegions = (activePage?.regions ?? []).filter(
+        (r) => r.groupId === region.groupId && r.id !== region.id,
+      );
+      for (const gr of groupRegions) {
+        updateRegion(activePageId, gr.id, { x: gr.x + dx, y: gr.y + dy });
+      }
+    }
+
     updateRegion(activePageId, region.id, {
       x: Math.round(snapped.x),
       y: Math.round(snapped.y),
@@ -81,6 +98,7 @@ export function RegionRect({
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
+    useHistoryStore.getState().capture();
     const snapped = snapRect(
       {
         x: node.x(),
@@ -93,6 +111,18 @@ export function RegionRect({
       SNAP_THRESHOLD,
       otherRegions,
     );
+
+    const dx = Math.round(snapped.x) - region.x;
+    const dy = Math.round(snapped.y) - region.y;
+    if (region.groupId && (dx !== 0 || dy !== 0)) {
+      const groupRegions = (activePage?.regions ?? []).filter(
+        (r) => r.groupId === region.groupId && r.id !== region.id,
+      );
+      for (const gr of groupRegions) {
+        updateRegion(activePageId, gr.id, { x: gr.x + dx, y: gr.y + dy });
+      }
+    }
+
     updateRegion(activePageId, region.id, {
       x: Math.round(snapped.x),
       y: Math.round(snapped.y),
@@ -103,6 +133,7 @@ export function RegionRect({
 
   const stroke = getRegionColor(region.kind);
   const canManipulate = tool === 'select' && !region.locked;
+  const displaySelected = isSelected || isMultiSelected;
 
   return (
     <Group>
@@ -112,9 +143,10 @@ export function RegionRect({
         y={region.y}
         width={region.width}
         height={region.height}
-        fill={isSelected ? `${stroke}25` : `${stroke}12`}
-        stroke={stroke}
-        strokeWidth={isSelected ? 2.5 : 1.5}
+        fill={displaySelected ? `${stroke}25` : `${stroke}12`}
+        stroke={isMultiSelected ? '#a78bfa' : stroke}
+        strokeWidth={displaySelected ? 2.5 : 1.5}
+        dash={isMultiSelected ? [4, 3] : undefined}
         cornerRadius={3}
         draggable={canManipulate}
         onClick={handleSelect}
@@ -196,7 +228,7 @@ export function RegionRect({
         />
       )}
 
-      {/* Transformer */}
+      {/* Transformer — only for primary selection */}
       {isSelected && canManipulate && (
         <Transformer
           ref={trRef}

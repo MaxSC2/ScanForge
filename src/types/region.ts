@@ -55,6 +55,10 @@ export interface Region {
   ocrConfidence?: number;
   /** Whether OCR is allowed to overwrite this region on re-run */
   ocrOverwriteEnabled?: boolean;
+  /** Optional group ID for grouping regions together */
+  groupId?: string;
+  /** Z-index offset from natural order */
+  zIndex?: number;
 }
 
 export type RegionHydrationInput = Omit<
@@ -136,6 +140,8 @@ export function normalizeRegion(region: RegionHydrationInput): Region {
     ...(typeof region.ocrOverwriteEnabled === 'boolean'
       ? { ocrOverwriteEnabled: region.ocrOverwriteEnabled }
       : {}),
+    ...(region.groupId ? { groupId: region.groupId } : {}),
+    ...(typeof region.zIndex === 'number' ? { zIndex: region.zIndex } : {}),
   };
 }
 

@@ -3,6 +3,24 @@ import { useJobStore } from '../../stores/useJobStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useRegionStore } from '../../stores/useRegionStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
+import { graphQuery, graphPath, graphExplain } from './graph';
+import { memorySave, memoryRecall } from './memory';
+
+interface PlanStep {
+  id: number;
+  label: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+}
+
+interface Plan {
+  id: string;
+  description: string;
+  steps: PlanStep[];
+  currentStep: number;
+}
+
+let currentPlan: Plan | null = null;
+let planIdCounter = 0;
 
 /* ─── Tool Definitions ─── */
 
@@ -182,6 +200,117 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {},
     },
   },
+  {
+    name: 'graph_query',
+    description: 'Query the project knowledge graph. Finds nodes related to a topic and explores their connections. Use this to understand code architecture, find related files, or discover dependencies between components.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search term — node label, file name, or concept name' },
+        budget: { type: 'number', description: 'Max nodes to return (default 30)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'graph_path',
+    description: 'Find the shortest dependency/call path between two components or files in the project knowledge graph. Use this to understand how two parts of the codebase relate.',
+    parameters: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'Starting component/file name' },
+        to: { type: 'string', description: 'Target component/file name' },
+      },
+      required: ['from', 'to'],
+    },
+  },
+  {
+    name: 'graph_explain',
+    description: 'Get detailed information about a code entity from the knowledge graph: its file location, community, connections to other entities, and peers in the same module group.',
+    parameters: {
+      type: 'object',
+      properties: {
+        node: { type: 'string', description: 'Node name to explain — component, function, or file name' },
+      },
+      required: ['node'],
+    },
+  },
+  {
+    name: 'memory_save',
+    description: 'Save a fact or preference to long-term memory. The AI will remember it across conversations. Use for project conventions, user preferences, important decisions.',
+    parameters: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Unique key for the memory (e.g. "project_name", "ocr_engine", "user_preference")' },
+        value: { type: 'string', description: 'The fact or preference to remember' },
+      },
+      required: ['key', 'value'],
+    },
+  },
+  {
+    name: 'memory_recall',
+    description: 'Retrieve saved facts from long-term memory. Call with no query to list all memories, or with a query to search by keyword.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional keyword to search for' },
+      },
+    },
+  },
+  {
+    name: 'analyze_project',
+    description: 'Get comprehensive project statistics: page count, region count by kind and status, OCR/translation progress, and job queue state.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'find_overlaps',
+    description: 'Detect overlapping regions on a page. Helps identify layout issues where regions cover each other.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pageId: { type: 'string', description: 'Page ID to check (omit for all pages)' },
+        threshold: { type: 'number', description: 'Overlap threshold in pixels (default 5)' },
+      },
+    },
+  },
+  {
+    name: 'find_issues',
+    description: 'Find regions with problems: empty source text, failed OCR/translation, locked regions, or missing translations.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pageId: { type: 'string', description: 'Page ID to check (omit for all pages)' },
+      },
+    },
+  },
+  {
+    name: 'start_plan',
+    description: 'Create a multi-step plan to track progress across multiple tool calls. Use when the user asks for a complex workflow (e.g. "OCR all pages then translate"). Each step will be marked as you complete it.',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'Overall plan description' },
+        steps: { type: 'array', items: { type: 'string' }, description: 'List of step labels in order' },
+      },
+      required: ['description', 'steps'],
+    },
+  },
+  {
+    name: 'plan_step',
+    description: 'Mark a step as done or failed in the current plan. Call this after completing each step of a multi-step task.',
+    parameters: {
+      type: 'object',
+      properties: {
+        stepNumber: { type: 'number', description: 'Step number (1-based)' },
+        status: { type: 'string', enum: ['done', 'failed'], description: 'Completion status' },
+        note: { type: 'string', description: 'Optional result summary' },
+      },
+      required: ['stepNumber', 'status'],
+    },
+  },
 ];
 
 /* ─── Tool Dispatcher ─── */
@@ -351,6 +480,157 @@ export async function dispatchTool(toolCall: ToolCall): Promise<string> {
     case 'redo': {
       useHistoryStore.getState().redo();
       return 'Redone';
+    }
+
+    case 'graph_query': {
+      return await graphQuery(args.query as string, args.budget as number | undefined);
+    }
+
+    case 'graph_path': {
+      return await graphPath(args.from as string, args.to as string);
+    }
+
+    case 'graph_explain': {
+      return await graphExplain(args.node as string);
+    }
+
+    case 'memory_save': {
+      return memorySave(args.key as string, args.value as string);
+    }
+
+    case 'memory_recall': {
+      return memoryRecall(args.query as string | undefined);
+    }
+
+    case 'analyze_project': {
+      const { pages } = usePageStore.getState();
+      const { jobs } = useJobStore.getState();
+
+      let totalRegions = 0;
+      const kindCount: Record<string, number> = {};
+      const statusCount: Record<string, number> = {};
+      let ocrDone = 0;
+      let translated = 0;
+      let locked = 0;
+
+      for (const page of pages) {
+        totalRegions += page.regions.length;
+        for (const r of page.regions) {
+          kindCount[r.kind] = (kindCount[r.kind] ?? 0) + 1;
+          statusCount[r.status] = (statusCount[r.status] ?? 0) + 1;
+          if (r.ocrStatus === 'done') ocrDone++;
+          if (r.translationStatus === 'done') translated++;
+          if (r.locked) locked++;
+        }
+      }
+
+      const jobSummary = {
+        queued: jobs.filter(j => j.status === 'queued').length,
+        running: jobs.filter(j => j.status === 'running').length,
+        done: jobs.filter(j => j.status === 'done').length,
+        failed: jobs.filter(j => j.status === 'failed').length,
+      };
+
+      return JSON.stringify({
+        project: { pages: pages.length, regions: totalRegions },
+        regionsByKind: kindCount,
+        regionsByStatus: statusCount,
+        progress: { ocrDone, translated, locked },
+        jobs: jobSummary,
+      }, null, 2);
+    }
+
+    case 'find_overlaps': {
+      const { pages } = usePageStore.getState();
+      const threshold = (args.threshold as number) ?? 5;
+      const targetPageId = args.pageId as string | undefined;
+      const overlaps: { pageId: string; pageName: string; a: string; b: string; overlapPx: number }[] = [];
+
+      const checkOverlap = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => {
+        const overlapX = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+        const overlapY = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+        return overlapX * overlapY;
+      };
+
+      for (const page of pages) {
+        if (targetPageId && page.id !== targetPageId) continue;
+        for (let i = 0; i < page.regions.length; i++) {
+          for (let j = i + 1; j < page.regions.length; j++) {
+            const a = page.regions[i];
+            const b = page.regions[j];
+            const overlap = checkOverlap(a, b);
+            if (overlap > threshold * threshold) {
+              overlaps.push({ pageId: page.id, pageName: page.fileName, a: a.label, b: b.label, overlapPx: overlap });
+            }
+          }
+        }
+      }
+
+      if (overlaps.length === 0) return 'No overlapping regions found.';
+      return JSON.stringify({ overlapsFound: overlaps.length, overlaps }, null, 2);
+    }
+
+    case 'start_plan': {
+      const description = args.description as string;
+      const stepLabels = args.steps as string[];
+      planIdCounter++;
+      currentPlan = {
+        id: `plan-${planIdCounter}`,
+        description,
+        steps: stepLabels.map((label, i) => ({ id: i + 1, label, status: 'pending' as const })),
+        currentStep: 0,
+      };
+      const stepList = currentPlan.steps.map((s) => `  ${s.id}. ${s.label} — ожидает`).join('\n');
+      return `План создан: ${description}\n${stepList}`;
+    }
+
+    case 'plan_step': {
+      if (!currentPlan) return 'Нет активного плана. Сначала вызови start_plan.';
+      const stepNumber = args.stepNumber as number;
+      const status = args.status as 'done' | 'failed';
+      const note = args.note as string | undefined;
+
+      const step = currentPlan.steps.find((s) => s.id === stepNumber);
+      if (!step) return `Шаг ${stepNumber} не найден.`;
+      step.status = status;
+      currentPlan.currentStep = stepNumber;
+
+      const progress = currentPlan.steps
+        .map((s) => `  ${s.id}. ${s.label} — ${s.status === 'done' ? '✓' : s.status === 'failed' ? '✗' : '…'}`)
+        .join('\n');
+
+      const allDone = currentPlan.steps.every((s) => s.status === 'done');
+      const summary = note ? `\nЗаметка: ${note}` : '';
+      const doneMsg = allDone ? '\n\n✅ Все шаги выполнены!' : `\n\nПрогресс: ${currentPlan.steps.filter((s) => s.status === 'done').length}/${currentPlan.steps.length}`;
+
+      return `Шаг ${stepNumber} завершён: ${status}${summary}\n${progress}${doneMsg}`;
+    }
+
+    case 'find_issues': {
+      const { pages } = usePageStore.getState();
+      const targetPageId = args.pageId as string | undefined;
+      const issues: { pageId: string; pageName: string; regionId: string; label: string; issue: string }[] = [];
+
+      for (const page of pages) {
+        if (targetPageId && page.id !== targetPageId) continue;
+        for (const r of page.regions) {
+          if (!r.sourceText && r.ocrStatus !== 'idle') {
+            issues.push({ pageId: page.id, pageName: page.fileName, regionId: r.id, label: r.label, issue: 'OCR failed — no source text' });
+          }
+          if (r.ocrStatus === 'failed') {
+            issues.push({ pageId: page.id, pageName: page.fileName, regionId: r.id, label: r.label, issue: 'OCR failed' });
+          }
+          if (r.translationStatus === 'failed') {
+            issues.push({ pageId: page.id, pageName: page.fileName, regionId: r.id, label: r.label, issue: 'Translation failed' });
+          }
+          if (r.sourceText && !r.translatedText && r.translationStatus === 'idle') {
+            issues.push({ pageId: page.id, pageName: page.fileName, regionId: r.id, label: r.label, issue: 'OCR done but not translated' });
+          }
+        }
+      }
+
+      if (issues.length === 0) return 'No issues found.';
+      return JSON.stringify({ issuesFound: issues.length, issues }, null, 2);
     }
 
     default:
