@@ -61,7 +61,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         width: { type: 'number' },
         height: { type: 'number' },
         label: { type: 'string' },
-        kind: { type: 'string', enum: ['speech', 'thought', 'note'] },
+        kind: { type: 'string', enum: ['speech', 'sfx', 'narration', 'other'] },
       },
       required: ['pageId', 'x', 'y', 'width', 'height'],
     },
@@ -79,7 +79,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         width: { type: 'number' },
         height: { type: 'number' },
         label: { type: 'string' },
-        kind: { type: 'string', enum: ['speech', 'thought', 'note'] },
+        kind: { type: 'string', enum: ['speech', 'sfx', 'narration', 'other'] },
         sourceText: { type: 'string' },
         translatedText: { type: 'string' },
         locked: { type: 'boolean' },
@@ -111,7 +111,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         patch: {
           type: 'object',
           properties: {
-            kind: { type: 'string', enum: ['speech', 'thought', 'note'] },
+            kind: { type: 'string', enum: ['speech', 'sfx', 'narration', 'other'] },
             locked: { type: 'boolean' },
             visible: { type: 'boolean' },
           },
@@ -349,7 +349,7 @@ export async function dispatchTool(toolCall: ToolCall): Promise<string> {
         store.updateRegion(args.pageId as string, region.id, { label: args.label });
       }
       if (typeof args.kind === 'string') {
-        store.updateRegion(args.pageId as string, region.id, { kind: args.kind as 'speech' | 'thought' | 'note' });
+        store.updateRegion(args.pageId as string, region.id, { kind: args.kind as 'speech' | 'sfx' | 'narration' | 'other' });
       }
       return `Created region "${region.label}" (${region.id}) on page ${args.pageId}`;
     }
@@ -366,7 +366,7 @@ export async function dispatchTool(toolCall: ToolCall): Promise<string> {
       useRegionStore.getState().updateRegion(
         args.pageId as string,
         args.regionId as string,
-        patch as Record<string, unknown> & { kind?: 'speech' | 'thought' | 'note' },
+        patch as Record<string, unknown> & { kind?: 'speech' | 'sfx' | 'narration' | 'other' },
       );
       return `Updated region ${args.regionId}`;
     }
@@ -380,7 +380,7 @@ export async function dispatchTool(toolCall: ToolCall): Promise<string> {
       useRegionStore.getState().batchUpdateRegions(
         args.pageId as string,
         args.regionIds as string[],
-        args.patch as Record<string, unknown> & { kind?: 'speech' | 'thought' | 'note' },
+        args.patch as Record<string, unknown> & { kind?: 'speech' | 'sfx' | 'narration' | 'other' },
       );
       return `Batch updated ${(args.regionIds as string[]).length} regions`;
     }

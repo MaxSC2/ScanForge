@@ -22,8 +22,6 @@ export function useKeyboardShortcuts() {
       }
 
       const b = (id: string) => useShortcutsStore.getState().getBinding(id);
-      const ctrl = event.ctrlKey || event.metaKey;
-      const key = event.key.toLowerCase();
 
       if (matchEvent(event, b('tool_select'))) {
         event.preventDefault();

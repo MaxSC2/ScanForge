@@ -1,20 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BotIcon,
-  BoxIcon,
-  EyeIcon,
-  EyeOffIcon,
-  Grid3X3Icon,
   KeyboardIcon,
-  LayersIcon,
-  LanguagesIcon,
-  MaximizeIcon,
-  MinusIcon,
-  PlusIcon,
   ScanTextIcon,
   SettingsIcon,
   XIcon,
-  ZoomInIcon,
 } from '../icons';
 import { useAgentStore } from '../stores/useAgentStore';
 import { useAiPresetsStore } from '../stores/useAiPresetsStore';

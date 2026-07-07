@@ -87,7 +87,6 @@ export function useEditorCanvas() {
   const selectRegion = useRegionStore((s) => s.selectRegion);
   const addRegion = useRegionStore((s) => s.addRegion);
   const updateRegion = useRegionStore((s) => s.updateRegion);
-  const batchUpdateRegions = useRegionStore((s) => s.batchUpdateRegions);
   const duplicateRegion = useRegionStore((s) => s.duplicateRegion);
   const deleteRegion = useRegionStore((s) => s.deleteRegion);
   const reorderRegions = useRegionStore((s) => s.reorderRegions);

@@ -41,13 +41,13 @@ export class AgentOrchestrator {
   private _status: AgentStatus = 'idle';
   private onStatusChange?: (status: AgentStatus) => void;
   private onMessage?: (message: string) => void;
+  private customSystemPrompt?: string;
   onToken?: (token: string) => void;
 
   constructor(config: AiConfig, savedMessages?: AiMessage[], customSystemPrompt?: string) {
     this.provider = createAiProvider(config);
-    const base = customSystemPrompt
-      ? `${customSystemPrompt}\n\n---\n\n${SYSTEM_PROMPT}`
-      : SYSTEM_PROMPT;
+    this.customSystemPrompt = customSystemPrompt;
+    const base = this.buildSystemPrompt();
     this.messages.push({ role: 'system', content: base });
     if (savedMessages) {
       for (const msg of savedMessages) {
@@ -61,6 +61,13 @@ export class AgentOrchestrator {
       }
     }
     this.trimContext();
+  }
+
+  private buildSystemPrompt(): string {
+    const base = this.customSystemPrompt
+      ? `${this.customSystemPrompt}\n\n---\n\n${SYSTEM_PROMPT}`
+      : SYSTEM_PROMPT;
+    return base;
   }
 
   private trimContext() {
@@ -117,7 +124,7 @@ export class AgentOrchestrator {
     if (!memoryCtx) return;
     const sysIdx = this.messages.findIndex(m => m.role === 'system' && typeof m.content === 'string' && !m.content.startsWith('[Previous context'));
     if (sysIdx >= 0) {
-      const base = SYSTEM_PROMPT + memoryCtx;
+      const base = this.buildSystemPrompt() + memoryCtx;
       this.messages[sysIdx] = { role: 'system', content: base };
     }
   }

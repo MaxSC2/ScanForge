@@ -57,8 +57,6 @@ export interface Region {
   ocrOverwriteEnabled?: boolean;
   /** Optional group ID for grouping regions together */
   groupId?: string;
-  /** Z-index offset from natural order */
-  zIndex?: number;
 }
 
 export type RegionHydrationInput = Omit<
@@ -141,7 +139,6 @@ export function normalizeRegion(region: RegionHydrationInput): Region {
       ? { ocrOverwriteEnabled: region.ocrOverwriteEnabled }
       : {}),
     ...(region.groupId ? { groupId: region.groupId } : {}),
-    ...(typeof region.zIndex === 'number' ? { zIndex: region.zIndex } : {}),
   };
 }
 
