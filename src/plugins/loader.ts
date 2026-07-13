@@ -8,10 +8,10 @@ function extractManifest(source: string): PluginManifest | null {
     if (!match) return null;
     const header = match[0];
     const id = header.match(/@id\s+(\S+)/)?.[1];
-    const name = header.match(/@name\s+(.+)/)?.[1];
+    const name = header.match(/@name\s+([^@\*]+)/)?.[1]?.trim();
     const version = header.match(/@version\s+(\S+)/)?.[1];
-    const description = header.match(/@description\s+(.+)/)?.[1];
-    const author = header.match(/@author\s+(.+)/)?.[1];
+    const description = header.match(/@description\s+([^@\*]+)/)?.[1]?.trim();
+    const author = header.match(/@author\s+([^@\*]+)/)?.[1]?.trim();
     if (!id || !name || !version) return null;
     return { id, name, version, description, author, source };
   } catch {

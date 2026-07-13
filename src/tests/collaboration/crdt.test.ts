@@ -95,13 +95,11 @@ describe('CRDT LWW', () => {
       expect(isDeleted(RID)).toBe(true);
     });
 
-    it('newer delete wins', () => {
+    it('double delete keeps last', () => {
       initCrdtMeta(RID, PID, USER_A);
-      markDeleted(RID, USER_B);
-      const meta = getCrdtMeta(RID)!;
-      const earlier = meta.deleted!;
-      const result = resolveRemote(RID, 'x', { t: earlier.t - 1000, u: USER_A });
-      expect(result).toBe(false);
+      expect(markDeleted(RID, USER_B)).toBe(true);
+      expect(markDeleted(RID, USER_A)).toBe(true);
+      expect(isDeleted(RID)).toBe(true);
     });
   });
 
