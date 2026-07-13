@@ -205,13 +205,14 @@ function broadcastOp(type: CollabOp['type'], pageId: string, payload: Record<str
     const userId = getUserId();
     const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
+    const ts = Date.now();
     const op: CollabOp = {
       id,
       type: type as CollabOp['type'],
       userId,
-      timestamp: Date.now(),
+      timestamp: ts,
     pageId,
-    payload: { ...payload, _userId: userId, _timestamp: timestamp },
+    payload: { ...payload, _userId: userId, _timestamp: ts },
   };
 
   useCollabStore.getState().addPendingOp(op);

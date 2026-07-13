@@ -48,8 +48,8 @@ export function initCrdtMeta(regionId: string, pageId: string, _userId: string) 
   }
 }
 
-export function clearCrdtMeta(_regionId: string) {
-  crdtMeta.delete(_regionId);
+export function clearCrdtMeta(regionId: string) {
+  crdtMeta.delete(regionId);
 }
 
 export function clearAllCrdtMeta() {
@@ -121,7 +121,7 @@ export function isDeleted(regionId: string): boolean {
  * Build a version tag map for a patch, marking all changed fields.
  */
 export function buildVersionMap(
-  regionId: string,
+  _regionId: string,
   patch: Record<string, unknown>,
   userId: string,
 ): VersionMap {

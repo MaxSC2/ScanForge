@@ -18,8 +18,6 @@ import { useState } from 'react';
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [pagesSheet, setPagesSheet] = useState(false);
-  const [inspectorSheet, setInspectorSheet] = useState(false);
 
   useBeforeUnload();
   useKeyboardShortcuts();
@@ -33,8 +31,6 @@ export default function App() {
           toolbar={
             <MobileToolbar
               onOpenSettings={() => setSettingsOpen(true)}
-              onOpenPages={() => setPagesSheet(true)}
-              onOpenInspector={() => setInspectorSheet(true)}
             />
           }
           sidebar={<PagesSidebar />}

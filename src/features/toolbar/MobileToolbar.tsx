@@ -15,14 +15,13 @@ import { usePageStore } from '../../stores/usePageStore';
 import { useToastStore } from '../../stores/useToastStore';
 import { useToolbarActions } from './useToolbarActions';
 import { useT } from '../../i18n';
+import { useMobileStore } from '../../stores/useMobileStore';
 
 interface MobileToolbarProps {
   onOpenSettings: () => void;
-  onOpenPages: () => void;
-  onOpenInspector: () => void;
 }
 
-export function MobileToolbar({ onOpenSettings, onOpenPages, onOpenInspector }: MobileToolbarProps) {
+export function MobileToolbar({ onOpenSettings }: MobileToolbarProps) {
   const t = useT();
   const tool = useEditorStore((s) => s.tool);
   const setTool = useEditorStore((s) => s.setTool);
@@ -32,6 +31,8 @@ export function MobileToolbar({ onOpenSettings, onOpenPages, onOpenInspector }: 
   const redo = useHistoryStore((s) => s.redo);
   const canUndo = useHistoryStore((s) => s.canUndo);
   const canRedo = useHistoryStore((s) => s.canRedo);
+  const setSidebarSheet = useMobileStore((s) => s.setSidebarSheet);
+  const setInspectorSheet = useMobileStore((s) => s.setInspectorSheet);
   const {
     handleFiles,
     handleSaveProject,
@@ -100,12 +101,12 @@ export function MobileToolbar({ onOpenSettings, onOpenPages, onOpenInspector }: 
       <div className="h-6 w-px bg-zinc-800" />
 
       {/* Panels */}
-      <button onClick={onOpenPages} className="flex h-11 w-12 flex-col items-center justify-center gap-0.5 rounded-lg text-[9px] font-medium text-zinc-400 active:bg-zinc-800 active:text-zinc-200 transition-colors">
+      <button onClick={() => setSidebarSheet(true)} className="flex h-11 w-12 flex-col items-center justify-center gap-0.5 rounded-lg text-[9px] font-medium text-zinc-400 active:bg-zinc-800 active:text-zinc-200 transition-colors">
         <span className="text-[14px] font-bold">📄</span>
         <span>Стр.</span>
       </button>
 
-      <button onClick={onOpenInspector} className="flex h-11 w-12 flex-col items-center justify-center gap-0.5 rounded-lg text-[9px] font-medium text-zinc-400 active:bg-zinc-800 active:text-zinc-200 transition-colors">
+      <button onClick={() => setInspectorSheet(true)} className="flex h-11 w-12 flex-col items-center justify-center gap-0.5 rounded-lg text-[9px] font-medium text-zinc-400 active:bg-zinc-800 active:text-zinc-200 transition-colors">
         <span className="text-[14px] font-bold">ℹ️</span>
         <span>Инсп.</span>
       </button>

@@ -1,12 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   EyeIcon,
   EyeOffIcon,
@@ -14,6 +7,7 @@ import {
 } from '../icons';
 import { useEditorStore } from '../stores/useEditorStore';
 import { usePageStore } from '../stores/usePageStore';
+import { useMobileStore } from '../stores/useMobileStore';
 import { usePinchZoom } from '../hooks/usePinchZoom';
 
 interface MobileShellProps {
@@ -25,23 +19,19 @@ interface MobileShellProps {
 }
 
 const BOTTOM_NAV_H = 56;
-const SIDEBAR_WIDTH = 260;
 
 export function MobileShell({ sidebar, canvas, inspector, toolbar, statusBar }: MobileShellProps) {
-  const [sidebarSheet, setSidebarSheet] = useState(false);
-  const [inspectorSheet, setInspectorSheet] = useState(false);
+  const sidebarSheet = useMobileStore((s) => s.sidebarSheet);
+  const inspectorSheet = useMobileStore((s) => s.inspectorSheet);
+  const setSidebarSheet = useMobileStore((s) => s.setSidebarSheet);
+  const setInspectorSheet = useMobileStore((s) => s.setInspectorSheet);
   const [showNav, setShowNav] = useState(true);
   const [safeBottom, setSafeBottom] = useState(0);
 
   const pages = usePageStore((s) => s.pages);
   const activePageId = usePageStore((s) => s.activePageId);
   const goToAdjacentPage = usePageStore((s) => s.goToAdjacentPage);
-  const sidebarOpen = useEditorStore((s) => s.sidebarOpen);
-  const inspectorOpen = useEditorStore((s) => s.inspectorOpen);
-  const focusMode = useEditorStore((s) => s.focusMode);
   const cleanView = useEditorStore((s) => s.cleanView);
-  const toggleSidebar = useEditorStore((s) => s.toggleSidebar);
-  const toggleInspector = useEditorStore((s) => s.toggleInspector);
   const toggleCleanView = useEditorStore((s) => s.toggleCleanView);
   const regionOverlaysVisible = useEditorStore((s) => s.regionOverlaysVisible);
   const toggleRegionOverlays = useEditorStore((s) => s.toggleRegionOverlays);
