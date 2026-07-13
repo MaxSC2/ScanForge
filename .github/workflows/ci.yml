@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ─── Quality ───────────────────────────────────────────────────────
+  quality:
+    name: Lint + Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - run: npm ci --legacy-peer-deps
+      - run: npx tsc --noEmit
+      - run: npx vitest run --reporter=verbose
+        env:
+          CI: true
+
+  # ─── Web build ─────────────────────────────────────────────────────
+  web:
+    name: Web (Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: [web]
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
+
+  # ─── Desktop (Tauri) ──────────────────────────────────────────────
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            extension: AppImage
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            extension: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            extension: exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - name: Install Linux deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci --legacy-peer-deps
+      - name: Build Tauri
+        run: npx tauri build --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanforge-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/*/scanforge.${{ matrix.extension }}
+
+  # ─── Android ──────────────────────────────────────────────────────
+  android:
+    name: Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - name: Install Linux deps
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Android targets
+        run: |
+          rustup target add aarch64-linux-android
+          rustup target add x86_64-linux-android
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Tauri Android plugin
+        run: cargo install tauri-cli --version "^2" && npx tauri init --mobile --ci
+      - run: npm ci --legacy-peer-deps
+      - name: Build Android APK
+        run: npx tauri android build --apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanforge-android
+          path: src-tauri/gen/android/app/build/outputs/apk/*/*.apk
