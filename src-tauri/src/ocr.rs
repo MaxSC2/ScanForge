@@ -1,3 +1,5 @@
+pub mod detect;
+pub mod easy;
 pub mod manga;
 pub mod paddle;
 pub mod preview;
@@ -68,6 +70,9 @@ fn build_providers_for_engine(engine: &str) -> Vec<Box<dyn OcrProvider>> {
     let paddle = || -> Box<dyn OcrProvider> {
         Box::new(paddle::PaddleOcrProvider)
     };
+    let easy = || -> Box<dyn OcrProvider> {
+        Box::new(easy::EasyOcrProvider)
+    };
     let unavailable = |name: &str, msg: String| -> Box<dyn OcrProvider> {
         Box::new(provider::UnavailableOcrProvider::new(name, msg))
     };
@@ -81,6 +86,7 @@ fn build_providers_for_engine(engine: &str) -> Vec<Box<dyn OcrProvider>> {
             preview(),
         ],
         "paddle" => vec![paddle(), windows(), preview()],
+        "easyocr" => vec![easy(), paddle(), windows(), preview()],
         "manga-ocr" => vec![manga(), paddle(), windows(), preview()],
         other => vec![
             unavailable(other, format!("Unsupported OCR engine '{other}', falling back.")),

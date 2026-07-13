@@ -1,13 +1,48 @@
-import { useCallback, useRef, useEffect } from 'react';
-import { Rect, Transformer, Group, Text } from 'react-konva';
+import { useCallback, useRef, useEffect, useMemo } from 'react';
+import { Rect, Transformer, Group, Text, Circle } from 'react-konva';
 import type Konva from 'konva';
 import type { Region } from '../../types';
-import { getRegionColor } from '../../types';
+import { getRegionColor, createDefaultTextStyle } from '../../types';
+import type { TextStyleRecord } from '../../types';
 import { useRegionStore } from '../../stores/useRegionStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useEditorStore } from '../../stores/useEditorStore';
+import { useProjectDomainStore } from '../../stores/useProjectDomainStore';
 import { snapRect, SNAP_THRESHOLD, GRID_STEP } from '../../utils/snapping';
 
+const GROUP_COLORS = [
+  '#22d3ee', '#f472b6', '#34d399', '#fb923c',
+  '#a78bfa', '#facc15', '#818cf8', '#f87171',
+];
+
+/**
+ * Deterministically assigns a group indicator color from the GROUP_COLORS palette
+ * based on the group ID's hash. Used to give each region group a unique visual color
+ * (cyan, pink, green, orange, purple, yellow, indigo, red).
+ */
+function resolveRegionStyle(
+  region: Region,
+  styles: TextStyleRecord[],
+  defaultId?: string,
+  projectId?: string,
+): TextStyleRecord {
+  return (
+    styles.find((s) => s.id === region.textStyleId) ??
+    styles.find((s) => s.id === defaultId) ??
+    (projectId ? createDefaultTextStyle(projectId) : styles[0]) ??
+    { id: '', projectId: '', name: '', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 28, lineHeight: 1.15, letterSpacing: 0, align: 'center', fill: '#ffffff', stroke: '#111111', strokeWidth: 3 }
+  );
+}
+
+function getGroupColor(groupId: string): string {
+  let hash = 0;
+  for (let i = 0; i < groupId.length; i++) {
+    hash = ((hash << 5) - hash + groupId.charCodeAt(i)) | 0;
+  }
+  return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
+}
+
+/** Props for the RegionRect canvas component that renders a single region on the Konva stage. */
 interface RegionRectProps {
   region: Region;
   isSelected: boolean;
@@ -16,6 +51,19 @@ interface RegionRectProps {
   onContextMenu?: (e: Konva.KonvaEventObject<PointerEvent>) => void;
 }
 
+/**
+ * Renders a single region rectangle on the Konva canvas with:
+ * - Kind-based stroke color (via `getRegionColor`).
+ * - Multi-select purple styling (dashed border, purple stroke).
+ * - Label overlay above the rect with a colored badge.
+ * - Lock indicator ("L" icon) centered on the right edge.
+ * - Source and translated text overlays.
+ * - Group visual indicator: a colored dashed border and a clickable "G" badge
+ *   that selects all regions in the same group.
+ * - A Konva Transformer for resize operations on the primary selection.
+ * - Snapping to grid and other regions on drag/resize.
+ * - Group-member offset logic: dragging a grouped region moves all siblings by the same delta.
+ */
 export function RegionRect({
   region,
   isSelected,
@@ -34,27 +82,55 @@ export function RegionRect({
   });
   const tool = useEditorStore((s) => s.tool);
   const setEditingRegionId = useEditorStore((s) => s.setEditingRegionId);
+  const gridVisible = useEditorStore((s) => s.gridVisible);
+  const snapGuidesH = useEditorStore((s) => s.snapGuidesH);
+  const snapGuidesV = useEditorStore((s) => s.snapGuidesV);
+  const textStyles = useProjectDomainStore((s) => s.textStyles);
+  const defaultStyleId = useProjectDomainStore((s) => s.settings?.defaultTextStyleId);
+  const projectId = useProjectDomainStore((s) => s.projectId);
+
+  const otherRegions = (activePage?.regions ?? [])
+    .filter((r) => r.id !== region.id && r.visible)
+    .map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
+
+  const stroke = getRegionColor(region.kind);
+  const canManipulate = tool === 'select' && !region.locked;
+  const displaySelected = isSelected || isMultiSelected;
+  const groupColor = useMemo(
+    () => (region.groupId ? getGroupColor(region.groupId) : null),
+    [region.groupId],
+  );
+
+  const textStyle = useMemo(
+    () => resolveRegionStyle(region, textStyles, defaultStyleId, projectId ?? undefined),
+    [region, textStyles, defaultStyleId, projectId],
+  );
+
+  const handleSelectGroup = useCallback(() => {
+    if (!activePage || !region.groupId) return;
+    const groupIds = activePage.regions
+      .filter((r) => r.groupId === region.groupId)
+      .map((r) => r.id);
+    useRegionStore.setState({ selectedRegionId: groupIds[0], multiSelectedRegionIds: groupIds.slice(1) });
+  }, [activePage, region.groupId]);
+
+  const handleDblClick = useCallback(() => {
+    if (tool !== 'select') return;
+    setEditingRegionId(region.id);
+  }, [region.id, tool, setEditingRegionId]);
 
   useEffect(() => {
     if (isSelected && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
       trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
-
-  if (!region.visible) return null;
+  }, [isSelected, canManipulate]);
 
   const handleSelect = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (tool !== 'select') return;
     selectRegion(region.id, e.evt?.shiftKey);
     setEditingRegionId(null);
   };
-
-  const gridVisible = useEditorStore((s) => s.gridVisible);
-
-  const otherRegions = (activePage?.regions ?? [])
-    .filter((r) => r.id !== region.id && r.visible)
-    .map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!activePageId || region.locked) return;
@@ -64,9 +140,10 @@ export function RegionRect({
       GRID_STEP,
       SNAP_THRESHOLD,
       otherRegions,
+      snapGuidesH,
+      snapGuidesV,
     );
 
-    // If region is grouped, offset all group members by the same delta
     const dx = Math.round(snapped.x) - region.x;
     const dy = Math.round(snapped.y) - region.y;
     if (region.groupId && (dx !== 0 || dy !== 0)) {
@@ -83,11 +160,6 @@ export function RegionRect({
       y: Math.round(snapped.y),
     });
   };
-
-  const handleDblClick = useCallback(() => {
-    if (tool !== 'select') return;
-    setEditingRegionId(region.id);
-  }, [region.id, tool, setEditingRegionId]);
 
   const handleTransformEnd = () => {
     const node = shapeRef.current;
@@ -107,6 +179,8 @@ export function RegionRect({
       GRID_STEP,
       SNAP_THRESHOLD,
       otherRegions,
+      snapGuidesH,
+      snapGuidesV,
     );
 
     const dx = Math.round(snapped.x) - region.x;
@@ -128,9 +202,7 @@ export function RegionRect({
     });
   };
 
-  const stroke = getRegionColor(region.kind);
-  const canManipulate = tool === 'select' && !region.locked;
-  const displaySelected = isSelected || isMultiSelected;
+  if (!region.visible) return null;
 
   return (
     <Group>
@@ -193,6 +265,20 @@ export function RegionRect({
         />
       )}
 
+      {/* Confidence indicator bar — always visible */}
+      {region.ocrConfidence !== undefined && region.ocrConfidence < 0.8 && (
+        <Rect
+          x={region.x}
+          y={region.y + region.height - 3}
+          width={region.width * region.ocrConfidence}
+          height={3}
+          fill={region.ocrConfidence < 0.5 ? '#ef4444' : '#f59e0b'}
+          opacity={0.8}
+          cornerRadius={[0, 0, 0, 2]}
+          listening={false}
+        />
+      )}
+
       {/* Source text display */}
       {region.sourceText && (
         <Text
@@ -217,12 +303,54 @@ export function RegionRect({
           width={region.width - 8}
           height={region.height - (region.sourceText ? 22 : 8)}
           text={region.translatedText}
-          fontSize={11}
-          fontFamily="Inter, system-ui, sans-serif"
-          fill="rgba(255,255,255,0.8)"
+          fontSize={Math.max(8, Math.round(textStyle.fontSize * 0.4))}
+          fontFamily={textStyle.fontFamily}
+          fill={textStyle.fill}
+          stroke={textStyle.strokeWidth > 0 ? textStyle.stroke : undefined}
+          strokeWidth={Math.max(0.5, Math.round(textStyle.strokeWidth * 0.4))}
+          align={textStyle.align}
+          lineHeight={textStyle.lineHeight}
           ellipsis
           listening={false}
         />
+      )}
+
+      {/* Group indicator border */}
+      {region.groupId && groupColor && (
+        <Rect
+          x={region.x - 3}
+          y={region.y - 3}
+          width={region.width + 6}
+          height={region.height + 6}
+          stroke={groupColor}
+          strokeWidth={1.5}
+          dash={[4, 3]}
+          cornerRadius={5}
+          listening={false}
+          opacity={0.6}
+        />
+      )}
+
+      {/* Group badge */}
+      {region.groupId && groupColor && showLabelOverlay && (
+        <Group
+          x={region.x + region.width - 10}
+          y={region.y - 10}
+          onClick={handleSelectGroup}
+          onTap={handleSelectGroup}
+          listening={canManipulate}
+        >
+          <Circle radius={7} fill={groupColor} opacity={0.9} />
+          <Text
+            x={-3.5}
+            y={-4.5}
+            text="G"
+            fontSize={9}
+            fill="#fff"
+            fontStyle="bold"
+            listening={false}
+          />
+        </Group>
       )}
 
       {/* Transformer — only for primary selection */}

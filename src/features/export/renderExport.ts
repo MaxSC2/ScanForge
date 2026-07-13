@@ -2,9 +2,11 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { loadProjectDomainContext, pageRepository, regionRepository } from '../../repositories';
 import { formatDiagnosticError } from '../../services/diagnostics';
+import { inpaintCanvasWithProvider } from '../../services/inpainting';
 import { ensureProjectDomainStatePersisted } from '../../services/projectSync';
 import { isDesktopRuntime } from '../../utils/runtime';
 import {
+  type InpaintingProviderId,
   type Page,
   type RegionRecord,
   type RenderedExportFailure,
@@ -270,7 +272,7 @@ function drawRegionText(
   context.restore();
 }
 
-export async function renderPageToBlob(page: Page) {
+export async function renderPageToBlob(page: Page, options?: { inpaint?: boolean; inpaintingProvider?: InpaintingProviderId }) {
   await ensureProjectDomainStatePersisted();
 
   const pageRecord = await pageRepository.getById(page.id);
@@ -294,6 +296,19 @@ export async function renderPageToBlob(page: Page) {
   }
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  // Optional inpainting: remove source text from regions before rendering translation
+  if (options?.inpaint) {
+    const textRegions = regionRecords
+      .filter((r) => r.visible && r.sourceText.trim())
+      .map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
+    if (textRegions.length > 0) {
+      const provider = options.inpaintingProvider ?? domainContext.settings.inpaintingProvider ?? 'basic';
+      const inpainted = await inpaintCanvasWithProvider(canvas, textRegions, provider as InpaintingProviderId);
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(inpainted, 0, 0);
+    }
+  }
 
   const visibleTranslatedRegions = regionRecords
     .filter((region) => region.visible && region.translatedText.trim())
@@ -330,7 +345,7 @@ export async function exportRenderedPageAsPng(
   let translatedRegions: number;
 
   try {
-    const rendered = await renderPageToBlob(page);
+    const rendered = await renderPageToBlob(page, { inpaint: true });
     blob = rendered.blob;
     translatedRegions = rendered.translatedRegions;
   } catch (error) {

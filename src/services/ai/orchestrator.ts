@@ -3,8 +3,10 @@ import { createAiProvider, type AiProvider } from './provider';
 import { TOOL_DEFINITIONS, dispatchTool } from './tools';
 import { getMemoryContext } from './memory';
 
+/** Maximum number of non-system messages to retain in the sliding context window. */
 const MAX_CONTEXT_MESSAGES = 30;
 
+/** Base system prompt injected into every conversation. Defines tool capabilities, behavior rules, and language. */
 const SYSTEM_PROMPT = `You are an AI assistant integrated into ScanForge, a scanlation/manga editing application.
 You can analyze pages, run OCR, translate text, create and modify regions, stitch pages, and export results.
 
@@ -34,6 +36,11 @@ You have long-term memory: use memory_save to remember important facts about the
 
 Keep responses concise in Russian.`;
 
+/**
+ * Orchestrates AI agent conversations. Manages the message loop, injects memory context,
+ * enforces a sliding window for context trimming, and handles streaming token emission.
+ * Each `run()` call sends a user message and drives tool-call iterations up to MAX_ITERATIONS.
+ */
 export class AgentOrchestrator {
   private provider: AiProvider;
   private messages: AiMessage[] = [];
@@ -44,6 +51,11 @@ export class AgentOrchestrator {
   private customSystemPrompt?: string;
   onToken?: (token: string) => void;
 
+  /**
+   * @param config - Provider configuration (model, API key, endpoint).
+   * @param savedMessages - Previously persisted conversation history to restore (system messages are skipped).
+   * @param customSystemPrompt - Optional override of the default system prompt, appended before SYSTEM_PROMPT.
+   */
   constructor(config: AiConfig, savedMessages?: AiMessage[], customSystemPrompt?: string) {
     this.provider = createAiProvider(config);
     this.customSystemPrompt = customSystemPrompt;
@@ -63,6 +75,7 @@ export class AgentOrchestrator {
     this.trimContext();
   }
 
+  /** Builds the final system prompt — either the default SYSTEM_PROMPT or a custom one merged with the default. */
   private buildSystemPrompt(): string {
     const base = this.customSystemPrompt
       ? `${this.customSystemPrompt}\n\n---\n\n${SYSTEM_PROMPT}`
@@ -70,6 +83,11 @@ export class AgentOrchestrator {
     return base;
   }
 
+  /**
+   * Sliding-window context trimmer. When non-system messages exceed MAX_CONTEXT_MESSAGES,
+   * older messages are condensed into a synthetic "[Previous context summary]" system message,
+   * preserving the most recent user + assistant + tool exchange.
+   */
   private trimContext() {
     const systemIdx = this.messages.findIndex(m => m.role === 'system');
     const system = systemIdx >= 0 ? [this.messages[systemIdx]] : [];
@@ -104,10 +122,12 @@ export class AgentOrchestrator {
     ];
   }
 
+  /** Returns the current agent status (idle | thinking | awaiting_tool | done). */
   get status() {
     return this._status;
   }
 
+  /** Registers a callback for status-change or message events. */
   on(event: 'status', handler: (status: AgentStatus) => void): void;
   on(event: 'message', handler: (message: string) => void): void;
   on(event: string, handler: unknown) {
@@ -115,10 +135,16 @@ export class AgentOrchestrator {
     if (event === 'message') this.onMessage = handler as (message: string) => void;
   }
 
+  /** Signals the agent to stop as soon as possible. The current provider call will be rejected with AbortError. */
   abort() {
     this.aborted = true;
   }
 
+  /**
+   * Injects long-term memory (from `getMemoryContext`) into the system prompt.
+   * The memory block is appended to the existing system prompt on every `run()` call
+   * so the model is aware of persisted facts from the start of the turn.
+   */
   private injectMemoryContext() {
     const memoryCtx = getMemoryContext();
     if (!memoryCtx) return;
@@ -129,6 +155,15 @@ export class AgentOrchestrator {
     }
   }
 
+  /**
+   * Runs the agent loop: injects memory, appends the user message, then iteratively
+   * calls the provider (with streaming via `onToken`), dispatches any tool calls,
+   * and loops until the model returns a text-only response or MAX_ITERATIONS is reached.
+   *
+   * @param userMessage - The user's input text.
+   * @returns The final assistant response text, or a default "done" message in Russian.
+   * @throws DOMException('AbortError') if `abort()` was called mid-execution.
+   */
   async run(userMessage: string): Promise<string> {
     this.aborted = false;
     this.injectMemoryContext();
@@ -183,6 +218,7 @@ export class AgentOrchestrator {
     return fullResponse || 'Готово. Задачи выполнены.';
   }
 
+  /** Updates the internal status and fires the status-change callback. */
   private setStatus(status: AgentStatus) {
     this._status = status;
     this.onStatusChange?.(status);

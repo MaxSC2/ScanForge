@@ -1,12 +1,13 @@
-import { Stage, Layer, Image as KonvaImage, Rect } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Rect, Line as KonvaLine } from 'react-konva';
 import { Upload } from 'lucide-react';
 import { ContextMenu } from '../../components/ContextMenu';
 import { shouldRenderRegionLabel } from './canvasPerformance';
 import { CanvasGrid } from './CanvasGrid';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import { Minimap } from './Minimap';
-import { RegionRect } from './RegionRect';
+import { RegionLayerItem } from './RegionLayerItem';
 import { RegionTextOverlay } from './RegionTextOverlay';
+import { BrushCanvas } from './BrushLayer';
 import { useEditorCanvas } from './useEditorCanvas';
 
 export function EditorCanvas() {
@@ -31,7 +32,10 @@ export function EditorCanvas() {
     isDragging,
     visibleRegions,
     contextMenuItems,
+    polygonPoints,
     cursor,
+    isPanMode,
+    handleContainerMouseDown,
     handleWheel,
     handleDragEnd,
     handleDragOver,
@@ -60,7 +64,8 @@ export function EditorCanvas() {
     <div
       ref={containerRef}
       className={`relative h-full w-full ${cleanView ? 'bg-transparent' : ''}`}
-      style={{ cursor }}
+      style={{ cursor: isPanMode ? 'grab' : cursor }}
+      onMouseDown={handleContainerMouseDown}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -69,6 +74,15 @@ export function EditorCanvas() {
         <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_0%,rgba(24,24,27,0.06)_42%,rgba(0,0,0,0)_70%)]" />
           <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent" />
+        </div>
+      ) : null}
+
+      {activePage && !image ? (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/80">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+            <p className="text-xs text-zinc-500">Загрузка страницы...</p>
+          </div>
         </div>
       ) : null}
 
@@ -88,7 +102,7 @@ export function EditorCanvas() {
         scaleY={zoom}
         x={stagePosition.x}
         y={stagePosition.y}
-        draggable={tool === 'pan'}
+        draggable={isPanMode}
         onWheel={handleWheel}
         onDragEnd={handleDragEnd}
         onMouseDown={handleMouseDown}
@@ -141,7 +155,7 @@ export function EditorCanvas() {
 
           {regionOverlaysVisible
             ? visibleRegions.map((region) => (
-                <RegionRect
+                <RegionLayerItem
                   key={region.id}
                   region={region}
                   isSelected={region.id === selectedRegionId}
@@ -169,7 +183,30 @@ export function EditorCanvas() {
               listening={false}
             />
           ) : null}
+
+          {polygonPoints.length >= 2 && (
+            <KonvaLine
+              points={polygonPoints.flatMap((p) => [p.x, p.y])}
+              stroke="#a78bfa"
+              strokeWidth={2}
+              dash={[6, 4]}
+              closed={false}
+              listening={false}
+            />
+          )}
+          {polygonPoints.length >= 1 && (
+            <KonvaLine
+              x={polygonPoints[polygonPoints.length - 1].x - 3}
+              y={polygonPoints[polygonPoints.length - 1].y - 3}
+              points={[0, 0, 6, 0, 6, 6, 0, 6]}
+              closed
+              fill="#a78bfa"
+              listening={false}
+            />
+          )}
         </Layer>
+
+        <BrushCanvas width={activePage.naturalWidth} height={activePage.naturalHeight} />
       </Stage>
 
       {minimapVisible && !cleanView ? (

@@ -16,8 +16,11 @@ import {
   Trash2Icon,
 } from '../../icons';
 import { useJobStore } from '../../stores/useJobStore';
+import { usePageStore } from '../../stores/usePageStore';
+import { useRegionStore } from '../../stores/useRegionStore';
+import { useProjectDomainStore } from '../../stores/useProjectDomainStore';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { REGION_KIND_OPTIONS, type Region, type RegionKind } from '../../types';
+import { REGION_KIND_OPTIONS, type Region, type RegionKind, type RegionOrientation } from '../../types';
 import {
   AccordionSection,
   Field,
@@ -25,11 +28,29 @@ import {
   StatusPill,
 } from './inspectorShared';
 
+const SOURCE_LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'auto', label: 'Авто' },
+  { value: 'ja', label: 'Японский' },
+  { value: 'zh', label: 'Китайский' },
+  { value: 'ko', label: 'Корейский' },
+  { value: 'en', label: 'Английский' },
+  { value: 'ru', label: 'Русский' },
+];
+
+const TARGET_LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'Английский' },
+  { value: 'ja', label: 'Японский' },
+  { value: 'zh', label: 'Китайский' },
+  { value: 'ko', label: 'Корейский' },
+];
+
 export function RegionDetailsPanel({
   pageId,
   region,
   update,
   onDuplicate,
+  onSplit,
   onDelete,
   onRerunOcr,
 }: {
@@ -37,12 +58,15 @@ export function RegionDetailsPanel({
   region: Region;
   update: (patch: Partial<Region>) => void;
   onDuplicate: (pageId: string, regionId: string) => void;
+  onSplit: (pageId: string, regionId: string) => void;
   onDelete: (pageId: string, regionId: string) => void;
   onRerunOcr: () => void;
 }) {
-  const queueOcr = useJobStore((s) => s.queueOcrJobs);
   const queueTranslate = useJobStore((s) => s.queueTranslationJobs);
+  const reorderRegions = useRegionStore((s) => s.reorderRegions);
+  const textStyles = useProjectDomainStore((s) => s.textStyles);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showHiddenFields, setShowHiddenFields] = useState(false);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -73,6 +97,60 @@ export function RegionDetailsPanel({
           {region.visible ? <EyeIcon size={13} /> : <EyeOffIcon size={13} />}
         </button>
 
+        {region.sourceText && (
+          <button
+            onClick={() => navigator.clipboard?.writeText(region.sourceText)}
+            aria-label="Копировать исходный текст"
+            className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            title="Копировать исходный текст"
+          >
+            <Copy size={13} />
+          </button>
+        )}
+
+        <button
+          onClick={() => {
+            const page = usePageStore.getState().getActivePage();
+            if (!page) return;
+            const sorted = [...page.regions].sort(
+              (a, b) => a.order - b.order,
+            );
+            const idx = sorted.findIndex((r) => r.id === region.id);
+            if (idx > 0) reorderRegions(pageId, idx, 0);
+          }}
+          aria-label="На задний план"
+          className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          title="На задний план"
+        >
+          <span className="text-[11px] font-bold">↓</span>
+        </button>
+
+        <button
+          onClick={() => {
+            const page = usePageStore.getState().getActivePage();
+            if (!page) return;
+            const sorted = [...page.regions].sort(
+              (a, b) => a.order - b.order,
+            );
+            const idx = sorted.findIndex((r) => r.id === region.id);
+            if (idx < sorted.length - 1) reorderRegions(pageId, idx, sorted.length - 1);
+          }}
+          aria-label="На передний план"
+          className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          title="На передний план"
+        >
+          <span className="text-[11px] font-bold">↑</span>
+        </button>
+
+        <button
+          onClick={() => update({ groupId: region.groupId ? undefined : (crypto.randomUUID?.() ?? `${Date.now()}`) })}
+          aria-label={region.groupId ? 'Разгруппировать' : 'Сгруппировать'}
+          className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          title={region.groupId ? 'Разгруппировать' : 'Сгруппировать'}
+        >
+          <span className="text-[11px] font-bold">{region.groupId ? '∄' : '⊕'}</span>
+        </button>
+
         <button
           onClick={() => onDuplicate(pageId, region.id)}
           aria-label="Дублировать"
@@ -80,6 +158,15 @@ export function RegionDetailsPanel({
           title="Дублировать"
         >
           <Copy size={13} />
+        </button>
+
+        <button
+          onClick={() => onSplit(pageId, region.id)}
+          aria-label="Разделить"
+          className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          title="Разделить"
+        >
+          <span className="text-[11px] font-bold">↔</span>
         </button>
 
         <div className="flex-1" />
@@ -159,6 +246,41 @@ export function RegionDetailsPanel({
                 min={1}
               />
             </Field>
+
+            <button
+              onClick={() => setShowHiddenFields((v) => !v)}
+              className="text-[9px] text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              {showHiddenFields ? 'Скрыть доп. поля' : 'Дополнительные поля ▸'}
+            </button>
+
+            {showHiddenFields && (
+              <>
+                <Field label="Ориентация">
+                  <select
+                    value={region.orientation}
+                    onChange={(e) => update({ orientation: e.target.value as RegionOrientation })}
+                    className="input-field"
+                  >
+                    <option value="horizontal">Горизонтальная</option>
+                    <option value="vertical">Вертикальная</option>
+                  </select>
+                </Field>
+
+                <Field label="Стиль текста">
+                  <select
+                    value={region.textStyleId ?? ''}
+                    onChange={(e) => update({ textStyleId: e.target.value || undefined })}
+                    className="input-field"
+                  >
+                    <option value="">— По умолчанию —</option>
+                    {textStyles.map((ts) => (
+                      <option key={ts.id} value={ts.id}>{ts.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            )}
           </div>
         </AccordionSection>
 
@@ -176,6 +298,13 @@ export function RegionDetailsPanel({
               value={region.height}
               onChange={(value) => update({ height: value })}
             />
+            {showHiddenFields && (
+              <NumField
+                label="Поворот"
+                value={region.rotation}
+                onChange={(value) => update({ rotation: value })}
+              />
+            )}
           </div>
         </AccordionSection>
 
@@ -205,15 +334,22 @@ export function RegionDetailsPanel({
             ) : null}
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={!!region.ocrOverwriteEnabled}
-                onChange={(event) => update({ ocrOverwriteEnabled: event.target.checked })}
-                className="h-3 w-3 rounded border-zinc-700 bg-zinc-800 text-indigo-500 focus:ring-0"
-              />
-              Перезаписывать при OCR
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={!!region.ocrOverwriteEnabled}
+                  onChange={(event) => update({ ocrOverwriteEnabled: event.target.checked })}
+                  className="h-3 w-3 rounded border-zinc-700 bg-zinc-800 text-indigo-500 focus:ring-0"
+                />
+                Перезаписывать при OCR
+              </label>
+              {showHiddenFields && region.targetLanguage && (
+                <span className="text-[10px] text-zinc-600 ml-auto">
+                  Цель: {TARGET_LANGUAGE_OPTIONS.find((l) => l.value === region.targetLanguage)?.label ?? region.targetLanguage}
+                </span>
+              )}
+            </div>
             <button
               onClick={onRerunOcr}
               className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
@@ -226,6 +362,22 @@ export function RegionDetailsPanel({
           {region.sourceText ? (
             <p className="mt-1 text-[10px] text-zinc-600">Символов: {region.sourceText.length}</p>
           ) : null}
+          {showHiddenFields && (
+            <div className="mt-2">
+              <Field label="Язык оригинала">
+                <select
+                  value={region.sourceLanguage ?? ''}
+                  onChange={(e) => update({ sourceLanguage: e.target.value || undefined })}
+                  className="input-field"
+                >
+                  <option value="">— По умолчанию —</option>
+                  {SOURCE_LANGUAGE_OPTIONS.map((lang) => (
+                    <option key={lang.value} value={lang.value}>{lang.label}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
         </AccordionSection>
 
         <AccordionSection title="Перевод" icon={<LanguagesIcon size={12} />} defaultOpen>
@@ -243,6 +395,22 @@ export function RegionDetailsPanel({
             ) : null}
             {region.targetLanguage ? <StatusPill label={region.targetLanguage} /> : null}
           </div>
+          {showHiddenFields && (
+            <div className="mt-2">
+              <Field label="Язык перевода">
+                <select
+                  value={region.targetLanguage ?? ''}
+                  onChange={(e) => update({ targetLanguage: e.target.value || undefined })}
+                  className="input-field"
+                >
+                  <option value="">— По умолчанию —</option>
+                  {TARGET_LANGUAGE_OPTIONS.map((lang) => (
+                    <option key={lang.value} value={lang.value}>{lang.label}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
           <div className="mt-2 flex items-center gap-1">
             {region.sourceText && (
               <button

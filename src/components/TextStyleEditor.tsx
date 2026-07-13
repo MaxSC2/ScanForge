@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Trash2Icon } from '../icons';
 import type { TextStyleRecord } from '../types';
 import { useProjectDomainStore } from '../stores/useProjectDomainStore';
+import { useTextStylePresetsStore } from '../stores/useTextStylePresetsStore';
+import { useToastStore } from '../stores/useToastStore';
 
 const COMMON_FONTS = [
   'Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Georgia',
@@ -240,6 +242,48 @@ export function TextStyleEditor({ style, onClose }: TextStyleEditorProps) {
             className="flex-1 rounded-md bg-indigo-500/20 px-3 py-1.5 text-[10px] font-medium text-indigo-300 transition-colors hover:bg-indigo-500/30 disabled:opacity-40"
           >
             {saving ? 'Сохранение…' : 'Сохранить'}
+          </button>
+          <button
+            onClick={() => {
+              const p = useTextStylePresetsStore.getState();
+              const name = prompt('Название пресета:', fontFamily);
+              if (name) {
+                p.savePreset(name, { fontFamily, fontSize, lineHeight, letterSpacing, align: align as any, fill, stroke, strokeWidth });
+                useToastStore.getState().push(`Пресет «${name}» сохранён`, 'success');
+              }
+            }}
+            className="rounded-md px-2 py-1.5 text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => {
+              const presets = useTextStylePresetsStore.getState().presets;
+              if (presets.length === 0) {
+                useToastStore.getState().push('Нет сохранённых пресетов', 'info');
+                return;
+              }
+              const names = presets.map((p) => p.name);
+              const name = prompt(`Загрузить пресет (доступны: ${names.join(', ')}):`);
+              if (!name) return;
+              const preset = presets.find((p) => p.name === name);
+              if (!preset) {
+                useToastStore.getState().push(`Пресет «${name}» не найден`, 'error');
+                return;
+              }
+              setFontFamily(preset.fontFamily);
+              setFontSize(preset.fontSize);
+              setLineHeight(preset.lineHeight);
+              setLetterSpacing(preset.letterSpacing);
+              setAlign(preset.align);
+              setFill(preset.fill);
+              setStroke(preset.stroke);
+              setStrokeWidth(preset.strokeWidth);
+              useToastStore.getState().push(`Пресет «${name}» загружен`, 'success');
+            }}
+            className="rounded-md px-2 py-1.5 text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            Load
           </button>
           <button
             onClick={onClose}

@@ -6,12 +6,14 @@ import { useHistoryStore } from '../../stores/useHistoryStore';
 import { graphQuery, graphPath, graphExplain } from './graph';
 import { memorySave, memoryRecall } from './memory';
 
+/** A single step within a multi-step task plan. */
 interface PlanStep {
   id: number;
   label: string;
   status: 'pending' | 'running' | 'done' | 'failed';
 }
 
+/** A multi-step task plan created by `start_plan` and progressed by `plan_step`. */
 interface Plan {
   id: string;
   description: string;
@@ -24,6 +26,11 @@ let planIdCounter = 0;
 
 /* ─── Tool Definitions ─── */
 
+/**
+ * Complete list of tool definitions exposed to the AI model.
+ * Each entry declares the tool name, description (shown to the model), and JSON Schema parameters.
+ * Tools cover OCR, translation, region management, history, knowledge graph, memory, project analysis, and multi-step planning.
+ */
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'ocr_page',
@@ -315,6 +322,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 
 /* ─── Tool Dispatcher ─── */
 
+/**
+ * Routes an AI tool-call request to the appropriate handler.
+ * Each case reads arguments from the tool call, invokes the corresponding store/service,
+ * and returns a human-readable result string that is fed back to the model.
+ *
+ * @param toolCall - The tool call object containing the tool name and parsed arguments.
+ * @returns A string summary of the operation result.
+ */
 export async function dispatchTool(toolCall: ToolCall): Promise<string> {
   const args = toolCall.arguments;
 

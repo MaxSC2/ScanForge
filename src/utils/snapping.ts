@@ -43,6 +43,8 @@ export function snapRect(
   gridStep: number,
   threshold: number,
   otherRegions: SnapRect[] = [],
+  guidesH: number[] = [],
+  guidesV: number[] = [],
 ): SnapRect {
   const right = rect.x + rect.width;
   const bottom = rect.y + rect.height;
@@ -56,10 +58,18 @@ export function snapRect(
   if (snapToGrid) {
     const sx = snapValue(rect.x, gridStep, threshold);
     const sy = snapValue(rect.y, gridStep, threshold);
-    const sr = snapValue(right, gridStep, threshold);
-    const sb = snapValue(bottom, gridStep, threshold);
     dx += sx - rect.x;
     dy += sy - rect.y;
+  }
+
+  // Snap to guides (edge detection lines)
+  if (guidesH.length > 0) {
+    const hMatch = snapEdge(rect.y, guidesH, threshold);
+    if (hMatch !== null) dy = hMatch - rect.y;
+  }
+  if (guidesV.length > 0) {
+    const vMatch = snapEdge(rect.x, guidesV, threshold);
+    if (vMatch !== null) dx = vMatch - rect.x;
   }
 
   // Edge snap to other regions

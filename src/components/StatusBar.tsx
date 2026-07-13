@@ -77,11 +77,13 @@ export function StatusBar() {
   const lastError = usePersistenceStore((state) => state.lastError);
   const recoveryNotice = usePersistenceStore((state) => state.recoveryNotice);
 
-  const toolLabels = {
+  const toolLabels: Record<string, string> = {
     select: 'Выбор',
     draw: 'Рисование',
+    'draw-polygon': 'Полигон',
+    brush: 'Кисть',
     pan: 'Панорама',
-  } as const;
+  };
 
   const viewModeLabel = {
     manual: 'Ручной',

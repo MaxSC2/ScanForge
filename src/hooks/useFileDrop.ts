@@ -28,17 +28,18 @@ export function useFileDrop() {
       e.stopPropagation();
       setIsDragging(false);
 
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith('image/'),
+      const files = Array.from(e.dataTransfer.files).filter(
+        (f) => f.type.startsWith('image/') || f.type === 'application/pdf' || /\.pdf$/i.test(f.name) || /\.cbz$/i.test(f.name) || /\.cbr$/i.test(f.name),
       );
 
       if (files.length === 0) {
-        pushToast('Подходящие изображения не найдены', 'warning');
+        pushToast('Подходящие файлы не найдены', 'warning');
         return;
       }
 
-      addPages(files);
-      pushToast(`Добавлено страниц: ${files.length}`, 'success');
+      void addPages(files).then((count) => {
+        pushToast(`Добавлено страниц: ${count}`, 'success');
+      });
     },
     [addPages, pushToast],
   );

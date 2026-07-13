@@ -8,11 +8,13 @@ import { ToastContainer } from './components/ToastContainer';
 import { useBeforeUnload } from './hooks/useBeforeUnload';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useLocalProjectPersistence } from './hooks/useLocalProjectPersistence';
+import { useFontLoader } from './hooks/useFontLoader';
 
 export default function App() {
   useBeforeUnload();
   useKeyboardShortcuts();
   useLocalProjectPersistence();
+  useFontLoader();
 
   return (
     <>

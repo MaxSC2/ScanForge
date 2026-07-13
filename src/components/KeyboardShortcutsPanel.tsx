@@ -13,6 +13,12 @@ export function KeyboardShortcutsPanel({ onBeforeOpen }: KeyboardShortcutsPanelP
   const panelRef = useRef<HTMLDivElement>(null);
   const resetBinding = useShortcutsStore((s) => s.resetBinding);
   const resetAll = useShortcutsStore((s) => s.resetAll);
+  const overrides = useShortcutsStore((s) => s.overrides);
+
+  const getBinding = useCallback(
+    (id: string) => overrides[id] ?? SHORTCUT_DEFS.find((d) => d.id === id)?.defaultKeys ?? '',
+    [overrides],
+  );
 
   const sections = SHORTCUT_DEFS.reduce<
     { title: string; items: { id: string; label: string }[] }[]
@@ -148,8 +154,8 @@ export function KeyboardShortcutsPanel({ onBeforeOpen }: KeyboardShortcutsPanelP
                 </div>
                 <div className="space-y-0.5">
                   {section.items.map((item) => {
-                    const binding = useShortcutsStore.getState().getBinding(item.id);
-                    const isOverridden = useShortcutsStore.getState().overrides[item.id] !== undefined;
+                    const binding = getBinding(item.id);
+                    const isOverridden = overrides[item.id] !== undefined;
                     return (
                       <div
                         key={item.id}

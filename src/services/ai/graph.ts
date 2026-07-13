@@ -1,5 +1,6 @@
 import { readTextFile } from '@tauri-apps/plugin-fs';
 
+/** A node in the knowledge graph — represents a code entity (file, function, component, etc.). */
 interface GraphNode {
   id: string;
   label: string;
@@ -10,6 +11,7 @@ interface GraphNode {
   norm_label?: string;
 }
 
+/** A directed or undirected edge between two graph nodes — represents a dependency, call, or import relationship. */
 interface GraphLink {
   source: string;
   target: string;
@@ -21,6 +23,11 @@ interface GraphLink {
   weight?: number;
 }
 
+/**
+ * Top-level graph structure loaded from `graphify-out/graph.json`.
+ * The JSON file contains a flat node list and an edge list with optional relation labels and confidence scores.
+ * Edges can be directed or undirected; the adjacency builder respects the `directed` flag.
+ */
 interface GraphData {
   directed: boolean;
   nodes: GraphNode[];
@@ -62,10 +69,23 @@ async function loadGraph(): Promise<GraphData> {
   }
 }
 
+/** Clears the in-memory graph cache so the next query re-reads the JSON file from disk. */
 export function clearGraphCache(): void {
   cachedGraph = null;
 }
 
+/**
+ * Queries the knowledge graph. Finds nodes matching the query string by label, norm_label,
+ * or source_file, then performs a BFS from up to 3 seed nodes up to the given budget.
+ * Returns matching nodes with their depth, source file, community, and relationship types.
+ *
+ * The graph is traversed from seed nodes outward using an adjacency list built from the edge list.
+ * Communities are inferred clusters of related nodes — the response includes how many communities were visited.
+ *
+ * @param query - Search term matched against node labels, normalized labels, and file paths.
+ * @param budget - Maximum number of result nodes to return (default 30).
+ * @returns JSON string with query metadata, explored nodes, and community counts.
+ */
 export async function graphQuery(query: string, budget = 30): Promise<string> {
   const graph = await loadGraph();
   const matches = findNodes(graph, query);
@@ -120,6 +140,15 @@ export async function graphQuery(query: string, budget = 30): Promise<string> {
   }, null, 2);
 }
 
+/**
+ * Finds the shortest dependency/call path between two code entities in the knowledge graph.
+ * Uses BFS on the undirected adjacency map starting from the first matching node of `from`
+ * and searching until the first matching node of `to` is reached.
+ *
+ * @param from - Starting entity name (matched via findNodes fuzzy search).
+ * @param to - Target entity name (matched via findNodes fuzzy search).
+ * @returns JSON string with the path array (labels + source files + communities at each step) or a "not found" message.
+ */
 export async function graphPath(from: string, to: string): Promise<string> {
   const graph = await loadGraph();
 
@@ -171,6 +200,14 @@ export async function graphPath(from: string, to: string): Promise<string> {
   }, null, 2);
 }
 
+/**
+ * Returns a detailed summary of a single code entity from the knowledge graph:
+ * its file location, community ID and size, file type, all neighbor relationships
+ * (with relation labels and confidence), and peer entities in the same community.
+ *
+ * @param nodeQuery - The entity name to look up (fuzzy-matched against node labels).
+ * @returns JSON string with the node's metadata, connection list, and community peers.
+ */
 export async function graphExplain(nodeQuery: string): Promise<string> {
   const graph = await loadGraph();
   const matches = findNodes(graph, nodeQuery);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { usePageStore } from '../stores/usePageStore';
 import { useRegionStore } from '../stores/useRegionStore';
 
+/** A contextual action suggestion presented to the user, with a label, description, callback, and priority level. */
 export interface Suggestion {
   id: string;
   label: string;
@@ -17,7 +18,17 @@ interface Props {
   deleteRegion: (pageId: string, regionId: string) => void;
 }
 
-export function useAutoSuggest({ queueOcr, queueTranslate, autoNumber, deleteRegion }: Props) {
+/**
+ * Analyzes the active page's region state and returns contextual suggestions:
+ * - Prompts the user to draw regions when the page is empty (high priority).
+ * - Recommends OCR run when idle regions without source text are detected (high priority).
+ * - Recommends translation when OCR-done regions lack translations (high priority).
+ * - Flags OCR/translation failures for specific regions with one-click retry (high priority).
+ * - Detects overlapping region pairs and warns about layout issues (normal priority).
+ *
+ * The suggestion list updates reactively whenever `activePageId`, `pages`, or the action callbacks change.
+ */
+export function useAutoSuggest({ queueOcr, queueTranslate, autoNumber: _autoNumber, deleteRegion: _deleteRegion }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const activePageId = usePageStore((s) => s.activePageId);
   const pages = usePageStore((s) => s.pages);
@@ -105,7 +116,7 @@ export function useAutoSuggest({ queueOcr, queueTranslate, autoNumber, deleteReg
     }
 
     setSuggestions(result);
-  }, [activePageId, pages, queueOcr, queueTranslate, autoNumber, deleteRegion, selectRegion]);
+  }, [activePageId, pages, queueOcr, queueTranslate, selectRegion]);
 
   return suggestions;
 }

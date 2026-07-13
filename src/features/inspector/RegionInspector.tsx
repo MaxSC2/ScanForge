@@ -22,6 +22,7 @@ export function RegionInspector() {
     rerunOcr,
     deleteRegion,
     duplicateRegion,
+    splitRegion,
   } = useRegionInspector();
 
   if (!activePage) {
@@ -70,6 +71,7 @@ export function RegionInspector() {
           region={region}
           update={update}
           onDuplicate={duplicateRegion}
+          onSplit={splitRegion}
           onDelete={deleteRegion}
           onRerunOcr={rerunOcr}
         />

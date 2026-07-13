@@ -13,6 +13,7 @@ export function useRegionInspector() {
   const updateRegion = useRegionStore((state) => state.updateRegion);
   const deleteRegion = useRegionStore((state) => state.deleteRegion);
   const duplicateRegion = useRegionStore((state) => state.duplicateRegion);
+  const splitRegion = useRegionStore((state) => state.splitRegion);
 
   const queueOcrJobs = useJobStore((state) => state.queueOcrJobs);
   const pushToast = useToastStore((state) => state.push);
@@ -53,5 +54,6 @@ export function useRegionInspector() {
     rerunOcr,
     deleteRegion,
     duplicateRegion,
+    splitRegion,
   };
 }

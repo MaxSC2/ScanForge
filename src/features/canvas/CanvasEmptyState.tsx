@@ -43,7 +43,7 @@ export function CanvasEmptyState({
             {isDragging ? 'Отпусти изображения здесь' : 'Страница не выбрана'}
           </p>
           <p className="mt-1.5 max-w-64 text-xs text-zinc-600">
-            Загрузи изображения через тулбар или перетащи файлы сюда
+            Загрузи изображения или PDF через тулбар или перетащи файлы сюда
           </p>
         </div>
         {!isDragging ? (

@@ -6,6 +6,10 @@ import {
   buildLocalDraftTranslation,
   buildPreviewTranslation,
 } from './translationDraft';
+import { translateOffline } from './translation/offline';
+import { translateViaHttp } from './translation/providers';
+import { createAiProvider } from './ai/provider';
+import type { AiConfig } from './ai/types';
 import type {
   Page,
   ProjectTargetLanguage,
@@ -34,6 +38,11 @@ const TRANSLATION_PROVIDER_FALLBACKS: Record<string, string[]> = {
   local: ['local', 'mock'],
   mock: ['mock'],
   remote: ['remote', 'local', 'mock'],
+  offline: ['offline', 'local', 'mock'],
+  deepl: ['deepl', 'local', 'mock'],
+  libre: ['libre', 'local', 'mock'],
+  ollama: ['ollama', 'local', 'mock'],
+  sakura: ['sakura', 'ollama', 'local', 'mock'],
 };
 
 function getTranslationProviderChain(provider: TranslationProviderId | string) {
@@ -48,6 +57,16 @@ function getTranslationProviderName(provider: string) {
       return 'scanforge-translation-preview';
     case 'remote':
       return 'scanforge-translation-remote';
+    case 'offline':
+      return 'scanforge-offline-kuromoji';
+    case 'deepl':
+      return 'deepl-api';
+    case 'libre':
+      return 'libre-translate';
+    case 'ollama':
+      return 'ollama-llm';
+    case 'sakura':
+      return 'sakura-llm';
     default:
       return provider;
   }
@@ -62,19 +81,70 @@ function describeTranslationProviderLabel(provider: string, providerPath?: strin
 }
 
 function isBrowserTranslationProviderAvailable(provider: string) {
-  return provider === 'local' || provider === 'mock';
+  return provider === 'local' || provider === 'mock' || provider === 'offline'
+    || provider === 'deepl' || provider === 'libre' || provider === 'ollama'
+    || provider === 'sakura';
 }
 
-function runBrowserProviderTranslation(
+async function runBrowserProviderTranslation(
   provider: string,
   sourceText: string,
   targetLanguage: ProjectTargetLanguage,
-) {
+): Promise<string | null> {
   switch (provider) {
     case 'local':
       return buildLocalDraftTranslation(sourceText, targetLanguage);
     case 'mock':
       return buildPreviewTranslation(sourceText, targetLanguage);
+    case 'offline': {
+      const result = await translateOffline(sourceText, targetLanguage);
+      return result.text;
+    }
+    case 'deepl':
+      return translateViaHttp('deepl', sourceText, targetLanguage);
+    case 'libre':
+      return translateViaHttp('libre', sourceText, targetLanguage);
+    case 'ollama': {
+      const ollamaConfig: AiConfig = {
+        provider: 'ollama',
+        model: localStorage.getItem('scanforge.ollama.model') || 'llama3.2:1b',
+        baseUrl: localStorage.getItem('scanforge.ollama.endpoint') || 'http://localhost:11434',
+        apiKey: '',
+        maxTokens: 512,
+        temperature: 0.3,
+      };
+      const provider = createAiProvider(ollamaConfig);
+      const result = await provider.chat(
+        [{ role: 'user', content: `Translate the following Japanese manga text to ${targetLanguage === 'ru' ? 'Russian' : 'English'}. Keep it concise and natural for a speech bubble. Return ONLY the translation, no explanations:\n\n${sourceText}` }],
+        [],
+        undefined,
+      );
+      return result.content || null;
+    }
+    case 'sakura': {
+      const sakuraConfig: AiConfig = {
+        provider: 'ollama',
+        model: localStorage.getItem('scanforge.sakura.model') || 'sakura-1.5b',
+        baseUrl: localStorage.getItem('scanforge.sakura.endpoint') || 'http://localhost:11434',
+        apiKey: '',
+        maxTokens: 512,
+        temperature: 0.2,
+      };
+      const provider = createAiProvider(sakuraConfig);
+      const lang = targetLanguage === 'ru' ? 'Russian' : 'English';
+      const result = await provider.chat(
+        [{
+          role: 'system',
+          content: 'You are a professional manga translator. Translate Japanese text to ' + lang + '. Preserve names, onomatopoeia, and cultural terms. Keep the translation natural for speech bubbles.',
+        }, {
+          role: 'user',
+          content: sourceText,
+        }],
+        [],
+        undefined,
+      );
+      return result.content || null;
+    }
     default:
       return null;
   }
@@ -236,7 +306,7 @@ async function runBrowserTranslation(
     } else {
       let translatedText: string | null = null;
 
-      translatedText = runBrowserProviderTranslation(
+      translatedText = await runBrowserProviderTranslation(
         activeProvider,
         region.sourceText,
         context.targetLanguage,
@@ -293,6 +363,13 @@ export async function runPageTranslation(
 ): Promise<TranslationPageResult> {
   if (!isDesktopRuntime()) {
     onProgress?.(0.15, 'Running browser translation provider');
+    return runBrowserTranslation(page, options, onProgress);
+  }
+
+  // Offline provider runs in-browser even on desktop (uses kuromoji.js + dictionary)
+  const context = await loadStoredTranslationContext(page, options);
+  if (context.translationProvider === 'offline') {
+    onProgress?.(0.15, 'Running offline browser translation provider');
     return runBrowserTranslation(page, options, onProgress);
   }
 

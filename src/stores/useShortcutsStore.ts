@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 const STORAGE_KEY = 'scanforge.shortcuts';
 
+/** Definition of a single keyboard shortcut: its unique id, default key combination, display label, and grouping category. */
 export interface ShortcutDef {
   id: string;
   defaultKeys: string;
@@ -9,9 +10,23 @@ export interface ShortcutDef {
   category: string;
 }
 
+/**
+ * The 47 built-in keyboard shortcuts for ScanForge, organized by category:
+ * - Инструменты (tools): select, draw, pan, grid toggle
+ * - Регионы (regions): delete, select all, duplicate, navigate, bring to front/back, group/ungroup
+ * - Перемещение (movement): nudge 1px/10px in each direction, resize via Alt+arrows
+ * - OCR и перевод (OCR & translation): queue OCR, queue translation
+ * - Экспорт (export): export PNG, stitch pages
+ * - Масштаб (zoom): zoom in/out/reset, actual size, fit width, fit page
+ * - Панели (panels): sidebar, inspector, focus mode, clean mode, overlays
+ * - История (history): undo, redo
+ * - Навигация (navigation): escape, space next, pageup previous
+ */
 export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'tool_select', defaultKeys: 'v', label: 'Инструмент «Выбор»', category: 'Инструменты' },
   { id: 'tool_draw', defaultKeys: 'r', label: 'Инструмент «Регион»', category: 'Инструменты' },
+  { id: 'tool_polygon', defaultKeys: 'p', label: 'Инструмент «Полигон»', category: 'Инструменты' },
+  { id: 'tool_brush', defaultKeys: 'b', label: 'Инструмент «Кисть»', category: 'Инструменты' },
   { id: 'tool_pan', defaultKeys: 'h', label: 'Инструмент «Панорама»', category: 'Инструменты' },
   { id: 'toggle_grid', defaultKeys: 'g', label: 'Переключить сетку', category: 'Инструменты' },
   { id: 'delete_region', defaultKeys: 'del', label: 'Удалить выбранный регион', category: 'Регионы' },
@@ -33,6 +48,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'resize_right', defaultKeys: 'alt+arrowright', label: 'Увеличить ширину', category: 'Перемещение' },
   { id: 'queue_ocr', defaultKeys: 'ctrl+shift+o', label: 'Запустить OCR', category: 'OCR и перевод' },
   { id: 'queue_translate', defaultKeys: 'ctrl+shift+t', label: 'Запустить перевод', category: 'OCR и перевод' },
+  { id: 'process_all', defaultKeys: 'ctrl+shift+p', label: 'Пайплайн: OCR → Перевод', category: 'OCR и перевод' },
   { id: 'export_png', defaultKeys: 'ctrl+shift+e', label: 'Экспорт в PNG', category: 'Экспорт' },
   { id: 'stitch_pages', defaultKeys: 'ctrl+m', label: 'Склеить страницы', category: 'Склейка' },
   { id: 'zoom_in', defaultKeys: 'ctrl+=', label: 'Приблизить', category: 'Масштаб' },
@@ -57,6 +73,10 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'prev_page_clean', defaultKeys: 'pageup', label: 'Предыдущая страница (чистый режим)', category: 'Навигация' },
 ];
 
+/**
+ * Converts a machine-readable key combo string (e.g. "ctrl+shift+a") to a human-readable display string
+ * (e.g. "Ctrl+Shift+A"). Known modifiers are capitalized; other key names are Title-cased.
+ */
 export function formatKeys(keys: string): string {
   return keys
     .split('+')
@@ -67,6 +87,11 @@ export function formatKeys(keys: string): string {
     .join('+');
 }
 
+/**
+ * Parses a key combo string into its modifier flags and primary key.
+ * Handles multi-character keys by joining non-modifier parts with "+".
+ * Example: "ctrl+shift+arrowup" → { ctrl: true, shift: true, alt: false, key: "arrowup" }
+ */
 export function parseKeys(keys: string): { key: string; ctrl: boolean; shift: boolean; alt: boolean } {
   const parts = keys.toLowerCase().split('+');
   return {
@@ -77,6 +102,11 @@ export function parseKeys(keys: string): { key: string; ctrl: boolean; shift: bo
   };
 }
 
+/**
+ * Tests whether a raw KeyboardEvent matches a shortcut combo string.
+ * Handles special key aliases: "esc" → Escape, "del" → Delete/Backspace, "space" → Space/' '.
+ * Uses `event.code` as a fallback when `event.key` does not match.
+ */
 export function matchEvent(event: KeyboardEvent, keys: string): boolean {
   const combo = parseKeys(keys);
   const ctrl = event.ctrlKey || event.metaKey;
@@ -105,6 +135,7 @@ function saveOverrides(overrides: Record<string, string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
 }
 
+/** Zustand state and actions for user-customizable keyboard shortcut bindings, persisted to localStorage. */
 interface ShortcutsState {
   overrides: Record<string, string>;
   getBinding: (id: string) => string;

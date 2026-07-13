@@ -35,7 +35,8 @@ interface CtxMenuState {
   regionId: string;
 }
 
-function getCanvasCursor(tool: EditorTool) {
+function getCanvasCursor(tool: EditorTool, spacePanning: boolean) {
+  if (spacePanning) return 'grab';
   switch (tool) {
     case 'draw':
       return 'crosshair';
@@ -56,11 +57,63 @@ export function useEditorCanvas() {
     width: number;
     height: number;
   } | null>(null);
+  const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([]);
   const cursorFrameRef = useRef<number | null>(null);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
   const isDrawing = useRef(false);
   const drawStart = useRef({ x: 0, y: 0 });
   const previousPageIdRef = useRef<string | null>(null);
+  const [spacePanning, setSpacePanning] = useState(false);
+  const spacePanRef = useRef(false);
+  const middleMouseRef = useRef(false);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        e.preventDefault();
+        spacePanRef.current = true;
+        setSpacePanning(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spacePanRef.current = false;
+        setSpacePanning(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, []);
+
+  const isPanMode = tool === 'pan' || spacePanning;
+
+  const handleContainerMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      middleMouseRef.current = true;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    }
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!middleMouseRef.current) return;
+      const dx = e.clientX - lastPointerRef.current.x;
+      const dy = e.clientY - lastPointerRef.current.y;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      const store = useEditorStore.getState();
+      store.setStagePosition({
+        x: store.stagePosition.x + dx / store.zoom,
+        y: store.stagePosition.y + dy / store.zoom,
+      });
+    };
+    const onUp = () => { middleMouseRef.current = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
 
   const activePage = usePageStore((s) => {
     const id = s.activePageId;
@@ -75,6 +128,8 @@ export function useEditorCanvas() {
   const cleanView = useEditorStore((s) => s.cleanView);
   const regionOverlaysVisible = useEditorStore((s) => s.regionOverlaysVisible);
   const gridVisible = useEditorStore((s) => s.gridVisible);
+  const snapGuidesH = useEditorStore((s) => s.snapGuidesH);
+  const snapGuidesV = useEditorStore((s) => s.snapGuidesV);
   const labelsVisible = useEditorStore((s) => s.labelsVisible);
   const minimapVisible = useEditorStore((s) => s.minimapVisible);
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
@@ -170,6 +225,21 @@ export function useEditorCanvas() {
     applyViewportTransform,
   ]);
 
+  const setSnapGuides = useEditorStore((s) => s.setSnapGuides);
+
+  useEffect(() => {
+    if (!activePage || !activePage.imageUrl) return;
+    let cancelled = false;
+    import('../../services/edgeDetection').then(({ detectEdgeGuides }) => {
+      detectEdgeGuides(activePage.imageUrl, activePage.naturalWidth, activePage.naturalHeight)
+        .then((guides) => {
+          if (!cancelled) setSnapGuides(guides.horizontal, guides.vertical);
+        })
+        .catch(() => {});
+    });
+    return () => { cancelled = true; };
+  }, [activePage?.id, activePage?.imageUrl, activePage?.naturalWidth, activePage?.naturalHeight, setSnapGuides]);
+
   const getScaledPointer = useCallback((stage: Konva.Stage) => {
     const pointer = stage.getPointerPosition();
     if (!pointer) return null;
@@ -181,11 +251,21 @@ export function useEditorCanvas() {
 
   const handleMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
-      if (tool !== 'draw') return;
       const stage = event.target.getStage();
       if (!stage) return;
       const pos = getScaledPointer(stage);
       if (!pos) return;
+
+      if (tool === 'draw-polygon') {
+        if (event.evt.detail === 2) {
+          handleFinishPolygon();
+          return;
+        }
+        setPolygonPoints((prev) => [...prev, pos]);
+        return;
+      }
+
+      if (tool !== 'draw') return;
       isDrawing.current = true;
       drawStart.current = pos;
       setDrawRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
@@ -232,7 +312,7 @@ export function useEditorCanvas() {
     const rect = drawRect;
     setDrawRect(null);
     if (!rect || rect.width < 8 || rect.height < 8 || !activePageId) return;
-    const snapped = snapRect(rect, gridVisible, GRID_STEP, SNAP_THRESHOLD);
+    const snapped = snapRect(rect, gridVisible, GRID_STEP, SNAP_THRESHOLD, [], snapGuidesH, snapGuidesV);
     addRegion(activePageId, {
       x: Math.round(snapped.x),
       y: Math.round(snapped.y),
@@ -384,6 +464,51 @@ export function useEditorCanvas() {
     ];
   }, [ctxMenu, activePage, activePageId, updateRegion, duplicateRegion, deleteRegion, queueOcrJobs, queueTranslationJobs, reorderRegions, multiSelectedRegionIds]);
 
+  const handleFinishPolygon = useCallback(() => {
+    const points = polygonPoints;
+    if (points.length < 3 || !activePageId) {
+      setPolygonPoints([]);
+      return;
+    }
+    const minX = Math.min(...points.map((p) => p.x));
+    const minY = Math.min(...points.map((p) => p.y));
+    const maxX = Math.max(...points.map((p) => p.x));
+    const maxY = Math.max(...points.map((p) => p.y));
+    const relPoints = points.map((p) => ({ x: p.x - minX, y: p.y - minY }));
+    const created = addRegion(activePageId, {
+      x: Math.round(minX),
+      y: Math.round(minY),
+      width: Math.round(maxX - minX),
+      height: Math.round(maxY - minY),
+    });
+    if (created && relPoints.length >= 3) {
+      updateRegion(activePageId, created.id, { polygon: relPoints });
+    }
+    setPolygonPoints([]);
+  }, [polygonPoints, activePageId, addRegion, updateRegion]);
+
+  const handleCancelPolygon = useCallback(() => {
+    setPolygonPoints([]);
+  }, []);
+
+  useEffect(() => {
+    if (tool !== 'draw-polygon') {
+      setPolygonPoints([]);
+      return;
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleFinishPolygon();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancelPolygon();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tool, handleFinishPolygon, handleCancelPolygon]);
+
   const viewportBounds = useMemo(
     () =>
       getCanvasViewportBounds({
@@ -406,6 +531,7 @@ export function useEditorCanvas() {
   }, [activePage, selectedRegionId, viewportBounds]);
 
   return {
+    polygonPoints,
     containerRef,
     size,
     ctxMenu,
@@ -427,7 +553,9 @@ export function useEditorCanvas() {
     isDragging,
     visibleRegions,
     contextMenuItems,
-    cursor: getCanvasCursor(tool),
+    cursor: getCanvasCursor(tool, spacePanning),
+    isPanMode,
+    handleContainerMouseDown,
     handleWheel,
     handleDragEnd,
     handleDragOver,

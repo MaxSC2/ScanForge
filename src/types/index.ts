@@ -48,6 +48,7 @@ export type {
   LocalProjectLoadSource,
 } from './project';
 export type {
+  InpaintingProviderId,
   OcrEngineId,
   ProjectSettings,
   ProjectSourceLanguage,
@@ -79,3 +80,7 @@ export type {
   DiagnosticLevel,
   DiagnosticScope,
 } from './diagnostics';
+export type {
+  InpaintPageResult,
+  InpaintRegion,
+} from './inpainting';

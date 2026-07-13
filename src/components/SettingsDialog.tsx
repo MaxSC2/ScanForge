@@ -14,6 +14,8 @@ import { useProjectStore } from '../stores/useProjectStore';
 import { usePersistenceStore } from '../stores/usePersistenceStore';
 import { SNAP_THRESHOLD, GRID_STEP } from '../utils/snapping';
 import { formatKeys, SHORTCUT_DEFS, useShortcutsStore } from '../stores/useShortcutsStore';
+import { useLocaleStore, type LocaleId } from '../i18n';
+import { ThemeSelector } from '../themes/ThemeSelector';
 
 type SettingsTab = 'editor' | 'pipeline' | 'shortcuts' | 'ai';
 
@@ -196,11 +198,38 @@ function EditorSettings() {
         />
       </SettingsSection>
 
+      {/* Theme */}
+      <SettingsSection title="Тема / Theme">
+        <ThemeSelector />
+      </SettingsSection>
+
+      {/* Language */}
+      <SettingsSection title="Язык / Language">
+        <LanguageSelector />
+      </SettingsSection>
+
       {/* Persistence Status */}
       <SettingsSection title="Автосохранение">
         <AutoSaveStatus />
       </SettingsSection>
     </div>
+  );
+}
+
+function LanguageSelector() {
+  const locale = useLocaleStore((s) => s.locale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
+  return (
+    <SettingsRow label="Interface language">
+      <select
+        value={locale}
+        onChange={(e) => setLocale(e.target.value as LocaleId)}
+        className="input-field text-[11px]"
+      >
+        <option value="ru">Русский</option>
+        <option value="en">English</option>
+      </select>
+    </SettingsRow>
   );
 }
 

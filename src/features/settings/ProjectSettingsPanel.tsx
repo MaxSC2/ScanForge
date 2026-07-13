@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { WandSparkles } from 'lucide-react';
 import { LanguagesIcon, PlusIcon, ScanTextIcon, SettingsIcon } from '../../icons';
 import {
+  type InpaintingProviderId,
   type OcrEngineId,
   type ProjectSourceLanguage,
   type ProjectTargetLanguage,
@@ -27,8 +28,9 @@ const TARGET_LANGUAGE_OPTIONS: Array<{ value: ProjectTargetLanguage; label: stri
 ];
 
 const OCR_ENGINE_OPTIONS: Array<{ value: OcrEngineId; label: string }> = [
-  { value: 'manga-ocr', label: 'Manga OCR (Python)' },
-  { value: 'paddle', label: 'Paddle OCR (Python)' },
+  { value: 'paddle', label: 'Paddle OCR (Python, JP/KO/ZH/EN)' },
+  { value: 'easyocr', label: 'EasyOCR (Python, 80+ языков)' },
+  { value: 'manga-ocr', label: 'Manga OCR (Python, только JP)' },
   { value: 'windows', label: 'Windows OCR' },
   { value: 'mock', label: 'Превью OCR' },
   { value: 'tesseract', label: 'Tesseract (не готов)' },
@@ -39,8 +41,18 @@ const TRANSLATION_PROVIDER_OPTIONS: Array<{
   label: string;
 }> = [
   { value: 'local', label: 'Локальный черновик' },
+  { value: 'offline', label: 'Офлайн-перевод (kuromoji + словарь)' },
+  { value: 'deepl', label: 'DeepL API (500k символов/мес бесплатно)' },
+  { value: 'libre', label: 'LibreTranslate (self-hosted)' },
+  { value: 'ollama', label: 'Ollama (локальная LLM)' },
+  { value: 'sakura', label: 'SakuraLLM (JP→RU/EN, манга)' },
   { value: 'mock', label: 'Превью-черновик' },
   { value: 'remote', label: 'Удаленный (позже)' },
+];
+
+const INPAINTING_PROVIDER_OPTIONS: Array<{ value: InpaintingProviderId; label: string }> = [
+  { value: 'basic', label: 'Базовый (Canvas 2D)' },
+  { value: 'iopaint', label: 'LaMA (IOPaint, требует сервер)' },
 ];
 
 export function ProjectSettingsPanel() {
@@ -102,6 +114,18 @@ export function ProjectSettingsPanel() {
               options={OCR_ENGINE_OPTIONS}
               onChange={(value) => void updateSettings({ ocrEngine: value as OcrEngineId })}
             />
+            {(settings.ocrEngine === 'manga-ocr' || settings.ocrEngine === 'paddle' || settings.ocrEngine === 'easyocr') && (
+              <div className="rounded-lg border border-amber-800/40 bg-amber-950/10 p-2 text-[10px] leading-relaxed text-amber-300">
+                <p className="mb-1 font-medium">Требуется Python</p>
+                <p className="text-amber-400/80">
+                  {settings.ocrEngine === 'manga-ocr'
+                    ? 'Установи: pip install manga-ocr'
+                    : settings.ocrEngine === 'paddle'
+                      ? 'Установи: pip install paddleocr'
+                      : 'Установи: pip install easyocr'}
+                </p>
+              </div>
+            )}
 
             <SelectField
               label="Перевод"
@@ -113,9 +137,111 @@ export function ProjectSettingsPanel() {
                 void updateSettings({ translationProvider: value as TranslationProviderId })
               }
             />
+            {settings.translationProvider === 'deepl' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-500">DeepL API Key</label>
+                <input
+                  type="password"
+                  defaultValue={localStorage.getItem('scanforge.deepl.api_key') ?? ''}
+                  onBlur={(e) => localStorage.setItem('scanforge.deepl.api_key', e.target.value)}
+                  className="input-field"
+                  placeholder="Free tier: api-free.deepl.com"
+                />
+              </div>
+            )}
+            {settings.translationProvider === 'libre' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-500">LibreTranslate URL</label>
+                <input
+                  type="text"
+                  defaultValue={localStorage.getItem('scanforge.libre.url') ?? 'http://localhost:5000'}
+                  onBlur={(e) => localStorage.setItem('scanforge.libre.url', e.target.value)}
+                  className="input-field"
+                  placeholder="http://localhost:5000"
+                />
+              </div>
+            )}
+            {settings.translationProvider === 'ollama' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-500">Ollama endpoint</label>
+                <input
+                  type="text"
+                  defaultValue={localStorage.getItem('scanforge.ollama.endpoint') ?? 'http://localhost:11434'}
+                  onBlur={(e) => localStorage.setItem('scanforge.ollama.endpoint', e.target.value)}
+                  className="input-field"
+                  placeholder="http://localhost:11434"
+                />
+                <label className="text-[10px] font-medium text-zinc-500 mt-1">Модель</label>
+                <input
+                  type="text"
+                  defaultValue={localStorage.getItem('scanforge.ollama.model') ?? 'llama3.2:1b'}
+                  onBlur={(e) => localStorage.setItem('scanforge.ollama.model', e.target.value)}
+                  className="input-field"
+                  placeholder="llama3.2:1b"
+                />
+              </div>
+            )}
+
+            {settings.translationProvider === 'sakura' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-500">Ollama endpoint</label>
+                <input
+                  type="text"
+                  defaultValue={localStorage.getItem('scanforge.sakura.endpoint') ?? 'http://localhost:11434'}
+                  onBlur={(e) => localStorage.setItem('scanforge.sakura.endpoint', e.target.value)}
+                  className="input-field"
+                  placeholder="http://localhost:11434"
+                />
+                <label className="text-[10px] font-medium text-zinc-500 mt-1">Модель SakuraLLM</label>
+                <input
+                  type="text"
+                  defaultValue={localStorage.getItem('scanforge.sakura.model') ?? 'sakura-1.5b'}
+                  onBlur={(e) => localStorage.setItem('scanforge.sakura.model', e.target.value)}
+                  className="input-field"
+                  placeholder="sakura-1.5b"
+                />
+                <p className="text-[10px] leading-relaxed text-amber-400/60">
+                  SakuraLLM — модель для перевода JP→RU/EN, оптимизированная под мангу.
+                  Загрузи: {`ollama pull sakura-1.5b`} (или другую версию)
+                </p>
+              </div>
+            )}
+
+            <SelectField
+              label="Inpainting"
+              icon={<WandSparkles size={11} className="text-zinc-500" />}
+              value={settings.inpaintingProvider}
+              disabled={disabled}
+              options={INPAINTING_PROVIDER_OPTIONS}
+              onChange={(value) =>
+                void updateSettings({ inpaintingProvider: value as InpaintingProviderId })
+              }
+            />
+            {settings.inpaintingProvider === 'iopaint' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-500">IOPaint endpoint</label>
+                <input
+                  type="text"
+                  defaultValue={localStorage.getItem('scanforge.iopaint.endpoint') ?? 'http://localhost:8080'}
+                  onBlur={(e) => localStorage.setItem('scanforge.iopaint.endpoint', e.target.value)}
+                  className="input-field"
+                  placeholder="http://localhost:8080"
+                />
+                <p className="text-[10px] leading-relaxed text-amber-400/60">
+                  Запусти сервер: {`iopaint run --model=lama --device=cpu --port=8080`}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-3">
+            <ToggleField
+              label="Авто-OCR при загрузке"
+              description="Запускать OCR автоматически после добавления страниц."
+              value={settings?.autoRunOcr ?? false}
+              disabled={disabled}
+              onChange={(v) => void updateSettings({ autoRunOcr: v })}
+            />
             <ToggleField
               label="Перезаписывать OCR"
               description="Заменять существующий исходный текст при повторном запуске."

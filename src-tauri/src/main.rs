@@ -1,4 +1,5 @@
 mod domain_storage;
+mod imagick;
 mod ocr;
 mod storage;
 mod translation;
@@ -16,6 +17,8 @@ use domain_storage::{
     upsert_page_record, upsert_project_record, upsert_project_settings_record,
     upsert_region_record, upsert_text_style_record, DomainRepository,
 };
+use imagick::{check_imagick, convert_with_imagick};
+use ocr::detect::auto_detect_regions;
 use ocr::run_page_ocr;
 use std::io;
 use storage::{
@@ -75,6 +78,9 @@ fn main() {
             upsert_diagnostic_entity,
             delete_diagnostic_entity,
             delete_diagnostic_entities_by_project,
+            auto_detect_regions,
+            check_imagick,
+            convert_with_imagick,
             run_page_ocr,
             run_page_translation,
             save_page_image,

@@ -5,6 +5,7 @@ import { useJobStore } from '../stores/useJobStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useRegionStore } from '../stores/useRegionStore';
 import { pickRenderedPageExportPath } from '../features/export/renderExport';
+import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { isDesktopRuntime } from '../utils/runtime';
 import { matchEvent, useShortcutsStore } from '../stores/useShortcutsStore';
 
@@ -134,6 +135,18 @@ export function useKeyboardShortcuts() {
       if (matchEvent(event, b('toggle_overlays'))) {
         event.preventDefault();
         useEditorStore.getState().toggleRegionOverlays();
+        return;
+      }
+
+      if (matchEvent(event, b('process_all'))) {
+        event.preventDefault();
+        const { pages } = usePageStore.getState();
+        const targets = pages.map((p) => ({ pageId: p.id }));
+        if (targets.length > 0) {
+          void ensureProjectDomainStatePersisted();
+          useJobStore.getState().queueOcrJobs(targets);
+          useJobStore.getState().queueTranslationJobs(targets);
+        }
         return;
       }
 

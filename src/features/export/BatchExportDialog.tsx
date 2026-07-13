@@ -9,6 +9,7 @@ import { usePageStore } from '../../stores/usePageStore';
 import { useToastStore } from '../../stores/useToastStore';
 import { isDesktopRuntime } from '../../utils/runtime';
 import { buildCbzBlob } from '../../utils/cbz';
+import { encodeTiff } from '../../utils/tiff';
 import { renderPageToBlob } from './renderExport';
 
 interface BatchExportDialogProps {
@@ -16,7 +17,7 @@ interface BatchExportDialogProps {
   onClose: () => void;
 }
 
-type ExportFormat = 'png' | 'cbz';
+type ExportFormat = 'png' | 'cbz' | 'pdf' | 'tiff';
 
 interface ExportProgress {
   pageId: string;
@@ -119,7 +120,7 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
     );
 
     try {
-      const rendered: { fileName: string; data: ArrayBuffer }[] = [];
+      const rendered: { fileName: string; data: ArrayBuffer; width: number; height: number }[] = [];
       for (let i = 0; i < selectedPages.length; i++) {
         if (abortRef.current) break;
         const page = selectedPages[i];
@@ -132,7 +133,7 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
           const { blob } = await renderPageToBlob(page);
           const data = await blob.arrayBuffer();
           const index = String(i + 1).padStart(3, '0');
-          rendered.push({ fileName: `page-${index}.png`, data });
+          rendered.push({ fileName: `page-${index}.png`, data, width: page.naturalWidth, height: page.naturalHeight });
           setProgress((prev) =>
             prev.map((p) =>
               p.pageId === page.id ? { ...p, status: 'done' as const } : p,
@@ -153,6 +154,63 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
 
       if (rendered.length === 0) {
         pushToast('Не удалось отрендерить ни одной страницы', 'error');
+        setExporting(false);
+        return;
+      }
+
+      if (format === 'pdf') {
+        const { jsPDF } = await import('jspdf');
+        // Use A4 landscape as default with custom page size per image
+        let pdf: import('jspdf').jsPDF | null = null;
+        let first = true;
+        for (const { data, width, height } of rendered) {
+          const blob = new Blob([data], { type: 'image/png' });
+          const dataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          const dpi = 72;
+          const wMm = (width / dpi) * 25.4;
+          const hMm = (height / dpi) * 25.4;
+          if (first) {
+            pdf = new jsPDF({ unit: 'mm', format: [wMm, hMm] });
+            first = false;
+          } else {
+            pdf!.addPage([wMm, hMm]);
+          }
+          pdf!.addImage(dataUrl, 'PNG', 0, 0, wMm, hMm);
+        }
+        if (pdf) {
+          pdf.save(`export_${Date.now()}.pdf`);
+          pushToast(`PDF сохранён: ${rendered.length} страниц(ы)`, 'success');
+        }
+        setExporting(false);
+        return;
+      }
+
+      if (format === 'tiff') {
+        // Export pages as individual TIFF files
+        for (const { data, width, height } of rendered) {
+          const canvas = new OffscreenCanvas(width, height);
+          const ctx = canvas.getContext('2d')!;
+          const img = new Image(width, height);
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.src = URL.createObjectURL(new Blob([data], { type: 'image/png' }));
+          });
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, width, height);
+          const tiffBytes = encodeTiff(imageData);
+          const blob = new Blob([tiffBytes], { type: 'image/tiff' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `page-${Date.now()}.tiff`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        pushToast(`TIFF экспорт: ${rendered.length} страниц(ы)`, 'success');
         setExporting(false);
         return;
       }
@@ -219,6 +277,8 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
             >
               <option value="png">PNG (отдельные файлы)</option>
               <option value="cbz">CBZ (единый архив)</option>
+              <option value="pdf">PDF (единый документ)</option>
+              <option value="tiff">TIFF (постранично)</option>
             </select>
           </div>
 

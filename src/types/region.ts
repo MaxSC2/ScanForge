@@ -4,6 +4,11 @@ export type RegionOrientation = 'horizontal' | 'vertical';
 export type RegionOcrStatus = 'idle' | 'queued' | 'running' | 'done' | 'failed';
 export type RegionTranslationStatus = 'idle' | 'queued' | 'running' | 'done' | 'failed';
 
+export interface Point2D {
+  x: number;
+  y: number;
+}
+
 export interface Region {
   id: string;
   /** Display label, e.g. "Bubble 3" */
@@ -13,6 +18,8 @@ export interface Region {
   y: number;
   width: number;
   height: number;
+  /** Optional polygon points (relative to x,y) for non-rectangular regions */
+  polygon?: Point2D[];
   /** Rotation angle in degrees */
   rotation: number;
   /** Reading orientation for OCR/render */
@@ -129,6 +136,7 @@ export function normalizeRegion(region: RegionHydrationInput): Region {
     ...(typeof region.translationUpdatedAt === 'number'
       ? { translationUpdatedAt: region.translationUpdatedAt }
       : {}),
+    ...(region.polygon ? { polygon: region.polygon } : {}),
     locked: region.locked ?? false,
     visible: region.visible ?? true,
     ...(region.textStyleId ? { textStyleId: region.textStyleId } : {}),

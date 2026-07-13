@@ -6,6 +6,7 @@ import { buildStitchRenderPlans, computeStitchOutputSize } from '../utils/stitch
 import { isDesktopRuntime } from '../utils/runtime';
 import { useHistoryStore } from './useHistoryStore';
 import { useProjectStore } from './useProjectStore';
+import { useProjectDomainStore } from './useProjectDomainStore';
 
 const DEFAULT_STITCH_OPTIONS: StitchOptions = {
   direction: 'vertical',
@@ -26,7 +27,7 @@ interface PageState {
   stitching: boolean;
   stitchOptions: StitchOptions;
 
-  addPages: (files: File[]) => Promise<void>;
+  addPages: (files: File[]) => Promise<number>;
   removePage: (id: string) => void;
   removePages: (ids: string[]) => void;
   duplicatePage: (pageId: string) => void;
@@ -58,6 +59,17 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+async function savePageImage(pageId: string, dataUrl: string): Promise<string> {
+  if (!isDesktopRuntime()) return dataUrl;
+  const projectId = useProjectStore.getState().meta.localProjectId;
+  if (!projectId) return dataUrl;
+  try {
+    return await invoke<string>('save_page_image', { projectId, pageId, dataUrl });
+  } catch {
+    return dataUrl;
+  }
+}
+
 /** Helper: read a File into a stable data-url and resolve natural dimensions */
 async function loadImage(file: File): Promise<Omit<Page, 'regions'>> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -75,31 +87,36 @@ async function loadImage(file: File): Promise<Omit<Page, 'regions'>> {
   });
 
   const pageId = uuid();
-  let imagePath = dataUrl;
-
-  if (isDesktopRuntime()) {
-    const projectId = useProjectStore.getState().meta.localProjectId;
-    if (projectId) {
-      try {
-        imagePath = await invoke<string>('save_page_image', {
-          projectId,
-          pageId,
-          dataUrl,
-        });
-      } catch {
-        imagePath = dataUrl;
-      }
-    }
-  }
 
   return {
     id: pageId,
     fileName: file.name,
-    imagePath,
+    imagePath: await savePageImage(pageId, dataUrl),
     imageUrl: dataUrl,
     naturalWidth: img.naturalWidth,
     naturalHeight: img.naturalHeight,
   };
+}
+
+async function loadPdfPages(file: File): Promise<Omit<Page, 'regions'>[]> {
+  const { isPdfFile, loadPdfAsDataUrls } = await import('../services/pdfLoader');
+  if (!isPdfFile(file)) return [];
+
+  const rendered = await loadPdfAsDataUrls(file, 2);
+  return Promise.all(
+    rendered.map(async (page, index) => {
+      const pageId = uuid();
+      const displayName = `${file.name.replace(/\.pdf$/i, '')} — с. ${index + 1}`;
+      return {
+        id: pageId,
+        fileName: displayName,
+        imagePath: await savePageImage(pageId, page.dataUrl),
+        imageUrl: page.dataUrl,
+        naturalWidth: page.width,
+        naturalHeight: page.height,
+      };
+    }),
+  );
 }
 
 function loadImageElement(url: string): Promise<HTMLImageElement> {
@@ -127,7 +144,33 @@ export const usePageStore = create<PageState>((set, get) => ({
   stitchOptions: DEFAULT_STITCH_OPTIONS,
 
   addPages: async (files) => {
-    const loaded = await Promise.all(files.map(loadImage));
+    const { isCbzFile, isCbrFile, loadCbzPages } = await import('../services/cbzReader');
+    const nested = await Promise.all(
+      files.map(async (f) => {
+        if (isCbzFile(f) || isCbrFile(f)) {
+          const rawPages = await loadCbzPages(f);
+          return Promise.all(
+            rawPages.map(async (raw) => {
+              const pageId = uuid();
+              return {
+                id: pageId,
+                fileName: raw.fileName,
+                imagePath: await savePageImage(pageId, raw.dataUrl),
+                imageUrl: raw.dataUrl,
+                naturalWidth: raw.width,
+                naturalHeight: raw.height,
+              };
+            }),
+          );
+        }
+        const { isPdfFile } = await import('../services/pdfLoader');
+        if (isPdfFile(f)) {
+          return loadPdfPages(f);
+        }
+        return [await loadImage(f)];
+      }),
+    );
+    const loaded = nested.flat();
     const newPages: Page[] = loaded.map((p) => ({ ...p, regions: [] }));
     set((s) => {
       useHistoryStore.getState().capture();
@@ -140,6 +183,15 @@ export const usePageStore = create<PageState>((set, get) => ({
       };
     });
     useProjectStore.getState().touch();
+
+    const settings = useProjectDomainStore.getState().settings;
+    if (settings?.autoRunOcr && newPages.length > 0) {
+      const { useJobStore } = await import('./useJobStore');
+      const targets = newPages.map((p) => ({ pageId: p.id }));
+      useJobStore.getState().queueOcrJobs(targets);
+    }
+
+    return loaded.length;
   },
 
   removePage: (id) => {
@@ -477,22 +529,14 @@ export const usePageStore = create<PageState>((set, get) => ({
 
   toProjectFile: async () => {
     const { pages, activePageId } = get();
-    const pageData = await Promise.all(
-      pages.map(async (page) => {
-        const isDataUrl = page.imagePath.startsWith('data:');
-        const imageDataUrl = isDataUrl
-          ? page.imagePath
-          : page.imagePath;
-        return {
-          id: page.id,
-          fileName: page.fileName,
-          imageDataUrl,
-          naturalWidth: page.naturalWidth,
-          naturalHeight: page.naturalHeight,
-          regions: page.regions,
-        };
-      }),
-    );
+    const pageData = pages.map((page) => ({
+      id: page.id,
+      fileName: page.fileName,
+      imageDataUrl: page.imagePath,
+      naturalWidth: page.naturalWidth,
+      naturalHeight: page.naturalHeight,
+      regions: page.regions,
+    }));
     return {
       version: 1 as const,
       meta: useProjectStore.getState().meta,

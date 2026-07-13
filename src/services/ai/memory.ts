@@ -1,5 +1,7 @@
+/** localStorage key used to persist the memory array as JSON. */
 const MEMORY_KEY = 'scanforge.ai.memory';
 
+/** A single persisted memory entry with a unique key, value, and creation/update timestamp. */
 interface MemoryEntry {
   key: string;
   value: string;
@@ -19,6 +21,15 @@ function saveAll(entries: MemoryEntry[]) {
   localStorage.setItem(MEMORY_KEY, JSON.stringify(entries));
 }
 
+/**
+ * Saves a key-value fact to long-term memory. Entries are stored in localStorage
+ * as a JSON array of {@link MemoryEntry} objects under the key `scanforge.ai.memory`.
+ * If the key already exists, its value and timestamp are overwritten.
+ *
+ * @param key - Unique identifier for the fact (e.g. "project_name", "ocr_engine").
+ * @param value - The fact content to remember.
+ * @returns A confirmation message including the first 100 characters of the value.
+ */
 export function memorySave(key: string, value: string): string {
   const entries = loadAll();
   const existing = entries.findIndex(e => e.key === key);
@@ -34,6 +45,13 @@ export function memorySave(key: string, value: string): string {
   return `Saved: "${key}" = "${value.slice(0, 100)}${value.length > 100 ? '…' : ''}"`;
 }
 
+/**
+ * Retrieves saved memories from persistent storage. With no query, returns all entries.
+ * With a query string, performs a case-insensitive match against both key and value fields.
+ *
+ * @param query - Optional keyword to filter memories by.
+ * @returns A JSON-stringified array of matching memory entries, or a "no memories" message.
+ */
 export function memoryRecall(query?: string): string {
   const entries = loadAll();
 
@@ -61,6 +79,12 @@ export function memoryRecall(query?: string): string {
   );
 }
 
+/**
+ * Deletes a single memory entry by its key.
+ *
+ * @param key - The key of the memory to remove.
+ * @returns A confirmation message, or a "not found" message if the key did not exist.
+ */
 export function memoryDelete(key: string): string {
   const entries = loadAll();
   const filtered = entries.filter(e => e.key !== key);
@@ -69,6 +93,11 @@ export function memoryDelete(key: string): string {
   return `Deleted memory: "${key}"`;
 }
 
+/**
+ * Builds a string summarizing all saved memories for injection into the system prompt.
+ * Each memory is formatted as "- key: value" with values truncated to 200 characters.
+ * Returns an empty string if no memories exist.
+ */
 export function getMemoryContext(): string {
   const entries = loadAll();
   if (entries.length === 0) return '';

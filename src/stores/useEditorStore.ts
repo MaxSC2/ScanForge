@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type EditorTool = 'select' | 'draw' | 'pan';
+export type EditorTool = 'select' | 'draw' | 'pan' | 'draw-polygon' | 'brush';
 export type ViewMode = 'manual' | 'fit-page' | 'fit-width' | 'actual';
 
 interface EditorState {
@@ -26,6 +26,13 @@ interface EditorState {
   viewRequestNonce: number;
   /** Region currently being edited on canvas (null = none) */
   editingRegionId: string | null;
+  /** Snap guides from edge detection */
+  snapGuidesH: number[];
+  snapGuidesV: number[];
+  /** Brush tool state */
+  brushSize: number;
+  brushMask: string | null;
+  brushErase: boolean;
 
   setTool: (tool: EditorTool) => void;
   setZoom: (zoom: number) => void;
@@ -59,6 +66,10 @@ interface EditorState {
   setCursorPosition: (pos: { x: number; y: number }) => void;
   requestFitToPage: () => void;
   setEditingRegionId: (id: string | null) => void;
+  setSnapGuides: (h: number[], v: number[]) => void;
+  setBrushSize: (size: number) => void;
+  setBrushMask: (mask: string | null) => void;
+  setBrushErase: (erase: boolean) => void;
 }
 
 const ZOOM_STEP = 0.15;
@@ -117,6 +128,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   cursorPosition: { x: 0, y: 0 },
   viewRequestNonce: 0,
   editingRegionId: null,
+  snapGuidesH: [],
+  snapGuidesV: [],
+  brushSize: 20,
+  brushMask: null,
+  brushErase: false,
 
   setTool: (tool) => set({ tool }),
   setZoom: (zoom) => set({ zoom: clampZoom(zoom), viewMode: 'manual' }),
@@ -188,4 +204,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       viewRequestNonce: s.viewRequestNonce + 1,
     })),
   setEditingRegionId: (id) => set({ editingRegionId: id }),
+  setSnapGuides: (h, v) => set({ snapGuidesH: h, snapGuidesV: v }),
+  setBrushSize: (size) => set({ brushSize: size }),
+  setBrushMask: (mask) => set({ brushMask: mask }),
+  setBrushErase: (erase) => set({ brushErase: erase }),
 }));

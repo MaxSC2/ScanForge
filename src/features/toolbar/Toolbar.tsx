@@ -1,9 +1,14 @@
 import { BatchExportDialog } from '../export/BatchExportDialog';
+import { PipelineDialog } from '../../components/PipelineDialog';
+import { ServerSendDialog } from '../../components/ServerSendDialog';
+import { SourcesDialog } from '../../components/SourcesDialog';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
+  BotIcon,
   CheckIcon,
   ChevronDownIcon,
   CombineIcon,
+  DatabaseIcon,
   DownloadIcon,
   EyeIcon,
   EyeOffIcon,
@@ -20,6 +25,7 @@ import {
   SettingsIcon,
   SquareIcon,
   Undo2Icon,
+  WorkflowIcon,
   ZoomInIcon,
   ZoomOutIcon,
 } from '../../icons';
@@ -28,6 +34,10 @@ import { JobProgress } from '../../components/JobProgress';
 import { KeyboardShortcutsPanel } from '../../components/KeyboardShortcutsPanel';
 import { SettingsDialog } from '../../components/SettingsDialog';
 import { StitchDialog } from '../../components/StitchDialog';
+import { PresetsDialog } from '../../components/PresetsDialog';
+import { PluginsDialog } from '../../components/PluginsDialog';
+import { CollabDialog } from '../../components/CollabDialog';
+import { TemplatesDialog } from '../../components/TemplatesDialog';
 import { useEditorStore, type EditorTool } from '../../stores/useEditorStore';
 import { useHistoryStore } from '../../stores/useHistoryStore';
 import { usePageStore } from '../../stores/usePageStore';
@@ -42,6 +52,13 @@ export function Toolbar() {
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [serverDialogOpen, setServerDialogOpen] = useState(false);
+  const [sourcesDialogOpen, setSourcesDialogOpen] = useState(false);
+  const [presetsDialogOpen, setPresetsDialogOpen] = useState(false);
+  const [pluginsDialogOpen, setPluginsDialogOpen] = useState(false);
+  const [collabDialogOpen, setCollabDialogOpen] = useState(false);
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
 
   const undo = useHistoryStore((state) => state.undo);
   const redo = useHistoryStore((state) => state.redo);
@@ -61,6 +78,8 @@ export function Toolbar() {
   const requestActualSize = useEditorStore((state) => state.requestActualSize);
   const toggleRegionOverlays = useEditorStore((state) => state.toggleRegionOverlays);
   const zoom = useEditorStore((state) => state.zoom);
+  const brushErase = useEditorStore((state) => state.brushErase);
+  const setBrushErase = useEditorStore((state) => state.setBrushErase);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetZoom = useEditorStore((state) => state.resetZoom);
@@ -76,9 +95,11 @@ export function Toolbar() {
     canStitch,
     canRunOcr,
     canRunTranslation,
+    canProcessAll,
     stitchPreview,
     safeSuggestion,
     handleFiles,
+    handleImportFolder,
     handleStitch,
     handleOcr,
     handleTranslate,
@@ -97,7 +118,9 @@ export function Toolbar() {
   const tools: { id: EditorTool; icon: ReactNode; label: string; shortcut: string }[] = [
     { id: 'select', icon: <MousePointer2Icon size={14} />, label: 'Выбор', shortcut: 'V' },
     { id: 'draw', icon: <SquareIcon size={14} />, label: 'Рисование региона', shortcut: 'R' },
-    { id: 'pan', icon: <HandIcon size={14} />, label: 'Панорама', shortcut: 'H' },
+      { id: 'pan', icon: <HandIcon size={14} />, label: 'Панорама', shortcut: 'H' },
+      { id: 'draw-polygon', icon: <span className="text-[11px] font-bold">⬡</span>, label: 'Полигон', shortcut: 'P' },
+      { id: 'brush', icon: <span className="text-[11px] font-bold">●</span>, label: 'Кисть', shortcut: 'B' },
   ];
 
   useEffect(() => {
@@ -137,15 +160,20 @@ export function Toolbar() {
 
       <div className="h-5 w-px bg-zinc-700/60" />
 
-      <IconButton onClick={() => fileRef.current?.click()} tooltip="Открыть изображения">
+      <IconButton onClick={() => fileRef.current?.click()} tooltip="Открыть изображения, PDF, CBZ, CBR">
         <FolderOpenIcon size={14} />
         <span className="hidden sm:inline">Открыть</span>
+      </IconButton>
+
+      <IconButton onClick={handleImportFolder} tooltip="Загрузить папку как главу">
+        <FolderOpenIcon size={14} />
+        <span className="hidden xl:inline">Глава</span>
       </IconButton>
 
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.pdf,.cbz,.cbr"
         multiple
         className="hidden"
         onChange={handleFiles}
@@ -206,6 +234,66 @@ export function Toolbar() {
         <span className="hidden xl:inline">Склеить</span>
       </IconButton>
 
+      <div className="h-5 w-px bg-zinc-800/60" />
+
+      <IconButton
+        onClick={() => setPipelineOpen(true)}
+        tooltip="Пайплайн обработки: OCR → Перевод → Экспорт (Ctrl+Shift+P)"
+        disabled={!canProcessAll}
+      >
+        <WorkflowIcon size={14} />
+        <span className="hidden sm:inline">Пайплайн</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setServerDialogOpen(true)}
+        tooltip="Отправить главу на сервер телефона"
+        disabled={pages.length === 0}
+      >
+        <DatabaseIcon size={14} />
+        <span className="hidden xl:inline">Сервер</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setSourcesDialogOpen(true)}
+        tooltip="Источники и мониторинг новых глав"
+      >
+        <BotIcon size={14} />
+        <span className="hidden xl:inline">Источники</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setPresetsDialogOpen(true)}
+        tooltip="Пресеты настроек проекта"
+      >
+        <SettingsIcon size={14} />
+        <span className="hidden xl:inline">Пресеты</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setPluginsDialogOpen(true)}
+        tooltip="Плагины"
+      >
+        <span className="text-[11px] font-bold">🧩</span>
+        <span className="hidden xl:inline">Плагины</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setCollabDialogOpen(true)}
+        tooltip="Коллаборация (WebSocket)"
+      >
+        <span className="text-[11px] font-bold">🌐</span>
+        <span className="hidden xl:inline">Коллаб</span>
+      </IconButton>
+
+      <IconButton
+        onClick={() => setTemplatesDialogOpen(true)}
+        tooltip="Шаблоны регионов"
+      >
+        <span className="text-[11px] font-bold">📐</span>
+        <span className="hidden xl:inline">Шаблоны</span>
+      </IconButton>
+
       <div className="h-5 w-px bg-zinc-700/60" />
 
       <div className="flex items-center gap-0.5 rounded-lg bg-zinc-800/50 p-0.5">
@@ -221,6 +309,17 @@ export function Toolbar() {
           </IconButton>
         ))}
       </div>
+
+      {tool === 'brush' && (
+        <IconButton
+          onClick={() => setBrushErase(!brushErase)}
+          tooltip={brushErase ? 'Режим: ластик' : 'Режим: кисть'}
+          active={brushErase}
+          variant="ghost"
+        >
+          <span className="text-[11px] font-bold">{brushErase ? '⊘' : '●'}</span>
+        </IconButton>
+      )}
 
       <div className="flex-1" />
 
@@ -341,9 +440,44 @@ export function Toolbar() {
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
+      <PipelineDialog
+        open={pipelineOpen}
+        onClose={() => setPipelineOpen(false)}
+      />
+
       <BatchExportDialog
         open={batchDialogOpen}
         onClose={() => setBatchDialogOpen(false)}
+      />
+
+      <ServerSendDialog
+        open={serverDialogOpen}
+        onClose={() => setServerDialogOpen(false)}
+      />
+
+      <SourcesDialog
+        open={sourcesDialogOpen}
+        onClose={() => setSourcesDialogOpen(false)}
+      />
+
+      <PresetsDialog
+        open={presetsDialogOpen}
+        onClose={() => setPresetsDialogOpen(false)}
+      />
+
+      <PluginsDialog
+        open={pluginsDialogOpen}
+        onClose={() => setPluginsDialogOpen(false)}
+      />
+
+      <CollabDialog
+        open={collabDialogOpen}
+        onClose={() => setCollabDialogOpen(false)}
+      />
+
+      <TemplatesDialog
+        open={templatesDialogOpen}
+        onClose={() => setTemplatesDialogOpen(false)}
       />
 
       <StitchDialog

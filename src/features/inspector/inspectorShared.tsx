@@ -207,6 +207,7 @@ export function RegionListPanel({
   fullHeight?: boolean;
 }) {
   const [filter, setFilter] = useState('');
+  const [sortByConfidence, setSortByConfidence] = useState(false);
   const selectRegion = useRegionStore((state) => state.selectRegion);
   const selectAllRegions = useRegionStore((state) => state.selectAllRegions);
   const updateRegion = useRegionStore((state) => state.updateRegion);
@@ -216,7 +217,16 @@ export function RegionListPanel({
   if (regions.length === 0) return null;
 
   const orderedRegions = useMemo(() => {
-    let list = [...regions].sort((first, second) => first.order - second.order);
+    let list = [...regions];
+    if (sortByConfidence) {
+      list.sort((a, b) => {
+        const ca = a.ocrConfidence ?? 1;
+        const cb = b.ocrConfidence ?? 1;
+        return ca - cb;
+      });
+    } else {
+      list.sort((first, second) => first.order - second.order);
+    }
     if (filter.trim()) {
       const q = filter.toLowerCase();
       list = list.filter(
@@ -229,7 +239,7 @@ export function RegionListPanel({
       );
     }
     return list;
-  }, [regions, filter]);
+  }, [regions, filter, sortByConfidence]);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -268,6 +278,16 @@ export function RegionListPanel({
           className="rounded px-1.5 py-0.5 text-[9px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
         >
           Выбрать все
+        </button>
+        <button
+          onClick={() => setSortByConfidence((v) => !v)}
+          className={`rounded px-1.5 py-0.5 text-[9px] transition-colors ${
+            sortByConfidence
+              ? 'bg-amber-500/15 text-amber-400'
+              : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+          }`}
+        >
+          Приоритет
         </button>
       </div>
 
@@ -326,6 +346,18 @@ export function RegionListPanel({
 
                         {region.locked ? <LockIcon size={10} className="flex-none text-amber-500/60" /> : null}
                         {!region.visible ? <EyeOffIcon size={10} className="flex-none text-zinc-600" /> : null}
+
+                        {region.ocrConfidence !== undefined && region.ocrConfidence < 0.8 && (
+                          <span
+                            className={`flex-none rounded px-1 py-0.5 text-[8px] font-medium ${
+                              region.ocrConfidence < 0.5
+                                ? 'bg-red-500/15 text-red-400'
+                                : 'bg-amber-500/15 text-amber-400'
+                            }`}
+                          >
+                            {Math.round(region.ocrConfidence * 100)}%
+                          </span>
+                        )}
 
                         <button
                           onClick={(event) => {
@@ -408,6 +440,12 @@ function MultiSelectActions({
             className="rounded border border-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
           >
             Сменить тип
+          </button>
+          <button
+            onClick={() => useRegionStore.getState().mergeRegions(pageId, selected.map((r) => r.id))}
+            className="rounded border border-emerald-800/50 px-2 py-1 text-[10px] text-emerald-400 hover:bg-emerald-500/10"
+          >
+            Слить
           </button>
           <button
             onClick={clearMultiSelect}

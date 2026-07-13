@@ -16,6 +16,7 @@ import { getStitchPreview, suggestSafeStitch } from '../../utils/stitch';
 import { isDesktopRuntime } from '../../utils/runtime';
 import { useHistoryStore } from '../../stores/useHistoryStore';
 import { buildOcrTargets, buildTranslationTargets } from './toolbarTargets';
+import { importFolder } from '../../services/batchImport';
 
 export function useToolbarActions() {
   const addPages = usePageStore((state) => state.addPages);
@@ -100,10 +101,20 @@ export function useToolbarActions() {
   const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length > 0) {
-      void addPages(files);
-      pushToast(`Загружено страниц: ${files.length}`, 'success');
+      void addPages(files).then((count) => {
+        pushToast(`Загружено страниц: ${count}`, 'success');
+      });
     }
     event.target.value = '';
+  };
+
+  const handleImportFolder = async () => {
+    const files = await importFolder();
+    if (files.length > 0) {
+      void addPages(files).then((count) => {
+        pushToast(`Загружена глава: ${count} страниц`, 'success');
+      });
+    }
   };
 
   const handleStitch = async () => {
@@ -194,9 +205,11 @@ export function useToolbarActions() {
     canStitch,
     canRunOcr,
     canRunTranslation,
+    canProcessAll: pages.length > 0,
     stitchPreview,
     safeSuggestion,
     handleFiles,
+    handleImportFolder,
     handleStitch,
     handleOcr,
     handleTranslate,
