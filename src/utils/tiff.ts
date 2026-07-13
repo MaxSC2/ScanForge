@@ -94,7 +94,7 @@ function typeSize(type: number): number {
 export function encodeTiff(imageData: ImageData): Uint8Array {
   const { width, height, data } = imageData;
   const le = true; // little-endian
-  const samplesPerPixel = 4; // RGBA
+  const samplesPerPixel = 3; // RGB output (alpha stripped)
   const bitsPerSample = 8;
   const stripBytes = width * height * samplesPerPixel;
   const ifdEntryCount = 11;

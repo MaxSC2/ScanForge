@@ -55,9 +55,10 @@ describe('plugin loader', () => {
   });
 
   it('calls factory on load', async () => {
-    const fn = vi.fn();
-    const src = `/* @id call-plugin @name Call @version 1.0 */ ${fn.toString()}`;
-    // Can't fully test factory call since it's eval'd, but check it doesn't throw
+    const src = `/* @id call-plugin @name Call @version 1.0 */
+(ctx) => {
+  ctx.api.showToast('hello');
+};`;
     const manifest = await loadPluginFromSource(src);
     expect(manifest).toBeTruthy();
   });
