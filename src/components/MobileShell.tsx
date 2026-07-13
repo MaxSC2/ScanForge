@@ -78,13 +78,14 @@ export function MobileShell({ sidebar, canvas, inspector, toolbar, statusBar }: 
   );
 
   useEffect(() => {
-    const main = document.querySelector('[data-canvas-area]');
+    const main = document.querySelector<HTMLDivElement>('[data-canvas-area]');
     if (!main) return;
-    main.addEventListener('touchstart', handleTouchStart, { passive: true });
-    main.addEventListener('touchend', handleTouchEnd, { passive: true });
+    const opts: AddEventListenerOptions = { passive: true };
+    main.addEventListener('touchstart', handleTouchStart as EventListener, opts);
+    main.addEventListener('touchend', handleTouchEnd as EventListener, opts);
     return () => {
-      main.removeEventListener('touchstart', handleTouchStart);
-      main.removeEventListener('touchend', handleTouchEnd);
+      main.removeEventListener('touchstart', handleTouchStart as EventListener);
+      main.removeEventListener('touchend', handleTouchEnd as EventListener);
     };
   }, [handleTouchStart, handleTouchEnd]);
 
