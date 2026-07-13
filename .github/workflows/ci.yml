@@ -124,9 +124,9 @@ jobs:
           java-version: '17'
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      - name: Install Tauri Android plugin
-        run: cargo install tauri-cli --version "^2" && npx tauri init --mobile --ci
       - run: npm ci --legacy-peer-deps
+      - name: Init Tauri Android
+        run: npx tauri android init
       - name: Build Android APK
         run: npx tauri android build --apk
       - uses: actions/upload-artifact@v4

@@ -35,13 +35,12 @@ export function MobileShell({ sidebar, canvas, inspector, toolbar, statusBar }: 
   const toggleCleanView = useEditorStore((s) => s.toggleCleanView);
   const regionOverlaysVisible = useEditorStore((s) => s.regionOverlaysVisible);
   const toggleRegionOverlays = useEditorStore((s) => s.toggleRegionOverlays);
-  const requestFitToPage = useEditorStore((s) => s.requestFitToPage);
 
   const activeIdx = activePageId ? pages.findIndex((p) => p.id === activePageId) : -1;
 
   // close sheets when page or region changes
-  useEffect(() => { setSidebarSheet(false); }, [activePageId]);
-  useEffect(() => { setInspectorSheet(false); }, [activePageId]);
+  useEffect(() => { setSidebarSheet(false); }, [activePageId, setSidebarSheet]);
+  useEffect(() => { setInspectorSheet(false); }, [activePageId, setInspectorSheet]);
   const hasPrev = activeIdx > 0;
   const hasNext = activeIdx >= 0 && activeIdx < pages.length - 1;
   const pageLabel = pages.length === 0 || activeIdx < 0
@@ -95,8 +94,6 @@ export function MobileShell({ sidebar, canvas, inspector, toolbar, statusBar }: 
     const t = setTimeout(() => setShowNav(false), 2000);
     return () => clearTimeout(t);
   }, [cleanView]);
-
-  const navBtn = 'flex h-11 min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-lg px-3 text-[9px] font-medium text-zinc-400 active:bg-zinc-800 active:text-zinc-200 transition-colors tap-highlight-none';
 
   return (
     <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-zinc-950 text-zinc-100 safe-area">

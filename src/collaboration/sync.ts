@@ -111,7 +111,6 @@ function handleMessage(data: CollabMessage) {
         }
         case 'region:delete': {
           const { id } = op.payload as { id: string };
-          const remoteTag = { t: op.timestamp, u: op.userId };
           if (markDeleted(id, op.userId)) {
             regionStore.deleteRegion(op.pageId, id);
             clearCrdtMeta(id);
