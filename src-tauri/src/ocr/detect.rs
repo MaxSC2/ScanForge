@@ -93,14 +93,14 @@ pub fn auto_detect_regions(
     repository: State<'_, DomainRepository>,
     storage: State<'_, ProjectRepository>,
 ) -> Result<AutoDetectResponse, String> {
-    emit_progress(&app_handle, &page_id, 0.05, "Loading page".into());
+    emit_progress(&app_handle, &page_id, 0.05, "Loading page".to_string());
 
     let page = repository
         .get_page(page_id.clone())
         .map_err(|e| format!("Database error loading page: {e}"))?
-        .ok_or_else(|| "Page not found".into())?;
+        .ok_or_else(|| "Page not found".to_string())?;
 
-    emit_progress(&app_handle, &page_id, 0.15, "Loading image".into());
+    emit_progress(&app_handle, &page_id, 0.15, "Loading image".to_string());
 
     let image_data = if page.image_path.starts_with("data:") {
         page.image_path.clone()
@@ -117,7 +117,7 @@ pub fn auto_detect_regions(
         .as_ref()
         .and_then(|s| (s.source_language != "auto").then(|| s.source_language.clone()));
 
-    emit_progress(&app_handle, &page_id, 0.25, "Running text detection".into());
+    emit_progress(&app_handle, &page_id, 0.25, "Running text detection".to_string());
 
     let python = if cfg!(target_os = "windows") {
         "python"
@@ -155,11 +155,11 @@ pub fn auto_detect_regions(
         let message = if !stderr.is_empty() {
             stderr
         } else {
-            "Detection script failed".into()
+            "Detection script failed".to_string()
         };
 
         if message.contains("not installed") || message.contains("No module named") {
-            return Err("OCR library not installed. Run: pip install paddleocr".into());
+            return Err("OCR library not installed. Run: pip install paddleocr".to_string());
         }
 
         return Err(format!("Detection failed: {message}"));
