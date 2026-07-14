@@ -12,7 +12,7 @@ use crate::storage::ProjectRepository;
 use provider::{build_provider_request, run_provider_chain, OcrError, OcrProvider, OcrProviderRequest};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, State};
 
 // Re-export types needed by the Tauri command
 pub use provider::OcrRegionResult;
@@ -118,7 +118,7 @@ fn apply_ocr_result_to_region(
         updated_region.source_language = source_language;
         updated_region.ocr_updated_at = Some(processed_at);
         updated_region.ocr_confidence = result.confidence;
-        return repository.upsert_region(updated_region).map_err(|e| {
+        return repository.upsert_region(updated_region).map(|_| ()).map_err(|e| {
             OcrError::new("storage", format!("Failed to update region: {e}"), false)
         });
     }
@@ -130,7 +130,7 @@ fn apply_ocr_result_to_region(
             updated_region.source_language = source_language;
             updated_region.ocr_updated_at = Some(processed_at);
             updated_region.ocr_confidence = result.confidence;
-            repository.upsert_region(updated_region).map_err(|e| {
+            repository.upsert_region(updated_region).map(|_| ()).map_err(|e| {
                 OcrError::new("storage", format!("Failed to update region: {e}"), false)
             })
         }
@@ -160,6 +160,7 @@ pub fn run_page_ocr(
     region_ids: Option<Vec<String>>,
     overwrite_existing: Option<bool>,
     repository: State<'_, DomainRepository>,
+    storage: State<'_, ProjectRepository>,
 ) -> Result<OcrPageResult, String> {
     emit_progress(&app_handle, &page_id, None, 0.05, "Starting OCR".into());
 
@@ -177,7 +178,6 @@ pub fn run_page_ocr(
     let image_data = if page.image_path.starts_with("data:") {
         page.image_path.clone()
     } else {
-        let storage = app_handle.state::<ProjectRepository>();
         storage.load_page_image_as_data_url(&page.image_path)
             .map_err(|e| format!("Failed to load page image for OCR: {e}"))?
     };
