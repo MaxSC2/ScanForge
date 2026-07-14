@@ -22,19 +22,12 @@
       }
     ],
     "security": {
-      "csp": null,
-      "android": {
-        "permissions": ["INTERNET"]
-      }
+      "csp": null
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.ico", "icons/256x256.png", "icons/icon.png"],
-    "android": {
-      "minSdkVersion": "24",
-      "targetSdkVersion": "34"
-    }
+    "icon": ["icons/icon.ico", "icons/256x256.png", "icons/icon.png"]
   }
 }
