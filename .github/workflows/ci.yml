@@ -140,6 +140,31 @@ jobs:
           fi
       - name: Build Android APK
         run: npx tauri android build --apk
+      - name: Sign APK with debug keystore
+        run: |
+          DIR="src-tauri/gen/android/app/build/outputs/apk/universal/release"
+          UNSIGNED="$DIR/app-universal-release-unsigned.apk"
+          if [ -f "$UNSIGNED" ]; then
+            echo "Signing $UNSIGNED..."
+            BT=$(ls -d $ANDROID_HOME/build-tools/* 2>/dev/null | tail -1)
+            [ -z "$BT" ] && BT=$(ls -d /usr/local/lib/android/sdk/build-tools/* 2>/dev/null | tail -1)
+            echo "Build tools: $BT"
+            KS="$HOME/.android/debug.keystore"
+            if [ ! -f "$KS" ]; then
+              mkdir -p "$HOME/.android"
+              keytool -genkey -v -keystore "$KS" -storepass android -alias androiddebugkey \
+                -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+            fi
+            cp "$UNSIGNED" "$DIR/app-universal-release.apk"
+            "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android \
+              --ks-key-alias androiddebugkey "$DIR/app-universal-release.apk"
+            echo "Signed: $DIR/app-universal-release.apk"
+            ls -lh "$DIR/app-universal-release.apk"
+          else
+            echo "Warning: $UNSIGNED not found"
+            find src-tauri/gen/android -name '*.apk' 2>/dev/null
+          fi
       - name: List APK outputs
         run: find src-tauri/gen/android -name '*.apk' -o -name '*.aab' 2>/dev/null | head -20
       - uses: actions/upload-artifact@v4
@@ -148,3 +173,4 @@ jobs:
           path: |
             src-tauri/gen/android/app/build/outputs/apk/**/*.apk
             src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          compression-level: 0
