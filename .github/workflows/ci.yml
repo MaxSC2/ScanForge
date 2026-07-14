@@ -88,6 +88,9 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev \
             librsvg2-dev
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install target
+        if: matrix.os == 'macos-latest'
+        run: rustup target add x86_64-apple-darwin
       - run: npm install --legacy-peer-deps --ignore-scripts
       - name: Build Tauri
         run: npx tauri build --target ${{ matrix.target }}
