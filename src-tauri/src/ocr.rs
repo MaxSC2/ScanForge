@@ -162,17 +162,17 @@ pub fn run_page_ocr(
     repository: State<'_, DomainRepository>,
     storage: State<'_, ProjectRepository>,
 ) -> Result<OcrPageResult, String> {
-    emit_progress(&app_handle, &page_id, None, 0.05, "Starting OCR".into());
+    emit_progress(&app_handle, &page_id, None, 0.05, "Starting OCR".to_string());
 
     let page = repository
         .get_page(page_id.clone())
         .map_err(|e| format!("Database error loading page: {e}"))?
         .ok_or_else(|| "Page not found".to_string())?;
 
-    emit_progress(&app_handle, &page_id, None, 0.15, "Loading page data".into());
+    emit_progress(&app_handle, &page_id, None, 0.15, "Loading page data".to_string());
 
     if page.width <= 0 || page.height <= 0 {
-        return Err("Invalid page dimensions".into());
+        return Err("Invalid page dimensions".to_string());
     }
 
     let image_data = if page.image_path.starts_with("data:") {
@@ -206,7 +206,7 @@ pub fn run_page_ocr(
     };
 
     if regions.is_empty() {
-        return Err("No regions selected for OCR".into());
+        return Err("No regions selected for OCR".to_string());
     }
 
     let overwrite_existing = overwrite_existing.unwrap_or(false);
@@ -261,7 +261,7 @@ pub fn run_page_ocr(
         );
     }
 
-    emit_progress(&app_handle, &page_id, None, 1.0, "OCR complete".into());
+    emit_progress(&app_handle, &page_id, None, 1.0, "OCR complete".to_string());
 
     let filled_count = provider_output
         .results
