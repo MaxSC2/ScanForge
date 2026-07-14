@@ -707,7 +707,8 @@ impl DomainRepository {
                   locked,
                   visible,
                   text_style_id,
-                  ocr_confidence
+                  ocr_confidence,
+                  ocr_overwrite_enabled
                 FROM regions
                 WHERE page_id = ?1
                 ORDER BY region_order ASC, rowid ASC
@@ -754,7 +755,8 @@ impl DomainRepository {
                   locked,
                   visible,
                   text_style_id,
-                  ocr_confidence
+                  ocr_confidence,
+                  ocr_overwrite_enabled
                 FROM regions
                 WHERE id = ?1
                 ",
@@ -1194,6 +1196,7 @@ fn map_region_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<RegionRecord> 
         visible: sql_to_bool(row.get::<_, i64>(24)?),
         text_style_id: row.get(25)?,
         ocr_confidence: row.get(26)?,
+        ocr_overwrite_enabled: sql_to_bool(row.get::<_, i64>(27)?),
     })
 }
 

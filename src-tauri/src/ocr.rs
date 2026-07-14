@@ -12,7 +12,7 @@ use crate::storage::ProjectRepository;
 use provider::{build_provider_request, run_provider_chain, OcrError, OcrProvider, OcrProviderRequest};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 // Re-export types needed by the Tauri command
 pub use provider::OcrRegionResult;
