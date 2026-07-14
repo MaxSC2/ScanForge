@@ -91,6 +91,7 @@ pub fn auto_detect_regions(
     page_id: String,
     clear_existing: Option<bool>,
     repository: State<'_, DomainRepository>,
+    storage: State<'_, ProjectRepository>,
 ) -> Result<AutoDetectResponse, String> {
     emit_progress(&app_handle, &page_id, 0.05, "Loading page".into());
 
@@ -104,7 +105,6 @@ pub fn auto_detect_regions(
     let image_data = if page.image_path.starts_with("data:") {
         page.image_path.clone()
     } else {
-        let storage = app_handle.state::<ProjectRepository>();
         storage
             .load_page_image_as_data_url(&page.image_path)
             .map_err(|e| format!("Failed to load page image: {e}"))?
