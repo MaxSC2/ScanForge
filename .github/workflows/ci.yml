@@ -132,7 +132,11 @@ jobs:
         run: npx tauri android init
       - name: Build Android APK
         run: npx tauri android build --apk
+      - name: List APK outputs
+        run: find src-tauri/gen/android -name '*.apk' -o -name '*.aab' 2>/dev/null | head -20
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
-          path: src-tauri/gen/android/app/build/outputs/apk/*/*.apk
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
