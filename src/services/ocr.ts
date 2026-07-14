@@ -1,3 +1,4 @@
+import { createWorker, type Worker } from 'tesseract.js';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { pageRepository } from '../repositories/pageRepository';
@@ -34,17 +35,26 @@ interface StoredOcrContext {
   }>;
 }
 
-function filterTargetRegions(regions: RegionRecord[], regionIds?: string[]) {
-  if (!regionIds || regionIds.length === 0) {
-    return regions;
-  }
+let tesseractWorker: Worker | null = null;
+let tesseractReady = false;
 
-  const targetIds = new Set(regionIds);
-  return regions.filter((region) => targetIds.has(region.id));
+async function getTesseractWorker(): Promise<Worker> {
+  if (tesseractWorker && tesseractReady) return tesseractWorker;
+  if (tesseractWorker) {
+    await tesseractWorker.terminate();
+    tesseractWorker = null;
+  }
+  tesseractWorker = await createWorker('eng', 1, {
+    logger: () => {},
+  });
+  tesseractReady = true;
+  return tesseractWorker;
 }
 
-function toPreviewEngineName(engine: string) {
-  return engine === 'mock' ? 'scanforge-preview' : `scanforge-${engine}-preview`;
+function filterTargetRegions(regions: RegionRecord[], regionIds?: string[]) {
+  if (!regionIds || regionIds.length === 0) return regions;
+  const targetIds = new Set(regionIds);
+  return regions.filter((region) => targetIds.has(region.id));
 }
 
 function pageStem(fileName: string) {
@@ -52,34 +62,42 @@ function pageStem(fileName: string) {
 }
 
 function deriveFileName(page: Page, imagePath: string) {
-  if (page.fileName.trim()) {
-    return page.fileName;
-  }
-
+  if (page.fileName.trim()) return page.fileName;
   if (!imagePath.startsWith('data:')) {
     const normalized = imagePath.replace(/\\/g, '/');
     const segment = normalized.split('/').pop();
-    if (segment) {
-      return segment;
-    }
+    if (segment) return segment;
   }
-
   return `page-${page.id.slice(0, 8)}`;
 }
 
-function buildPreviewText(context: StoredOcrContext, region: StoredOcrContext['regions'][number]) {
-  const area = Math.max(1, context.naturalWidth * context.naturalHeight);
-  const regionArea = Math.max(1, region.record.width * region.record.height);
-  const coverage = Math.max(0.1, Math.round((regionArea / area) * 1000) / 10);
-  const label = region.label.trim() || `region ${region.order}`;
-
-  return `OCR preview: ${pageStem(context.fileName)} / text / ${label} / ${coverage}%`;
+function cropImageToRegion(
+  imageDataUrl: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(w));
+      canvas.height = Math.max(1, Math.round(h));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+      ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('Failed to load image for cropping'));
+    img.src = imageDataUrl;
+  });
 }
 
-function emitError(
-  pageId: string,
-  detail: OcrErrorDetail,
-) {
+function emitError(pageId: string, detail: OcrErrorDetail) {
   console.error(`[ScanForge][OCR] ${detail.provider}: ${detail.message}`);
   useDiagnosticsStore.getState().record({
     scope: 'ocr',
@@ -94,9 +112,7 @@ function emitError(
 }
 
 function assertNotAborted(signal?: AbortSignal) {
-  if (signal?.aborted) {
-    throw new DOMException('OCR cancelled', 'AbortError');
-  }
+  if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
 }
 
 function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext {
@@ -161,9 +177,7 @@ async function loadStoredOcrContext(page: Page, options: OcrRunOptions, signal?:
 
   assertNotAborted(signal);
 
-  if (!pageRecord || regionRecords.length === 0) {
-    return toFallbackContext(page, options);
-  }
+  if (!pageRecord || regionRecords.length === 0) return toFallbackContext(page, options);
 
   const settings = await ensureProjectDomainDefaults(pageRecord.projectId);
 
@@ -199,16 +213,13 @@ async function applyBrowserOcrResult(
 ) {
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
-  const engineName = toPreviewEngineName(String(context.ocrEngine));
 
   await Promise.all(
     regions.map(async ({ record }) => {
       assertNotAborted(signal);
 
       const result = resultMap.get(record.id);
-      if (!result) {
-        return;
-      }
+      if (!result) return;
 
       if (!result.skipped && result.text) {
         await regionRepository.update({
@@ -217,7 +228,7 @@ async function applyBrowserOcrResult(
           ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
           status: record.translatedText.trim() ? 'translated' : 'ocr_done',
           ocrStatus: 'done',
-          ocrEngine: engineName,
+          ocrEngine: 'tesseract.js',
           ocrUpdatedAt: updatedAt,
           ...(typeof result.confidence === 'number'
             ? { ocrConfidence: result.confidence }
@@ -231,7 +242,7 @@ async function applyBrowserOcrResult(
           ...record,
           ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
           ocrStatus: 'failed',
-          ocrEngine: engineName,
+          ocrEngine: 'tesseract.js',
           ocrUpdatedAt: updatedAt,
           ...(typeof result.confidence === 'number'
             ? { ocrConfidence: result.confidence }
@@ -242,7 +253,7 @@ async function applyBrowserOcrResult(
   );
 }
 
-async function runBrowserPreviewOcr(
+async function runBrowserOcr(
   page: Page,
   options: OcrRunOptionsWithAbort = {},
   onProgress?: OcrProgressCallback,
@@ -256,89 +267,114 @@ async function runBrowserPreviewOcr(
   }
 
   const overwriteExisting = runOptions.overwriteExisting ?? false;
-  const engineName = toPreviewEngineName(String(context.ocrEngine));
-  const providerPath =
-    context.ocrEngine === 'mock' ? [engineName] : [String(context.ocrEngine), engineName];
-
-  if (providerPath.length > 1) {
-    console.warn('[ScanForge][OCR] browser preview fallback used', {
-      pageId: page.id,
-      providerPath,
-    });
-    useDiagnosticsStore.getState().record({
-      scope: 'ocr',
-      level: 'warning',
-      message: 'Browser OCR preview fallback used',
-      detail: providerPath.join(' -> '),
-      ...(useProjectStore.getState().meta.localProjectId
-        ? { projectId: useProjectStore.getState().meta.localProjectId }
-        : {}),
-      pageId: page.id,
-    });
+  const engineName = 'tesseract.js';
+  const imageDataUrl = page.imageUrl || page.imagePath;
+  if (!imageDataUrl || !imageDataUrl.startsWith('data:')) {
+    throw new Error('Page image not available as data URL');
   }
-  const results: OcrRegionResult[] = [];
 
-  for (let index = 0; index < context.regions.length; index += 1) {
-    assertNotAborted(signal);
-    const region = context.regions[index];
-    await new Promise((resolve) => window.setTimeout(resolve, 90));
+  let worker: Worker | undefined;
+  try {
+    onProgress?.(0.1, 'Initializing Tesseract.js OCR engine');
+    worker = await getTesseractWorker();
 
-    assertNotAborted(signal);
+    const results: OcrRegionResult[] = [];
 
-    const regionOverwrite = region.record.ocrOverwriteEnabled ?? false;
-    if (region.record.locked) {
-      results.push({
-        regionId: region.record.id,
-        text: null,
-        skipped: true,
-        reason: 'locked',
-      });
-    } else if (!(overwriteExisting || regionOverwrite) && region.record.sourceText.trim()) {
-      results.push({
-        regionId: region.record.id,
-        text: null,
-        skipped: true,
-        reason: 'already_filled',
-      });
-    } else if (region.record.width <= 0 || region.record.height <= 0) {
-      results.push({
-        regionId: region.record.id,
-        text: null,
-        skipped: true,
-        reason: 'invalid_bounds',
-      });
-    } else {
-      results.push({
-        regionId: region.record.id,
-        text: buildPreviewText(context, region),
-        skipped: false,
-        reason: null,
-      });
+    for (let index = 0; index < context.regions.length; index += 1) {
+      assertNotAborted(signal);
+      const region = context.regions[index];
+
+      const regionOverwrite = region.record.ocrOverwriteEnabled ?? false;
+      if (region.record.locked) {
+        results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'locked' });
+        onProgress?.(
+          0.2 + ((index + 1) / context.regions.length) * 0.7,
+          `Region ${index + 1}/${context.regions.length}: skipped (locked)`,
+        );
+        continue;
+      }
+      if (!(overwriteExisting || regionOverwrite) && region.record.sourceText.trim()) {
+        results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'already_filled' });
+        onProgress?.(
+          0.2 + ((index + 1) / context.regions.length) * 0.7,
+          `Region ${index + 1}/${context.regions.length}: skipped (already filled)`,
+        );
+        continue;
+      }
+      if (region.record.width <= 0 || region.record.height <= 0) {
+        results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'invalid_bounds' });
+        onProgress?.(
+          0.2 + ((index + 1) / context.regions.length) * 0.7,
+          `Region ${index + 1}/${context.regions.length}: invalid bounds`,
+        );
+        continue;
+      }
+
+      onProgress?.(
+        0.2 + ((index + 0.1) / context.regions.length) * 0.7,
+        `Region ${index + 1}/${context.regions.length}: cropping`,
+      );
+
+      let croppedDataUrl: string;
+      try {
+        croppedDataUrl = await cropImageToRegion(
+          imageDataUrl,
+          region.record.x,
+          region.record.y,
+          region.record.width,
+          region.record.height,
+        );
+      } catch {
+        results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'no_text' });
+        continue;
+      }
+
+      assertNotAborted(signal);
+      onProgress?.(
+        0.2 + ((index + 0.3) / context.regions.length) * 0.7,
+        `Region ${index + 1}/${context.regions.length}: recognizing`,
+      );
+
+      const tesseractResult = await worker.recognize(croppedDataUrl);
+      assertNotAborted(signal);
+
+      const text = tesseractResult.data.text.trim();
+      const confidence = tesseractResult.data.confidence;
+
+      if (text) {
+        results.push({ regionId: region.record.id, text, skipped: false, reason: null, confidence });
+      } else {
+        results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'no_text' });
+      }
+
+      onProgress?.(
+        0.2 + ((index + 1) / context.regions.length) * 0.7,
+        `Region ${index + 1}/${context.regions.length}: ${text ? 'done' : 'no text'}`,
+      );
     }
 
-    onProgress?.(
-      0.2 + ((index + 1) / Math.max(1, context.regions.length)) * 0.7,
-      `OCR region ${index + 1}/${context.regions.length}`,
-    );
+    const filledCount = results.filter((item) => !item.skipped && item.text).length;
+    const skippedCount = results.length - filledCount;
+    const failedCount = results.filter((item) => item.reason === 'invalid_bounds' || item.reason === 'no_text').length;
+    const averageConfidence = computeAverageConfidence(results);
+
+    onProgress?.(0.95, 'Saving results');
+    await applyBrowserOcrResult(context, context.regions, results, signal);
+
+    return {
+      engine: engineName,
+      providerPath: [engineName],
+      regionsProcessed: results.length,
+      filledCount,
+      skippedCount,
+      failedCount,
+      results,
+      averageConfidence,
+    };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw error;
   }
-
-  const filledCount = results.filter((item) => !item.skipped && item.text).length;
-  const skippedCount = results.length - filledCount;
-  const failedCount = results.filter((item) => item.reason === 'invalid_bounds' || item.reason === 'no_text').length;
-  const averageConfidence = computeAverageConfidence(results);
-
-  await applyBrowserOcrResult(context, context.regions, results, signal);
-
-  return {
-    engine: engineName,
-    providerPath,
-    regionsProcessed: results.length,
-    filledCount,
-    skippedCount,
-    failedCount,
-    results,
-    averageConfidence,
-  };
 }
 
 export async function runPageOcr(
@@ -353,15 +389,13 @@ export async function runPageOcr(
   }
 
   if (!isDesktopRuntime()) {
-    onProgress?.(0.2, 'Running browser OCR preview');
+    onProgress?.(0.1, 'Initializing browser OCR');
     try {
-      return await runBrowserPreviewOcr(page, options, onProgress);
+      return await runBrowserOcr(page, options, onProgress);
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw error;
-      }
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
       const detail: OcrErrorDetail = {
-        provider: 'browser-preview',
+        provider: 'browser-ocr',
         message: error instanceof Error ? error.message : 'Unknown browser OCR error',
         recoverable: true,
       };
@@ -394,9 +428,7 @@ export async function runPageOcr(
       ).length,
     };
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw error;
-    }
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
     const message = typeof error === 'string' ? error : error instanceof Error ? error.message : 'OCR backend error';
     const detail: OcrErrorDetail = {
       provider: 'tauri-backend',

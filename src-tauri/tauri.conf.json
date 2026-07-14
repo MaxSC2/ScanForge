@@ -16,18 +16,25 @@
         "title": "ScanForge",
         "width": 1440,
         "height": 900,
-        "minWidth": 1100,
-        "minHeight": 700,
+        "minWidth": 400,
+        "minHeight": 400,
         "resizable": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "android": {
+        "permissions": ["INTERNET"]
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.ico", "icons/256x256.png", "icons/icon.png"]
+    "icon": ["icons/icon.ico", "icons/256x256.png", "icons/icon.png"],
+    "android": {
+      "minSdkVersion": "24",
+      "targetSdkVersion": "34"
+    }
   }
 }

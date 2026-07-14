@@ -1,0 +1,11 @@
+{
+  "identifier": "mobile",
+  "description": "Capabilities for Android mobile",
+  "windows": ["main"],
+  "webviewReferences": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "fs:default"
+  ]
+}
