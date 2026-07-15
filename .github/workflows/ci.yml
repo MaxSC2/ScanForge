@@ -128,8 +128,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       - run: npm install --legacy-peer-deps --ignore-scripts
+      - name: Build frontend
+        run: npm run build
+      - name: Verify dist output
+        run: ls -la dist/ && echo "---" && head -5 dist/index.html
       - name: Init Tauri Android
         run: npx tauri android init
+      - name: Copy dist to Android assets
+        run: |
+          mkdir -p src-tauri/gen/android/app/src/main/assets
+          cp -r dist/* src-tauri/gen/android/app/src/main/assets/
+          echo "=== Android assets after copy ==="
+          ls -la src-tauri/gen/android/app/src/main/assets/
       - name: Patch Android permissions
         run: |
           MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
@@ -165,8 +175,20 @@ jobs:
             echo "Warning: $UNSIGNED not found"
             find src-tauri/gen/android -name '*.apk' 2>/dev/null
           fi
-      - name: List APK outputs
-        run: find src-tauri/gen/android -name '*.apk' -o -name '*.aab' 2>/dev/null | head -20
+      - name: Verify APK contents
+        run: |
+          echo "=== Finding APK ==="
+          APK=$(find src-tauri/gen/android -name 'app-universal-release.apk' 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            echo "Found: $APK ($(du -h "$APK" | cut -f1))"
+            echo "=== Checking for index.html in APK ==="
+            unzip -l "$APK" 2>/dev/null | grep -i "index\.html" && echo "✓ index.html found in APK" || echo "✗ index.html NOT in APK"
+            echo "=== APK contents (first 40 entries) ==="
+            unzip -l "$APK" 2>/dev/null | head -40
+          else
+            echo "✗ No signed universal APK found"
+            find src-tauri/gen/android -name '*.apk' 2>/dev/null
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
