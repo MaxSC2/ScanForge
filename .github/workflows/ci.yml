@@ -140,16 +140,18 @@ jobs:
           cp -r dist/* src-tauri/gen/android/app/src/main/assets/
           echo "=== Android assets after copy ==="
           ls -la src-tauri/gen/android/app/src/main/assets/
-      - name: Patch Android permissions
+      - name: Patch Android manifest
         run: |
           MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             sed -i 's|<uses-permission android:name="android.permission.INTERNET"/>||g' "$MANIFEST"
             sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' "$MANIFEST"
-            echo "Patched $MANIFEST with INTERNET permission"
+            sed -i 's|usesCleartextTraffic="${usesCleartextTraffic}"|usesCleartextTraffic="true"|g' "$MANIFEST"
+            echo "=== Patched $MANIFEST ==="
+            grep -E "INTERNET|usesCleartext" "$MANIFEST"
           fi
       - name: Build Android APK
-        run: npx tauri android build --apk
+        run: npx tauri android build --apk --debug
       - name: Sign APK with debug keystore
         run: |
           DIR="src-tauri/gen/android/app/build/outputs/apk/universal/release"

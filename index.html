@@ -4,6 +4,53 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ScanForge — Manga Translation Studio</title>
+    <script>
+      (function() {
+        var KEY = "scanforge_errors";
+        var MAX = 50;
+        function push(e) {
+          try {
+            var raw = localStorage.getItem(KEY);
+            var logs = raw ? JSON.parse(raw) : [];
+            logs.push({ t: Date.now(), ev: e });
+            localStorage.setItem(KEY, JSON.stringify(logs.slice(-MAX)));
+          } catch(_) {}
+        }
+        push("html_start");
+        window.__sfLog = function() {
+          try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch(_) { return []; }
+        };
+        window.__sfClear = function() { localStorage.removeItem(KEY); };
+        window.onerror = function(m, src, line, col, err) {
+          push({ ev: "pre_onerror", m: String(m), src: src, line: line, col: col, s: err && err.stack });
+        };
+        window.onunhandledrejection = function(e) {
+          push({ ev: "pre_unhandled", r: String(e.reason), s: e.reason && e.reason.stack });
+        };
+        window.__sfShow = function() {
+          var logs = window.__sfLog();
+          var el = document.getElementById("sfdbg") || (function(){
+            var d = document.createElement("pre");
+            d.id = "sfdbg";
+            d.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#111;color:#0f0;overflow:auto;font:12px monospace;padding:12px;margin:0;white-space:pre-wrap";
+            document.body && document.body.appendChild(d);
+            return d;
+          })();
+          el.textContent = JSON.stringify(logs, null, 2) + "\n\n--- tap to close ---";
+          el.onclick = function() { el.style.display = el.style.display === "none" ? "block" : "none"; };
+          el.style.display = "block";
+        };
+        push("html_ready");
+        setTimeout(function() {
+          var logs = window.__sfLog();
+          var hasErrors = logs.some(function(l) {
+            var e = l.ev || l;
+            return e && (e.event === "onerror" || e.event === "unhandledrejection" || e.event === "render_fail" || e.ev === "pre_onerror" || e.ev === "pre_unhandled");
+          });
+          if (hasErrors) window.__sfShow();
+        }, 5000);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
