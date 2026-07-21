@@ -128,18 +128,8 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       - run: npm install --legacy-peer-deps --ignore-scripts
-      - name: Build frontend
-        run: npm run build
-      - name: Verify dist output
-        run: ls -la dist/ && echo "---" && head -5 dist/index.html
       - name: Init Tauri Android
         run: npx tauri android init
-      - name: Copy dist to Android assets
-        run: |
-          mkdir -p src-tauri/gen/android/app/src/main/assets
-          cp -r dist/* src-tauri/gen/android/app/src/main/assets/
-          echo "=== Android assets after copy ==="
-          ls -la src-tauri/gen/android/app/src/main/assets/
       - name: Patch Android manifest
         run: |
           MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
@@ -147,50 +137,58 @@ jobs:
             sed -i 's|<uses-permission android:name="android.permission.INTERNET"/>||g' "$MANIFEST"
             sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' "$MANIFEST"
             sed -i 's|usesCleartextTraffic="${usesCleartextTraffic}"|usesCleartextTraffic="true"|g' "$MANIFEST"
-            echo "=== Patched $MANIFEST ==="
+            echo "=== Patched manifest ==="
             grep -E "INTERNET|usesCleartext" "$MANIFEST"
           fi
-      - name: Build Android APK
-        run: npx tauri android build --apk --debug
-      - name: Sign APK with debug keystore
+      - name: Strip devUrl (workaround for Tauri v2 bug #13832)
         run: |
-          DIR="src-tauri/gen/android/app/build/outputs/apk/universal/release"
-          UNSIGNED="$DIR/app-universal-release-unsigned.apk"
-          if [ -f "$UNSIGNED" ]; then
-            echo "Signing $UNSIGNED..."
-            BT=$(ls -d $ANDROID_HOME/build-tools/* 2>/dev/null | tail -1)
-            [ -z "$BT" ] && BT=$(ls -d /usr/local/lib/android/sdk/build-tools/* 2>/dev/null | tail -1)
-            echo "Build tools: $BT"
-            KS="$HOME/.android/debug.keystore"
-            if [ ! -f "$KS" ]; then
-              mkdir -p "$HOME/.android"
-              keytool -genkey -v -keystore "$KS" -storepass android -alias androiddebugkey \
-                -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
-                -dname "CN=Android Debug,O=Android,C=US"
-            fi
-            cp "$UNSIGNED" "$DIR/app-universal-release.apk"
-            "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android \
-              --ks-key-alias androiddebugkey "$DIR/app-universal-release.apk"
-            echo "Signed: $DIR/app-universal-release.apk"
-            ls -lh "$DIR/app-universal-release.apk"
-          else
-            echo "Warning: $UNSIGNED not found"
-            find src-tauri/gen/android -name '*.apk' 2>/dev/null
+          python3 -c "
+import json, sys
+with open('src-tauri/tauri.conf.json') as f:
+    cfg = json.load(f)
+cfg['build'].pop('devUrl', None)
+with open('src-tauri/tauri.conf.json', 'w') as f:
+    json.dump(cfg, f, indent=2)
+print(json.dumps(cfg['build'], indent=2))
+"
+      - name: Build Android APK
+        run: npx tauri android build --apk
+      - name: Sign APK
+        run: |
+          UNSIGNED=$(find src-tauri/gen/android -name '*-unsigned.apk' 2>/dev/null | head -1)
+          if [ -z "$UNSIGNED" ]; then
+            UNSIGNED=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
           fi
+          if [ -z "$UNSIGNED" ]; then
+            echo "✗ No APK found!"
+            find src-tauri/gen/android -name '*.apk' -o -name '*.aab' 2>/dev/null
+            exit 1
+          fi
+          echo "Found: $UNSIGNED ($(du -h "$UNSIGNED" | cut -f1))"
+          BT=$(ls -d $ANDROID_HOME/build-tools/* 2>/dev/null | tail -1)
+          [ -z "$BT" ] && BT=$(ls -d /usr/local/lib/android/sdk/build-tools/* 2>/dev/null | tail -1)
+          echo "Build tools: $BT"
+          KS="$HOME/.android/debug.keystore"
+          if [ ! -f "$KS" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkey -v -keystore "$KS" -storepass android -alias androiddebugkey \
+              -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          cp "$UNSIGNED" "${UNSIGNED%.apk}-signed.apk"
+          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android \
+            --ks-key-alias androiddebugkey "${UNSIGNED%.apk}-signed.apk"
+          echo "✓ Signed: ${UNSIGNED%.apk}-signed.apk"
       - name: Verify APK contents
         run: |
-          echo "=== Finding APK ==="
-          APK=$(find src-tauri/gen/android -name 'app-universal-release.apk' 2>/dev/null | head -1)
-          if [ -n "$APK" ]; then
-            echo "Found: $APK ($(du -h "$APK" | cut -f1))"
-            echo "=== Checking for index.html in APK ==="
-            unzip -l "$APK" 2>/dev/null | grep -i "index\.html" && echo "✓ index.html found in APK" || echo "✗ index.html NOT in APK"
-            echo "=== APK contents (first 40 entries) ==="
-            unzip -l "$APK" 2>/dev/null | head -40
-          else
-            echo "✗ No signed universal APK found"
-            find src-tauri/gen/android -name '*.apk' 2>/dev/null
+          APK=$(find src-tauri/gen/android -name '*-signed.apk' 2>/dev/null | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
           fi
+          echo "=== Verifying: $APK ==="
+          unzip -l "$APK" 2>/dev/null | grep -i "index\.html" && echo "✓ index.html in APK" || echo "✗ index.html MISSING"
+          echo "=== Top entries ==="
+          unzip -l "$APK" 2>/dev/null | head -30
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
