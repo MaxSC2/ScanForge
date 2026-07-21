@@ -1,10 +1,16 @@
 import { create } from 'zustand';
 import type { Page, ProjectMeta, ProjectSettingsRecord, TextStyleRecord } from '../types';
-import { usePageStore } from './usePageStore';
-import { useProjectDomainStore } from './useProjectDomainStore';
-import { useRegionStore } from './useRegionStore';
 import { useProjectStore } from './useProjectStore';
 import { useToastStore } from './useToastStore';
+
+let _pageStore: any;
+let _regionStore: any;
+let _domainStore: any;
+void Promise.all([
+  import('./usePageStore').then(m => { _pageStore = m.usePageStore; }),
+  import('./useRegionStore').then(m => { _regionStore = m.useRegionStore; }),
+  import('./useProjectDomainStore').then(m => { _domainStore = m.useProjectDomainStore; }),
+]);
 
 interface HistorySnapshot {
   pages: Page[];
@@ -38,10 +44,10 @@ const DEFAULT_COALESCE_MS = 700;
 const activeCaptureWindows = new Map<string, number>();
 
 function cloneSnapshot(): HistorySnapshot {
-  const pageState = usePageStore.getState();
-  const regionState = useRegionStore.getState();
+  const pageState = _pageStore.getState();
+  const regionState = _regionStore.getState();
   const projectState = useProjectStore.getState();
-  const domainState = useProjectDomainStore.getState();
+  const domainState = _domainStore.getState();
   return {
     pages: structuredClone(pageState.pages),
     activePageId: pageState.activePageId,
@@ -54,14 +60,14 @@ function cloneSnapshot(): HistorySnapshot {
 }
 
 function applySnapshot(snapshot: HistorySnapshot) {
-  usePageStore.setState({
+  _pageStore.setState({
     pages: structuredClone(snapshot.pages),
     activePageId: snapshot.activePageId,
     selectedPageIds: [...snapshot.selectedPageIds],
   });
-  useRegionStore.setState({ selectedRegionId: snapshot.selectedRegionId });
+  _regionStore.setState({ selectedRegionId: snapshot.selectedRegionId });
   useProjectStore.setState({ meta: structuredClone(snapshot.meta) });
-  useProjectDomainStore.setState({
+  _domainStore.setState({
     settings: snapshot.settings ? structuredClone(snapshot.settings) : null,
     textStyles: structuredClone(snapshot.textStyles),
   });
