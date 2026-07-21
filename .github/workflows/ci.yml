@@ -183,7 +183,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/**/*.apk
           compression-level: 0
