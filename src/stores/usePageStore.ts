@@ -7,6 +7,7 @@ import { isDesktopRuntime } from '../utils/runtime';
 import { useHistoryStore } from './useHistoryStore';
 import { useProjectStore } from './useProjectStore';
 import { useProjectDomainStore } from './useProjectDomainStore';
+import { register } from './storeRegistry';
 
 const DEFAULT_STITCH_OPTIONS: StitchOptions = {
   direction: 'vertical',
@@ -545,3 +546,5 @@ export const usePageStore = create<PageState>((set, get) => ({
     };
   },
 }));
+
+register('page', usePageStore);

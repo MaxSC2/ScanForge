@@ -11,6 +11,7 @@ import { projectSettingsRepository } from '../repositories/projectSettingsReposi
 import { textStyleRepository } from '../repositories/textStyleRepository';
 import { useDiagnosticsStore } from './useDiagnosticsStore';
 import { useHistoryStore } from './useHistoryStore';
+import { register } from './storeRegistry';
 
 interface ProjectDomainState {
   projectId: string | null;
@@ -127,3 +128,5 @@ export const useProjectDomainStore = create<ProjectDomainState>((set, get) => ({
       textStyles: [],
     }),
 }));
+
+register('domain', useProjectDomainStore);

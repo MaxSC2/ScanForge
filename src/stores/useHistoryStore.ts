@@ -2,15 +2,7 @@ import { create } from 'zustand';
 import type { Page, ProjectMeta, ProjectSettingsRecord, TextStyleRecord } from '../types';
 import { useProjectStore } from './useProjectStore';
 import { useToastStore } from './useToastStore';
-
-let _pageStore: any;
-let _regionStore: any;
-let _domainStore: any;
-void Promise.all([
-  import('./usePageStore').then(m => { _pageStore = m.usePageStore; }),
-  import('./useRegionStore').then(m => { _regionStore = m.useRegionStore; }),
-  import('./useProjectDomainStore').then(m => { _domainStore = m.useProjectDomainStore; }),
-]);
+import { use as useStore } from './storeRegistry';
 
 interface HistorySnapshot {
   pages: Page[];
@@ -44,10 +36,10 @@ const DEFAULT_COALESCE_MS = 700;
 const activeCaptureWindows = new Map<string, number>();
 
 function cloneSnapshot(): HistorySnapshot {
-  const pageState = _pageStore.getState();
-  const regionState = _regionStore.getState();
+  const pageState = useStore('page').getState();
+  const regionState = useStore('region').getState();
   const projectState = useProjectStore.getState();
-  const domainState = _domainStore.getState();
+  const domainState = useStore('domain').getState();
   return {
     pages: structuredClone(pageState.pages),
     activePageId: pageState.activePageId,
@@ -60,14 +52,14 @@ function cloneSnapshot(): HistorySnapshot {
 }
 
 function applySnapshot(snapshot: HistorySnapshot) {
-  _pageStore.setState({
+  useStore('page').setState({
     pages: structuredClone(snapshot.pages),
     activePageId: snapshot.activePageId,
     selectedPageIds: [...snapshot.selectedPageIds],
   });
-  _regionStore.setState({ selectedRegionId: snapshot.selectedRegionId });
+  useStore('region').setState({ selectedRegionId: snapshot.selectedRegionId });
   useProjectStore.setState({ meta: structuredClone(snapshot.meta) });
-  _domainStore.setState({
+  useStore('domain').setState({
     settings: snapshot.settings ? structuredClone(snapshot.settings) : null,
     textStyles: structuredClone(snapshot.textStyles),
   });

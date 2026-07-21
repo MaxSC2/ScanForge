@@ -10,6 +10,7 @@ import { applyRegionLifecyclePatch } from './regionLifecyclePolicy';
 import { useProjectStore } from './useProjectStore';
 import { emitEvent } from '../plugins/api';
 import { broadcastRegionCreate, broadcastRegionUpdate, broadcastRegionDelete, isCollabConnected } from '../collaboration/sync';
+import { register } from './storeRegistry';
 
 /**
  * Zustand state and actions for managing page regions.
@@ -309,3 +310,5 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     useProjectStore.getState().touch();
   },
 }));
+
+register('region', useRegionStore);
