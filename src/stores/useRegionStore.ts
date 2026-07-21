@@ -8,8 +8,6 @@ import { useEditorStore } from './useEditorStore';
 import { resolveRegionHistoryCaptureOptions } from './regionHistoryPolicy';
 import { applyRegionLifecyclePatch } from './regionLifecyclePolicy';
 import { useProjectStore } from './useProjectStore';
-import { emitEvent } from '../plugins/api';
-import { broadcastRegionCreate, broadcastRegionUpdate, broadcastRegionDelete, isCollabConnected } from '../collaboration/sync';
 import { register } from './storeRegistry';
 
 /**
@@ -131,8 +129,8 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     set({ selectedRegionId: region.id });
     useEditorStore.getState().setInspectorOpen(true);
     useProjectStore.getState().touch();
-    emitEvent('region:create', region);
-    if (isCollabConnected()) broadcastRegionCreate(pageId, region);
+    void import('../plugins/api').then(m => m.emitEvent('region:create', region));
+    void import('../collaboration/sync').then(m => { if (m.isCollabConnected()) m.broadcastRegionCreate(pageId, region); });
     return region;
   },
 
@@ -164,8 +162,8 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     );
     useProjectStore.getState().touch();
     if (updatedRegion) {
-      emitEvent('region:update', updatedRegion, patch);
-      if (isCollabConnected()) broadcastRegionUpdate(pageId, regionId, patch);
+      void import('../plugins/api').then(m => m.emitEvent('region:update', updatedRegion, patch));
+      void import('../collaboration/sync').then(m => { if (m.isCollabConnected()) m.broadcastRegionUpdate(pageId, regionId, patch); });
     }
   },
 
@@ -191,7 +189,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
         .map((r, i) => ({ ...r, order: i + 1 })),
     );
     useProjectStore.getState().touch();
-    if (isCollabConnected()) broadcastRegionDelete(pageId, regionId);
+    void import('../collaboration/sync').then(m => { if (m.isCollabConnected()) m.broadcastRegionDelete(pageId, regionId); });
     set((s) => ({
       selectedRegionId: s.selectedRegionId === regionId ? null : s.selectedRegionId,
     }));
