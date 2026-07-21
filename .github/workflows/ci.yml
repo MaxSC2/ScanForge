@@ -141,16 +141,7 @@ jobs:
             grep -E "INTERNET|usesCleartext" "$MANIFEST"
           fi
       - name: Strip devUrl (workaround for Tauri v2 bug #13832)
-        run: |
-          python3 -c "
-import json, sys
-with open('src-tauri/tauri.conf.json') as f:
-    cfg = json.load(f)
-cfg['build'].pop('devUrl', None)
-with open('src-tauri/tauri.conf.json', 'w') as f:
-    json.dump(cfg, f, indent=2)
-print(json.dumps(cfg['build'], indent=2))
-"
+        run: python3 -c "import json; cfg=json.load(open('src-tauri/tauri.conf.json')); cfg['build'].pop('devUrl',None); json.dump(cfg, open('src-tauri/tauri.conf.json','w'), indent=2); print(json.dumps(cfg['build'],indent=2))"
       - name: Build Android APK
         run: npx tauri android build --apk
       - name: Sign APK
