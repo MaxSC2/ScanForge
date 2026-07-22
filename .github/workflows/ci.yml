@@ -180,8 +180,18 @@ jobs:
           unzip -l "$APK" 2>/dev/null | grep -i "index\.html" && echo "✓ index.html in APK" || echo "✗ index.html MISSING"
           echo "=== Top entries ==="
           unzip -l "$APK" 2>/dev/null | head -30
+      - name: Find and copy signed APK
+        run: |
+          APK=$(find src-tauri/gen/android -name '*-signed.apk' 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            cp "$APK" scanforge-android.apk
+          else
+            APK=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
+            cp "$APK" scanforge-android.apk
+          fi
+          echo "APK: $(ls -lh scanforge-android.apk)"
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/**/*.apk
+          path: scanforge-android.apk
           compression-level: 0
