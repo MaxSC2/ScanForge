@@ -342,15 +342,87 @@ class OllamaProvider implements AiProvider {
 
 /* ─── Factory ─── */
 
+/**
+ * Rate limiter that restricts concurrent in-flight requests and enforces
+ * a minimum interval between request starts. Protects provider APIs from
+ * being overwhelmed by burst tool-call sequences inside the agent loop.
+ */
+class RateLimiter {
+  private active = 0;
+  private lastCall = 0;
+  private queue: (() => void)[] = [];
+  private readonly maxConcurrency: number;
+  private readonly minIntervalMs: number;
+
+  constructor(maxConcurrency = 2, minIntervalMs = 0) {
+    this.maxConcurrency = Math.max(1, maxConcurrency);
+    this.minIntervalMs = Math.max(0, minIntervalMs);
+  }
+
+  /** Waits until a slot is available and the minimum interval has elapsed, then resolves. */
+  async acquire(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const tryEnter = () => {
+        const now = Date.now();
+        const waitMs = Math.max(0, this.minIntervalMs - (now - this.lastCall));
+        if (this.active < this.maxConcurrency && waitMs === 0) {
+          this.active++;
+          this.lastCall = now;
+          resolve();
+          return;
+        }
+        setTimeout(() => tryEnter(), Math.max(5, waitMs));
+      };
+      this.queue.push(tryEnter);
+      tryEnter();
+    });
+  }
+
+  /** Signals that a previously acquired slot has been released. */
+  release(): void {
+    this.active--;
+    if (this.active < 0) this.active = 0;
+  }
+}
+
+/** Wrapped provider that applies rate limiting around each chat() call. */
+class RateLimitedProvider implements AiProvider {
+  private limiter: RateLimiter;
+  constructor(private inner: AiProvider, config: AiConfig) {
+    this.limiter = new RateLimiter(config.maxConcurrency ?? 2, config.minIntervalMs ?? 0);
+  }
+
+  async chat(
+    messages: AiMessage[],
+    tools: ToolDefinition[],
+    signal?: AbortSignal,
+    onToken?: (token: string) => void,
+  ): Promise<{ content: string; toolCalls: ToolCall[] }> {
+    await this.limiter.acquire();
+    try {
+      return await this.inner.chat(messages, tools, signal, onToken);
+    } finally {
+      this.limiter.release();
+    }
+  }
+}
+
 export function createAiProvider(config: AiConfig): AiProvider {
+  let inner: AiProvider;
   switch (config.provider) {
     case 'openai':
-      return new OpenAIProvider(config);
+      inner = new OpenAIProvider(config);
+      break;
     case 'anthropic':
-      return new AnthropicProvider(config);
+      inner = new AnthropicProvider(config);
+      break;
     case 'ollama':
-      return new OllamaProvider(config);
+      inner = new OllamaProvider(config);
+      break;
+    default:
+      throw new Error(`Unknown AI provider: ${String(config.provider)}`);
   }
+  return new RateLimitedProvider(inner, config);
 }
 
 function normalizeContent(content: string | { type: string; text?: string; image_url?: { url: string } }[]): unknown {

@@ -10,7 +10,7 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  # ─── Quality ───────────────────────────────────────────────────────
+    # ─── Quality ───────────────────────────────────────────────────────
   quality:
     name: Lint + Typecheck
     runs-on: ubuntu-latest
@@ -21,8 +21,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       - run: npm install --legacy-peer-deps --ignore-scripts
-      - run: npx tsc --noEmit || true
-      - run: npx vitest run --reporter=verbose || true
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+      - name: Run tests
+        run: npx vitest run --reporter=verbose
         env:
           CI: true
 

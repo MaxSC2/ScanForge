@@ -7,6 +7,10 @@ export interface AiConfig {
   model: string;
   maxTokens: number;
   temperature: number;
+  /** Maximum number of concurrent API calls to the provider. Defaults to 2. */
+  maxConcurrency?: number;
+  /** Minimum time (ms) between consecutive API calls. Defaults to 0 (no throttle). */
+  minIntervalMs?: number;
 }
 
 export type AiContentPart =

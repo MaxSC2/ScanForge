@@ -13,6 +13,55 @@ interface PlanStep {
   status: 'pending' | 'running' | 'done' | 'failed';
 }
 
+/**
+ * Client-side validation of an AI tool call before dispatching it to the
+ * underlying stores/services. Checks that the tool name is known, all
+ * required parameters are present, and parameter types match the declared
+ * JSON schema. Returns `null` when valid, or a human-readable error string.
+ *
+ * This prevents malformed or dangerous calls from reaching application code
+ * if the LLM hallucinates a bad argument shape.
+ */
+export function validateToolCall(toolCall: ToolCall): string | null {
+  const def = TOOL_DEFINITIONS.find((t) => t.name === toolCall.name);
+  if (!def) {
+    return `Unknown tool: ${toolCall.name}. Available: ${TOOL_DEFINITIONS.map((t) => t.name).join(', ')}`;
+  }
+
+  const props = (def.parameters as { type: string; properties: Record<string, { type?: string; enum?: unknown[] }>; required?: string[] }) ?? {};
+  const required = props.required ?? [];
+  const properties = props.properties ?? {};
+
+  for (const req of required) {
+    if (toolCall.arguments[req] === undefined || toolCall.arguments[req] === null) {
+      return `Missing required parameter: "${req}" for tool "${toolCall.name}"`;
+    }
+  }
+
+  for (const [key, value] of Object.entries(toolCall.arguments)) {
+    const schema = properties[key];
+    if (!schema) {
+      return `Unknown parameter "${key}" for tool "${toolCall.name}". Allowed: ${Object.keys(properties).join(', ')}`;
+    }
+
+    const expectedType = schema.type;
+    if (expectedType && expectedType !== 'array') {
+      const actual = Array.isArray(value) ? 'array' : typeof value;
+      if (actual !== expectedType && actual !== 'number' && expectedType === 'string' && typeof value !== 'string') {
+        return `Parameter "${key}" expected type "${expectedType}" but got "${actual}"`;
+      }
+    }
+
+    if (schema.enum && !schema.enum.includes(value)) {
+      return `Parameter "${key}" value "${String(value)}" is not in allowed values: ${schema.enum.join(', ')}`;
+    }
+  }
+
+  return null;
+}
+
+
+
 /** A multi-step task plan created by `start_plan` and progressed by `plan_step`. */
 interface Plan {
   id: string;

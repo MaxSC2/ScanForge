@@ -1,6 +1,6 @@
 import type { AiConfig, AiMessage, AgentStatus } from './types';
 import { createAiProvider, type AiProvider } from './provider';
-import { TOOL_DEFINITIONS, dispatchTool } from './tools';
+import { TOOL_DEFINITIONS, dispatchTool, validateToolCall } from './tools';
 import { getMemoryContext } from './memory';
 
 /** Maximum number of non-system messages to retain in the sliding context window. */
@@ -198,6 +198,19 @@ export class AgentOrchestrator {
 
         this.onMessage?.(`⚙️ Calling ${toolCall.name}...`);
 
+        // Client-side validation: reject malformed tool calls before dispatch
+        const validationError = validateToolCall(toolCall);
+        if (validationError) {
+          const output = `Validation error: ${validationError}`;
+          this.messages.push({
+            role: 'tool',
+            content: output,
+            toolCallId: toolCall.id,
+            name: toolCall.name,
+          });
+          continue;
+        }
+
         let output: string;
         try {
           output = await dispatchTool(toolCall);
@@ -213,6 +226,7 @@ export class AgentOrchestrator {
         });
       }
     }
+
 
     this.setStatus('done');
     return fullResponse || 'Готово. Задачи выполнены.';
