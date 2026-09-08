@@ -7,6 +7,7 @@ import { XIcon } from '../../icons';
 import { useJobStore } from '../../stores/useJobStore';
 import { usePageStore } from '../../stores/usePageStore';
 import { useToastStore } from '../../stores/useToastStore';
+import { useEditorStore } from '../../stores/useEditorStore';
 import { isDesktopRuntime } from '../../utils/runtime';
 import { buildCbzBlob } from '../../utils/cbz';
 import { encodeTiff } from '../../utils/tiff';
@@ -130,7 +131,10 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
           ),
         );
         try {
-          const { blob } = await renderPageToBlob(page);
+          const { blob } = await renderPageToBlob(page, {
+            inpaint: true,
+            brushMask: useEditorStore.getState().brushMask,
+          });
           const data = await blob.arrayBuffer();
           const index = String(i + 1).padStart(3, '0');
           rendered.push({ fileName: `page-${index}.png`, data, width: page.naturalWidth, height: page.naturalHeight });

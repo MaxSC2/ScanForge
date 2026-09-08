@@ -19,6 +19,19 @@ export function BrushCanvas({ width, height }: { width: number; height: number }
   const isPainting = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cursorPos = useRef({ x: 0, y: 0 });
+  /** Live strokes mirrored to a ref so mouse-up always sees the latest points. */
+  const strokesRef = useRef<BrushState[]>([]);
+  /** Cached Konva image element for the mask to avoid re-creating every render. */
+  const maskImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Reset strokes when the target page changes (width/height identity changes).
+  const lastSizeRef = useRef(`${width}x${height}`);
+  if (lastSizeRef.current !== `${width}x${height}`) {
+    lastSizeRef.current = `${width}x${height}`;
+    strokesRef.current = [];
+    setStrokes([]);
+    setBrushMask(null);
+  }
 
   const renderMaskToDataUrl = useCallback((allStrokes: BrushState[]) => {
     if (!canvasRef.current) {
@@ -37,13 +50,8 @@ export function BrushCanvas({ width, height }: { width: number; height: number }
       for (let i = 2; i < s.points.length; i += 2) {
         ctx.lineTo(s.points[i], s.points[i + 1]);
       }
-      if (s.erasing) {
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.strokeStyle = '#ffffff';
-      } else {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = '#ffffff';
-      }
+      ctx.globalCompositeOperation = s.erasing ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = s.size;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -56,7 +64,9 @@ export function BrushCanvas({ width, height }: { width: number; height: number }
   const handleMouseDown = () => {
     if (tool !== 'brush') return;
     isPainting.current = true;
-    setStrokes((prev) => [...prev, { points: [], erasing: brushErase, size: brushSize }]);
+    const newStroke: BrushState = { points: [], erasing: brushErase, size: brushSize };
+    strokesRef.current = [...strokesRef.current, newStroke];
+    setStrokes(strokesRef.current);
   };
 
   const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -70,22 +80,33 @@ export function BrushCanvas({ width, height }: { width: number; height: number }
 
     if (!isPainting.current || tool !== 'brush') return;
 
-    setStrokes((prev) => {
-      const updated = [...prev];
-      const last = { ...updated[updated.length - 1] };
-      last.points = [...last.points, x, y];
-      updated[updated.length - 1] = last;
-      return updated;
+    strokesRef.current = strokesRef.current.map((stroke, idx) => {
+      if (idx !== strokesRef.current.length - 1) return stroke;
+      return { ...stroke, points: [...stroke.points, x, y] };
     });
+    setStrokes(strokesRef.current);
   };
 
-  const handleMouseUp = () => {
+  const commitStrokes = () => {
     if (!isPainting.current) return;
     isPainting.current = false;
-    renderMaskToDataUrl(strokes);
+    renderMaskToDataUrl(strokesRef.current);
   };
 
+  const handleMouseUp = () => commitStrokes();
+
   if (tool !== 'brush') return null;
+
+  // Build/reuse the mask image element once.
+  let maskImage: HTMLImageElement | null = null;
+  if (brushMask) {
+    if (!maskImageRef.current || maskImageRef.current.src !== brushMask) {
+      const img = new window.Image();
+      img.src = brushMask;
+      maskImageRef.current = img;
+    }
+    maskImage = maskImageRef.current;
+  }
 
   return (
     <Layer
@@ -95,13 +116,9 @@ export function BrushCanvas({ width, height }: { width: number; height: number }
       onMouseLeave={handleMouseUp}
       listening={tool === 'brush'}
     >
-      {brushMask && (
+      {maskImage && (
         <KonvaImage
-          image={(() => {
-            const img = new window.Image();
-            img.src = brushMask;
-            return img;
-          })()}
+          image={maskImage}
           width={width}
           height={height}
           opacity={0.5}

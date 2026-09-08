@@ -405,6 +405,8 @@ function AiSettings() {
   const [model, setModel] = useState(config?.model ?? 'gpt-4o');
   const [maxTokens, setMaxTokens] = useState(config?.maxTokens ?? 4096);
   const [temperature, setTemperature] = useState(config?.temperature ?? 0.7);
+  const [maxConcurrency, setMaxConcurrency] = useState(config?.maxConcurrency ?? 2);
+  const [minIntervalMs, setMinIntervalMs] = useState(config?.minIntervalMs ?? 0);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [presetName, setPresetName] = useState('');
@@ -421,6 +423,8 @@ function AiSettings() {
     setModel(preset.config.model);
     setMaxTokens(preset.config.maxTokens);
     setTemperature(preset.config.temperature);
+    setMaxConcurrency(preset.config.maxConcurrency ?? 2);
+    setMinIntervalMs(preset.config.minIntervalMs ?? 0);
     setSystemPrompt(preset.systemPrompt ?? '');
     setSelectedPresetId(id);
   };
@@ -434,6 +438,8 @@ function AiSettings() {
       model: model.trim() || getDefaultModel(provider),
       maxTokens,
       temperature,
+      maxConcurrency,
+      minIntervalMs,
     }, systemPrompt || undefined);
   };
 
@@ -446,6 +452,8 @@ function AiSettings() {
       model: model.trim() || getDefaultModel(provider),
       maxTokens,
       temperature,
+      maxConcurrency,
+      minIntervalMs,
     }, systemPrompt || undefined);
     setPresetName('');
   };
@@ -600,6 +608,42 @@ function AiSettings() {
               onChange={(e) => setTemperature(Number(e.target.value))}
               className={inputClass}
             />
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Макс. параллельных запросов
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={maxConcurrency}
+              onChange={(e) => setMaxConcurrency(Number(e.target.value))}
+              className={inputClass}
+            />
+            <span className="text-[9px] text-zinc-600">
+              Сколько запросов к API может идти одновременно (по умолчанию 2)
+            </span>
+          </div>
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Мин. интервал (мс)
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={60000}
+              step={100}
+              value={minIntervalMs}
+              onChange={(e) => setMinIntervalMs(Number(e.target.value))}
+              className={inputClass}
+            />
+            <span className="text-[9px] text-zinc-600">
+              Пауза между запросами для защиты от rate limit (по умолчанию 0)
+            </span>
           </div>
         </div>
 

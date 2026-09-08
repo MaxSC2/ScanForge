@@ -405,6 +405,7 @@ async function runExportJob(job: JobRecord, { updateJob }: JobExecutionBindings)
 
     const exportResult = await exportRenderedPageAsPng(page, {
       ...(job.outputPath ? { outputPath: job.outputPath } : {}),
+      brushMask: useEditorStore.getState().brushMask,
     });
     const result = summarizeExportResult(exportResult);
 

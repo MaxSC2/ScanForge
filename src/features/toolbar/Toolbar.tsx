@@ -80,6 +80,8 @@ export function Toolbar() {
   const zoom = useEditorStore((state) => state.zoom);
   const brushErase = useEditorStore((state) => state.brushErase);
   const setBrushErase = useEditorStore((state) => state.setBrushErase);
+  const brushSize = useEditorStore((state) => state.brushSize);
+  const setBrushSize = useEditorStore((state) => state.setBrushSize);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetZoom = useEditorStore((state) => state.resetZoom);
@@ -311,14 +313,26 @@ export function Toolbar() {
       </div>
 
       {tool === 'brush' && (
-        <IconButton
-          onClick={() => setBrushErase(!brushErase)}
-          tooltip={brushErase ? 'Режим: ластик' : 'Режим: кисть'}
-          active={brushErase}
-          variant="ghost"
-        >
-          <span className="text-[11px] font-bold">{brushErase ? '⊘' : '●'}</span>
-        </IconButton>
+        <div className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1">
+          <IconButton
+            onClick={() => setBrushErase(!brushErase)}
+            tooltip={brushErase ? 'Режим: ластик' : 'Режим: кисть'}
+            active={brushErase}
+            variant="ghost"
+          >
+            <span className="text-[11px] font-bold">{brushErase ? '⊘' : '●'}</span>
+          </IconButton>
+          <input
+            type="range"
+            min={4}
+            max={120}
+            value={brushSize}
+            onChange={(e) => setBrushSize(Number(e.target.value))}
+            className="w-24 accent-indigo-500"
+            title={`Размер кисти: ${brushSize}px`}
+          />
+          <span className="w-7 text-right text-[10px] tabular-nums text-zinc-500">{brushSize}</span>
+        </div>
       )}
 
       <div className="flex-1" />

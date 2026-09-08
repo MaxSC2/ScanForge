@@ -27,6 +27,68 @@ interface RenderTextLayout {
   lines: string[];
 }
 
+export interface RenderPageOptions {
+  inpaint?: boolean;
+  inpaintingProvider?: InpaintingProviderId;
+  /**
+   * Brush mask (data URL of a grayscale image). White pixels mark areas that
+   * must be cleaned: the source content under them is replaced with a blurred
+   * fill derived from surrounding pixels, hiding both original text and any
+   * typeset translation underneath. Applied last, after inpainting + typesetting.
+   */
+  brushMask?: string | null;
+}
+
+/** Loads an <img> from a data URL / src, resolving on load or error. */
+function loadMaskImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to load brush mask image'));
+    img.src = src;
+  });
+}
+
+/**
+ * Applies a brush-cleaning mask to a canvas: for every white pixel of the mask,
+ * replaces the underlying pixels with a blurred copy of the same area. This gives
+ * a "heal" effect that removes leftover text/art outside OCR regions.
+ */
+export async function applyBrushMaskToCanvas(
+  canvas: HTMLCanvasElement,
+  maskSrc: string,
+): Promise<void> {
+  const mask = await loadMaskImage(maskSrc);
+  const width = canvas.width;
+  const height = canvas.height;
+
+  // Rendered copy (already contains translation + inpaint result).
+  const blurred = document.createElement('canvas');
+  blurred.width = width;
+  blurred.height = height;
+  const bCtx = blurred.getContext('2d');
+  if (!bCtx) return;
+  bCtx.filter = 'blur(10px)';
+  bCtx.drawImage(canvas, 0, 0, width, height);
+  bCtx.filter = 'none';
+
+  // Clip the blurred copy to the white mask region only.
+  const maskedBlur = document.createElement('canvas');
+  maskedBlur.width = width;
+  maskedBlur.height = height;
+  const mCtx = maskedBlur.getContext('2d');
+  if (!mCtx) return;
+  mCtx.drawImage(blurred, 0, 0);
+  mCtx.globalCompositeOperation = 'destination-in';
+  mCtx.drawImage(mask, 0, 0, width, height);
+
+  // Composite the mask-limited blur back on top of the source canvas.
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.drawImage(maskedBlur, 0, 0);
+}
+
+
 interface SavedBlobResult {
   saved: boolean;
   canceled: boolean;
@@ -272,7 +334,7 @@ function drawRegionText(
   context.restore();
 }
 
-export async function renderPageToBlob(page: Page, options?: { inpaint?: boolean; inpaintingProvider?: InpaintingProviderId }) {
+export async function renderPageToBlob(page: Page, options: RenderPageOptions = {}) {
   await ensureProjectDomainStatePersisted();
 
   const pageRecord = await pageRepository.getById(page.id);
@@ -324,6 +386,16 @@ export async function renderPageToBlob(page: Page, options?: { inpaint?: boolean
     drawRegionText(context, region, style);
   }
 
+  // Manual brush cleanup: apply mask last so it covers both original text,
+  // inpaint results, and any typeset translation drawn in masked areas.
+  if (options.brushMask) {
+    try {
+      await applyBrushMaskToCanvas(canvas, options.brushMask);
+    } catch {
+      // Mask failure should not abort the whole export — treat as no-op.
+    }
+  }
+
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, 'image/png'),
   );
@@ -339,13 +411,16 @@ export async function renderPageToBlob(page: Page, options?: { inpaint?: boolean
 
 export async function exportRenderedPageAsPng(
   page: Page,
-  options: { outputPath?: string } = {},
+  options: { outputPath?: string; brushMask?: string | null } = {},
 ): Promise<RenderedExportResult> {
   let blob: Blob;
   let translatedRegions: number;
 
   try {
-    const rendered = await renderPageToBlob(page, { inpaint: true });
+    const rendered = await renderPageToBlob(page, {
+      inpaint: true,
+      brushMask: options.brushMask ?? null,
+    });
     blob = rendered.blob;
     translatedRegions = rendered.translatedRegions;
   } catch (error) {

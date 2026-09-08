@@ -5,6 +5,7 @@ import { useAgentStore } from '../stores/useAgentStore';
 import { usePageStore } from '../stores/usePageStore';
 import { useRegionStore } from '../stores/useRegionStore';
 import { useJobStore } from '../stores/useJobStore';
+import { useEditorStore } from '../stores/useEditorStore';
 import { renderPageToBlob } from '../features/export/renderExport';
 import type { AiContentPart } from '../services/ai/types';
 import { useAutoSuggest } from '../hooks/useAutoSuggest';
@@ -237,7 +238,10 @@ export function AgentChat() {
     if (!activePage || status === 'thinking' || attaching) return;
     setAttaching(true);
     try {
-      const { blob } = await renderPageToBlob(activePage);
+      const { blob } = await renderPageToBlob(activePage, {
+        inpaint: true,
+        brushMask: useEditorStore.getState().brushMask,
+      });
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
