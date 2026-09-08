@@ -206,7 +206,7 @@ export function BatchExportDialog({ open, onClose }: BatchExportDialogProps) {
           ctx.drawImage(img, 0, 0);
           const imageData = ctx.getImageData(0, 0, width, height);
           const tiffBytes = encodeTiff(imageData);
-          const blob = new Blob([tiffBytes], { type: 'image/tiff' });
+          const blob = new Blob([tiffBytes as BlobPart], { type: 'image/tiff' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;

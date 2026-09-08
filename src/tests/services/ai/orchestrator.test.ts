@@ -26,7 +26,7 @@ describe('AgentOrchestrator', () => {
     provider: 'openai',
     model: 'gpt-4',
     apiKey: 'sk-test',
-    endpoint: 'https://api.openai.com/v1',
+    baseUrl: 'https://api.openai.com/v1',
   };
 
   beforeEach(() => {

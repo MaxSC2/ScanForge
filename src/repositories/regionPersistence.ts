@@ -1,4 +1,5 @@
 import type { Page, Region, RegionRecord } from '../types';
+import type { ProjectSourceLanguage, ProjectTargetLanguage } from '../types';
 import { normalizeRegion } from '../types/region';
 import { regionRepository } from './regionRepository';
 
@@ -16,13 +17,17 @@ function toRegionRecord(pageId: string, region: Region): RegionRecord {
     order: region.order,
     orientation: region.orientation,
     sourceText: region.sourceText,
-    ...(region.sourceLanguage ? { sourceLanguage: region.sourceLanguage } : {}),
+    ...(region.sourceLanguage
+      ? { sourceLanguage: region.sourceLanguage as ProjectSourceLanguage }
+      : {}),
     translatedText: region.translatedText,
     status: region.status,
     ocrStatus: region.ocrStatus,
     ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
     ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
-    ...(region.targetLanguage ? { targetLanguage: region.targetLanguage } : {}),
+    ...(region.targetLanguage
+      ? { targetLanguage: region.targetLanguage as ProjectTargetLanguage }
+      : {}),
     translationStatus: region.translationStatus,
     ...(region.translationProvider
       ? { translationProvider: region.translationProvider }

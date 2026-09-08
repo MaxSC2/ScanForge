@@ -1,4 +1,4 @@
-export type RegionKind = 'speech' | 'sfx' | 'narration' | 'other';
+export type RegionKind = 'speech' | 'sfx' | 'narration' | 'thought' | 'note' | 'other';
 export type RegionStatus = 'idle' | 'ocr_done' | 'translated';
 export type RegionOrientation = 'horizontal' | 'vertical';
 export type RegionOcrStatus = 'idle' | 'queued' | 'running' | 'done' | 'failed';
@@ -95,6 +95,8 @@ export const REGION_KIND_OPTIONS: { value: RegionKind; label: string; color: str
   { value: 'speech', label: 'Речь', color: '#6366f1' },
   { value: 'sfx', label: 'SFX', color: '#f59e0b' },
   { value: 'narration', label: 'Нарратив', color: '#10b981' },
+  { value: 'thought', label: 'Мысли', color: '#38bdf8' },
+  { value: 'note', label: 'Заметки', color: '#f472b6' },
   { value: 'other', label: 'Другое', color: '#8b5cf6' },
 ];
 

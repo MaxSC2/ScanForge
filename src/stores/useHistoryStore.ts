@@ -33,7 +33,8 @@ interface HistoryState {
 }
 
 const DEFAULT_COALESCE_MS = 700;
-const activeCaptureWindows = new Map<string, number>();
+type TimeoutId = ReturnType<typeof setTimeout>;
+const activeCaptureWindows = new Map<string, TimeoutId>();
 
 function cloneSnapshot(): HistorySnapshot {
   const pageState = useStore('page').getState();

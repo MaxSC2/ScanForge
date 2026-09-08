@@ -228,7 +228,7 @@ async function applyBrowserOcrResult(
           ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
           status: record.translatedText.trim() ? 'translated' : 'ocr_done',
           ocrStatus: 'done',
-          ocrEngine: 'tesseract.js',
+          ocrEngine: 'tesseract',
           ocrUpdatedAt: updatedAt,
           ...(typeof result.confidence === 'number'
             ? { ocrConfidence: result.confidence }
@@ -242,7 +242,7 @@ async function applyBrowserOcrResult(
           ...record,
           ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
           ocrStatus: 'failed',
-          ocrEngine: 'tesseract.js',
+          ocrEngine: 'tesseract',
           ocrUpdatedAt: updatedAt,
           ...(typeof result.confidence === 'number'
             ? { ocrConfidence: result.confidence }

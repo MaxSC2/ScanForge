@@ -5,6 +5,7 @@ import {
   ScanTextIcon,
   SettingsIcon,
   XIcon,
+  ZoomInIcon,
 } from '../icons';
 import { useAgentStore } from '../stores/useAgentStore';
 import { useAiPresetsStore } from '../stores/useAiPresetsStore';
@@ -13,7 +14,7 @@ import { useProjectDomainStore } from '../stores/useProjectDomainStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { usePersistenceStore } from '../stores/usePersistenceStore';
 import { SNAP_THRESHOLD, GRID_STEP } from '../utils/snapping';
-import { formatKeys, SHORTCUT_DEFS, useShortcutsStore } from '../stores/useShortcutsStore';
+import { formatKeys, SHORTCUT_DEFS, useShortcutsStore, type ShortcutDef } from '../stores/useShortcutsStore';
 import { useLocaleStore, type LocaleId } from '../i18n';
 import { ThemeSelector } from '../themes/ThemeSelector';
 
@@ -518,7 +519,7 @@ function AiSettings() {
           </label>
           <select
             value={provider}
-            onChange={(e) => setProvider(e.target.value)}
+            onChange={(e) => setProvider(e.target.value as 'openai' | 'anthropic' | 'ollama')}
             className={inputClass}
           >
             <option value="openai">OpenAI</option>
@@ -711,7 +712,7 @@ function ShortcutsTab() {
   const getBinding = useShortcutsStore((s) => s.getBinding);
 
   const sections = SHORTCUT_DEFS.reduce<
-    { title: string; items: typeof SHORTCUT_DEFS }
+    { title: string; items: ShortcutDef[] }[]
   >((acc, def) => {
     let section = acc.find((s) => s.title === def.category);
     if (!section) {

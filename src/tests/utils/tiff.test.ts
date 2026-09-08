@@ -60,7 +60,7 @@ describe('TIFF encoder', () => {
 
   it('produces a downloadable blob', () => {
     const buf = encodeTiff(makeImg(10, 10));
-    const blob = new Blob([buf], { type: 'image/tiff' });
+    const blob = new Blob([buf as BlobPart], { type: 'image/tiff' });
     expect(blob.size).toBeGreaterThan(100);
     expect(blob.type).toBe('image/tiff');
   });

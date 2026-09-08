@@ -487,7 +487,7 @@ export function BatchRegionActions({
       return a.x - b.x;
     });
     const pageStore = usePageStore.getState();
-    pageStore.setState({
+    usePageStore.setState({
       pages: pageStore.pages.map((p) =>
         p.id === pageId
           ? {

@@ -173,7 +173,7 @@ export function TextStyleEditor({ style, onClose }: TextStyleEditorProps) {
             <label className="mb-0.5 block text-[9px] font-medium text-zinc-500">Выравнивание</label>
             <select
               value={align}
-              onChange={(e) => setAlign(e.target.value)}
+              onChange={(e) => setAlign(e.target.value as 'left' | 'center' | 'right')}
               className={inputClass}
             >
               <option value="left">Влево</option>
@@ -275,7 +275,7 @@ export function TextStyleEditor({ style, onClose }: TextStyleEditorProps) {
               setFontSize(preset.fontSize);
               setLineHeight(preset.lineHeight);
               setLetterSpacing(preset.letterSpacing);
-              setAlign(preset.align);
+              setAlign(preset.align as 'left' | 'center' | 'right');
               setFill(preset.fill);
               setStroke(preset.stroke);
               setStrokeWidth(preset.strokeWidth);

@@ -5,6 +5,8 @@ import {
 } from '../repositories/browserDomainState';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import type {
+  ProjectSourceLanguage,
+  ProjectTargetLanguage,
   LocalProjectLoadResult,
   LocalProjectSaveResult,
   LocalProjectSummary,
@@ -160,13 +162,17 @@ function writeProjectIntoDomainState(
         order: region.order,
         orientation: region.orientation,
         sourceText: region.sourceText,
-        ...(region.sourceLanguage ? { sourceLanguage: region.sourceLanguage } : {}),
+        ...(region.sourceLanguage
+          ? { sourceLanguage: region.sourceLanguage as ProjectSourceLanguage }
+          : {}),
         translatedText: region.translatedText,
         status: region.status,
         ocrStatus: region.ocrStatus,
         ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
         ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
-        ...(region.targetLanguage ? { targetLanguage: region.targetLanguage } : {}),
+        ...(region.targetLanguage
+          ? { targetLanguage: region.targetLanguage as ProjectTargetLanguage }
+          : {}),
         translationStatus: region.translationStatus,
         ...(region.translationProvider
           ? { translationProvider: region.translationProvider }

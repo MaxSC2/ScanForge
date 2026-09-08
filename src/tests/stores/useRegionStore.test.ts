@@ -31,12 +31,11 @@ function createRegion(id: string, overrides: Partial<Region> = {}): Region {
 function createPage(overrides: Partial<Page> = {}): Page {
   return {
     id: 'page-1',
-    label: 'Page 1',
+    fileName: 'page-1.png',
     regions: [],
     naturalWidth: 800,
     naturalHeight: 600,
-    image: null,
-    imageDataUrl: '',
+    imageUrl: '',
     ...overrides,
   };
 }

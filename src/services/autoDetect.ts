@@ -119,7 +119,7 @@ export async function autoDetectRegions(
       translatedText: '',
       status: 'ocr_done',
       ocrStatus: 'done',
-      ocrEngine: 'tesseract.js',
+      ocrEngine: 'tesseract',
       ocrUpdatedAt: now,
       translationStatus: 'idle',
       notes: '',

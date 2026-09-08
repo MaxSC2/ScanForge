@@ -166,7 +166,7 @@ export function encodeTiff(imageData: ImageData): Uint8Array {
 }
 
 export function tiffBlob(imageData: ImageData): Blob {
-  return new Blob([encodeTiff(imageData)], { type: 'image/tiff' });
+  return new Blob([encodeTiff(imageData) as BlobPart], { type: 'image/tiff' });
 }
 
 export function downloadTiff(imageData: ImageData, filename = 'export.tiff') {

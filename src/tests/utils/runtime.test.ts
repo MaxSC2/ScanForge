@@ -19,7 +19,7 @@ describe('runtime', () => {
 
   it('treats injected Tauri globals as desktop runtime even if base detection is unavailable', () => {
     const runtimeWindow = {} as RuntimeWindow;
-    globalThis.window = runtimeWindow;
+    (globalThis as unknown as { window: unknown }).window = runtimeWindow;
     runtimeWindow.__TAURI_INTERNALS__ = {};
     expect(isDesktopRuntime()).toBe(true);
   });

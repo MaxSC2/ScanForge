@@ -36,7 +36,7 @@ export function ImageProcessingPanel() {
   const [processing, setProcessing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const generatePreview = useCallback(async (url: string, opts: ImageProcessOptions) => {
     setProcessing(true);

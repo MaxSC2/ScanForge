@@ -87,7 +87,7 @@ export function useEditorCanvas() {
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
   }, []);
 
-  const isPanMode = tool === 'pan' || spacePanning;
+  const isPanMode = useEditorStore((s) => s.tool) === 'pan' || spacePanning;
 
   const handleContainerMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1) {
