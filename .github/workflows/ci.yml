@@ -149,18 +149,21 @@ jobs:
         run: python3 -c "import json; c=json.load(open('src-tauri/tauri.conf.json')); c['build'].pop('devUrl',None); json.dump(c,open('src-tauri/tauri.conf.json','w'),indent=2)"
       - name: Build APK
         run: npx tauri android build --apk
-      - name: Sign APK
+            - name: Sign and align APK
         run: |
           UNSIGNED=$(find src-tauri/gen/android -name '*-unsigned.apk' 2>/dev/null | head -1)
-          [ -z "$UNSIGNED" ] && UNSIGNED=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
+          [ -z "$UNSIGNED" ] && UNSIGNED=$(find src-tauri/gen/android -name '*.apk' ! -name '*-signed.apk' 2>/dev/null | head -1)
           [ -z "$UNSIGNED" ] && echo "No APK" && exit 1
           BT=$(ls -d $ANDROID_HOME/build-tools/* 2>/dev/null | tail -1)
           KS="$HOME/.android/debug.keystore"
-          [ ! -f "$KS" ] && mkdir -p $HOME/.android && keytool -genkey -v -keystore $KS -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          cp $UNSIGNED ${UNSIGNED%.apk}-signed.apk
-          $BT/apksigner sign --ks $KS --ks-pass pass:android --ks-key-alias androiddebugkey ${UNSIGNED%.apk}-signed.apk
+          [ ! -f "$KS" ] && mkdir -p $HOME/.android && keytool -genkey -v -keystore "$KS" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          ALIGNED="${UNSIGNED%.apk}-aligned.apk"
+          SIGNED="${UNSIGNED%.apk}-signed.apk"
+          $BT/zipalign -w 4 "$UNSIGNED" "$ALIGNED"
+          $BT/apksigner sign --ks "$KS" --ks-pass pass:android --ks-key-alias androiddebugkey --v2-signing-enabled true --out "$SIGNED" "$ALIGNED"
+          $BT/apksigner verify "$SIGNED"
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*signed*.apk
           compression-level: 0

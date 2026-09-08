@@ -12,7 +12,8 @@
     "validate": "node scripts/validate.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "icon:android": "node scripts/gen-android-icon.cjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
