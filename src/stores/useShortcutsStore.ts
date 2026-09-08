@@ -119,7 +119,8 @@ export function matchEvent(event: KeyboardEvent, keys: string): boolean {
   if (combo.key === 'esc') return key === 'escape';
   if (combo.key === 'del') return key === 'delete' || key === 'backspace';
   if (combo.key === 'space') return key === ' ' || key === 'space';
-  return key === combo.key || event.code?.toLowerCase() === combo.key;
+  const code = event.code?.toLowerCase();
+  return key === combo.key || code === combo.key || code === `key${combo.key}`;
 }
 
 function loadOverrides(): Record<string, string> {
