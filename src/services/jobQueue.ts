@@ -83,7 +83,7 @@ export function buildQueuedJobs(
   createdAt: number,
 ): JobRecord[] {
   return targets
-    .map((target, index) => {
+    .map((target, index): JobRecord | null => {
       const page = pagesById.get(target.pageId);
       if (!page) {
         return null;

@@ -5,6 +5,7 @@ import {
 } from '../repositories/browserDomainState';
 import { ensureProjectDomainDefaults } from '../repositories/projectDefaults';
 import type {
+  OcrEngineId,
   ProjectSourceLanguage,
   ProjectTargetLanguage,
   LocalProjectLoadResult,
@@ -168,7 +169,7 @@ function writeProjectIntoDomainState(
         translatedText: region.translatedText,
         status: region.status,
         ocrStatus: region.ocrStatus,
-        ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
+        ...(region.ocrEngine ? { ocrEngine: region.ocrEngine as OcrEngineId } : {}),
         ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
         ...(region.targetLanguage
           ? { targetLanguage: region.targetLanguage as ProjectTargetLanguage }

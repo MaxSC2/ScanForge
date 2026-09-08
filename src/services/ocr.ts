@@ -16,6 +16,8 @@ import type {
   OcrRunOptions,
   OcrRunOptionsWithAbort,
   Page,
+  ProjectSourceLanguage,
+  ProjectTargetLanguage,
   RegionRecord,
 } from '../types';
 import { isDesktopRuntime } from '../utils/runtime';
@@ -129,13 +131,17 @@ function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext
     order: region.order || index + 1,
     orientation: region.orientation,
     sourceText: region.sourceText,
-    ...(region.sourceLanguage ? { sourceLanguage: region.sourceLanguage } : {}),
+    ...(region.sourceLanguage
+      ? { sourceLanguage: region.sourceLanguage as ProjectSourceLanguage }
+      : {}),
     translatedText: region.translatedText,
     status: region.status,
     ocrStatus: region.ocrStatus,
-    ...(region.ocrEngine ? { ocrEngine: region.ocrEngine } : {}),
+    ...(region.ocrEngine ? { ocrEngine: region.ocrEngine as OcrEngineId } : {}),
     ...(typeof region.ocrUpdatedAt === 'number' ? { ocrUpdatedAt: region.ocrUpdatedAt } : {}),
-    ...(region.targetLanguage ? { targetLanguage: region.targetLanguage } : {}),
+    ...(region.targetLanguage
+      ? { targetLanguage: region.targetLanguage as ProjectTargetLanguage }
+      : {}),
     translationStatus: region.translationStatus,
     ...(region.translationProvider ? { translationProvider: region.translationProvider } : {}),
     ...(typeof region.translationUpdatedAt === 'number'
@@ -225,7 +231,7 @@ async function applyBrowserOcrResult(
         await regionRepository.update({
           ...record,
           sourceText: result.text,
-          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
+          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
           status: record.translatedText.trim() ? 'translated' : 'ocr_done',
           ocrStatus: 'done',
           ocrEngine: 'tesseract',
@@ -240,7 +246,7 @@ async function applyBrowserOcrResult(
       if (result.reason === 'invalid_bounds' || result.reason === 'no_text') {
         await regionRepository.update({
           ...record,
-          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage } : {}),
+          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
           ocrStatus: 'failed',
           ocrEngine: 'tesseract',
           ocrUpdatedAt: updatedAt,

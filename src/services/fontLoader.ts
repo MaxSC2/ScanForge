@@ -75,6 +75,6 @@ export function loadFont(family: string): Promise<void> {
 export async function ensureFontsLoaded(
   families: (string | undefined)[],
 ): Promise<void> {
-  const unique = Array.from(new Set(families.filter(Boolean)));
+  const unique = Array.from(new Set(families.filter((f): f is string => Boolean(f))));
   await Promise.all(unique.map(loadFont));
 }

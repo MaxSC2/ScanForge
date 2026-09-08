@@ -64,6 +64,7 @@ describe('jobPersistence', () => {
       {
         id: 'page-1',
         fileName: 'page-1.png',
+        imagePath: 'data:image/png;base64,AAAA',
         imageUrl: 'data:image/png;base64,AAAA',
         naturalWidth: 100,
         naturalHeight: 100,

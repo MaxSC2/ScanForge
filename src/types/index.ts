@@ -31,6 +31,7 @@ export type {
   OcrErrorDetail,
   OcrPageResult,
   OcrProgressCallback,
+  OcrProgressEvent,
   OcrRegionResult,
   OcrRunOptions,
   OcrRunOptionsWithAbort,

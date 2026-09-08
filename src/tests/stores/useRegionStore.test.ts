@@ -32,10 +32,11 @@ function createPage(overrides: Partial<Page> = {}): Page {
   return {
     id: 'page-1',
     fileName: 'page-1.png',
+    imagePath: 'data:image/png;base64,AAAA',
+    imageUrl: 'data:image/png;base64,AAAA',
     regions: [],
     naturalWidth: 800,
     naturalHeight: 600,
-    imageUrl: '',
     ...overrides,
   };
 }

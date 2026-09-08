@@ -59,7 +59,12 @@ export async function autoDetectRegions(
   onProgress?.(0.3, 'Running text detection');
 
   const result = await worker.recognize(imageUrl);
-  const words = result.data.words || [];
+  // tesseract.js v6 types omit `words` on the result page — read defensively.
+  interface DetectedWord {
+    text: string;
+    bbox: { x0: number; y0: number; x1: number; y1: number };
+  }
+  const words = ((result.data as unknown as { words?: DetectedWord[] }).words) || [];
 
   if (words.length === 0) {
     onProgress?.(1.0, 'No text detected');
