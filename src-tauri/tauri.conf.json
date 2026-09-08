@@ -30,7 +30,8 @@
     "active": true,
     "targets": "all",
     "icon": ["icons/icon.ico", "icons/256x256.png", "icons/icon.png"],
-    "android": {
+        "android": {
+      "applicationName": "ScanForge",
       "icon": ["icons/android/icon-512.png", "icons/android/icon-192.png"],
       "roundIcon": ["icons/android/icon-512.png", "icons/android/icon-192.png"],
       "foreground": ["icons/android/foreground.png", "icons/android/foreground-192.png"],

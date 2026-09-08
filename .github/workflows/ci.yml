@@ -149,7 +149,7 @@ jobs:
         run: python3 -c "import json; c=json.load(open('src-tauri/tauri.conf.json')); c['build'].pop('devUrl',None); json.dump(c,open('src-tauri/tauri.conf.json','w'),indent=2)"
       - name: Build APK
         run: npx tauri android build --apk
-            - name: Sign and align APK
+      - name: Sign and align APK
         run: |
           UNSIGNED=$(find src-tauri/gen/android -name '*-unsigned.apk' 2>/dev/null | head -1)
           [ -z "$UNSIGNED" ] && UNSIGNED=$(find src-tauri/gen/android -name '*.apk' ! -name '*-signed.apk' 2>/dev/null | head -1)
