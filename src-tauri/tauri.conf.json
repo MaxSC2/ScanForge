@@ -31,8 +31,8 @@
     "targets": "all",
     "icon": [
       "icons/icon.ico",
-      "icons/256x256.png",
-      "icons/icon.png"
+      "icons/android/icon-512.png",
+      "icons/android/icon-192.png"
     ]
   }
 }
