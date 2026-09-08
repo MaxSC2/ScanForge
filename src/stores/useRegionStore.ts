@@ -74,7 +74,10 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     const page = usePageStore.getState().getActivePage();
     if (!page || page.regions.length === 0) return;
     const ids = [...page.regions].sort((a, b) => a.order - b.order).map((r) => r.id);
-    set({ selectedRegionId: ids[0] ?? null, multiSelectedRegionIds: ids });
+    set({
+      selectedRegionId: ids[0] ?? null,
+      multiSelectedRegionIds: ids.length > 1 ? ids.slice(1) : [],
+    });
   },
 
   /** Returns the full Region object for the currently selected region, or undefined. */
