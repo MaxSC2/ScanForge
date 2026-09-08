@@ -9,6 +9,7 @@
     "preview": "vite preview",
         "test": "vitest run",
     "test:watch": "vitest",
+    "validate": "node scripts/validate.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "tauri": "tauri"

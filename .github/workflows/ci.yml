@@ -10,9 +10,9 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-    # ─── Quality ───────────────────────────────────────────────────────
+  # ─── Quality (gate for all other jobs) ─────────────────────────
   quality:
-    name: Lint + Typecheck
+    name: Validate + Typecheck + Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       - run: npm install --legacy-peer-deps --ignore-scripts
+      - name: Local validation (scripts)
+        run: npm run validate
       - name: TypeScript typecheck
         run: npx tsc --noEmit
       - name: Run tests
@@ -28,9 +30,10 @@ jobs:
         env:
           CI: true
 
-  # ─── Web build ─────────────────────────────────────────────────────
+  # ─── Web build ─────────────────────────────────────────────────
   web:
     name: Web (Vite)
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,9 +62,10 @@ jobs:
       - uses: actions/deploy-pages@v4
         id: deployment
 
-  # ─── Desktop (Tauri) ──────────────────────────────────────────────
+  # ─── Desktop (Tauri) ──────────────────────────────────────────
   desktop:
     name: Desktop (${{ matrix.os }})
+    needs: quality
     strategy:
       fail-fast: false
       matrix:
@@ -90,6 +94,9 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev \
             librsvg2-dev
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - name: Install target
         if: matrix.os == 'macos-latest'
         run: rustup target add x86_64-apple-darwin
@@ -101,9 +108,10 @@ jobs:
           name: scanforge-${{ matrix.os }}
           path: src-tauri/target/release/bundle/*/scanforge.${{ matrix.extension }}
 
-  # ─── Android ──────────────────────────────────────────────────────
+  # ─── Android ──────────────────────────────────────────────────
   android:
     name: Android (.apk)
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -118,17 +126,14 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev \
             librsvg2-dev
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install Android targets
-        run: |
-          rustup target add aarch64-linux-android
-          rustup target add x86_64-linux-android
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          distribution: 'temurin'
+          workspaces: src-tauri
+      - uses: nick-fields/action-setup-java@v2
+        with:
+          distribution: temurin
           java-version: '17'
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
       - run: npm install --legacy-peer-deps --ignore-scripts
       - name: Init Tauri Android
         run: npx tauri android init
@@ -139,61 +144,23 @@ jobs:
             sed -i 's|<uses-permission android:name="android.permission.INTERNET"/>||g' "$MANIFEST"
             sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' "$MANIFEST"
             sed -i 's|usesCleartextTraffic="${usesCleartextTraffic}"|usesCleartextTraffic="true"|g' "$MANIFEST"
-            echo "=== Patched manifest ==="
-            grep -E "INTERNET|usesCleartext" "$MANIFEST"
           fi
-      - name: Strip devUrl (workaround for Tauri v2 bug #13832)
-        run: python3 -c "import json; cfg=json.load(open('src-tauri/tauri.conf.json')); cfg['build'].pop('devUrl',None); json.dump(cfg, open('src-tauri/tauri.conf.json','w'), indent=2); print(json.dumps(cfg['build'],indent=2))"
-      - name: Build Android APK
+      - name: Strip devUrl (Tauri v2 bug #13832)
+        run: python3 -c "import json; c=json.load(open('src-tauri/tauri.conf.json')); c['build'].pop('devUrl',None); json.dump(c,open('src-tauri/tauri.conf.json','w'),indent=2)"
+      - name: Build APK
         run: npx tauri android build --apk
       - name: Sign APK
         run: |
           UNSIGNED=$(find src-tauri/gen/android -name '*-unsigned.apk' 2>/dev/null | head -1)
-          if [ -z "$UNSIGNED" ]; then
-            UNSIGNED=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
-          fi
-          if [ -z "$UNSIGNED" ]; then
-            echo "✗ No APK found!"
-            find src-tauri/gen/android -name '*.apk' -o -name '*.aab' 2>/dev/null
-            exit 1
-          fi
-          echo "Found: $UNSIGNED ($(du -h "$UNSIGNED" | cut -f1))"
+          [ -z "$UNSIGNED" ] && UNSIGNED=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
+          [ -z "$UNSIGNED" ] && echo "No APK" && exit 1
           BT=$(ls -d $ANDROID_HOME/build-tools/* 2>/dev/null | tail -1)
-          [ -z "$BT" ] && BT=$(ls -d /usr/local/lib/android/sdk/build-tools/* 2>/dev/null | tail -1)
-          echo "Build tools: $BT"
           KS="$HOME/.android/debug.keystore"
-          if [ ! -f "$KS" ]; then
-            mkdir -p "$HOME/.android"
-            keytool -genkey -v -keystore "$KS" -storepass android -alias androiddebugkey \
-              -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          cp "$UNSIGNED" "${UNSIGNED%.apk}-signed.apk"
-          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android \
-            --ks-key-alias androiddebugkey "${UNSIGNED%.apk}-signed.apk"
-          echo "✓ Signed: ${UNSIGNED%.apk}-signed.apk"
-      - name: Verify APK contents
-        run: |
-          APK=$(find src-tauri/gen/android -name '*-signed.apk' 2>/dev/null | head -1)
-          if [ -z "$APK" ]; then
-            APK=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
-          fi
-          echo "=== Verifying: $APK ==="
-          unzip -l "$APK" 2>/dev/null | grep -i "index\.html" && echo "✓ index.html in APK" || echo "✗ index.html MISSING"
-          echo "=== Top entries ==="
-          unzip -l "$APK" 2>/dev/null | head -30
-      - name: Find and copy signed APK
-        run: |
-          APK=$(find src-tauri/gen/android -name '*-signed.apk' 2>/dev/null | head -1)
-          if [ -n "$APK" ]; then
-            cp "$APK" scanforge-android.apk
-          else
-            APK=$(find src-tauri/gen/android -name '*.apk' 2>/dev/null | head -1)
-            cp "$APK" scanforge-android.apk
-          fi
-          echo "APK: $(ls -lh scanforge-android.apk)"
+          [ ! -f "$KS" ] && mkdir -p $HOME/.android && keytool -genkey -v -keystore $KS -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          cp $UNSIGNED ${UNSIGNED%.apk}-signed.apk
+          $BT/apksigner sign --ks $KS --ks-pass pass:android --ks-key-alias androiddebugkey ${UNSIGNED%.apk}-signed.apk
       - uses: actions/upload-artifact@v4
         with:
           name: scanforge-android
-          path: scanforge-android.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           compression-level: 0
