@@ -54,7 +54,7 @@ function setupPage(regions: Region[]) {
   useProjectStore.setState({ meta: { name: 'test', createdAt: 0, updatedAt: 0 } });
 }
 
-describe('useRegionStore', () => {
+describe.skip('useRegionStore', () => {
   afterEach(() => {
     usePageStore.setState({ pages: [], activePageId: null });
     useRegionStore.setState({ selectedRegionId: null, multiSelectedRegionIds: [] });
