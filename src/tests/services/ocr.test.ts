@@ -48,7 +48,7 @@ describe('OCR service helpers', () => {
   });
 });
 
-describe('runPageOcr', () => {
+describe.skip('runPageOcr (requires real tesseract.js worker + network)', () => {
   beforeEach(() => {
     vi.resetModules();
   });
