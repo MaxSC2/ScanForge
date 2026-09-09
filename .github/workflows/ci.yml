@@ -47,9 +47,11 @@ jobs:
         with:
           path: dist/
 
+    # ─── GitHub Pages (опционально) ───────────────────────────────────
+  # Деплой включён только при наличии секрета GH_PAGES_PAT (см. secrets).
   deploy-pages:
     name: Deploy to GitHub Pages
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.GH_PAGES_PAT != ''
     needs: [web]
     permissions:
       pages: write
