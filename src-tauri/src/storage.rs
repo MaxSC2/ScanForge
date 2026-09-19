@@ -460,35 +460,8 @@ impl ProjectRepository {
 
         update_snapshot_last_opened(&connection, id.clone())?;
 
-        match load_snapshot_backup(&connection, id.clone()) {
-            Ok(Some(mut snapshot)) => {
-                snapshot.meta = ProjectMeta {
-                    local_project_id: Some(project_row.id),
-                    name: project_row.name,
-                    created_at: project_row.created_at,
-                    updated_at: project_row.updated_at,
-                };
-                return Ok(LocalProjectLoadResult {
-                    project: snapshot,
-                    source: "snapshot".into(),
-                    warning: None,
-                });
-            }
-            Ok(None) => {}
-            Err(error) => {
-                eprintln!(
-                    "[ScanForge][Recovery] snapshot backup unreadable for {}: {}",
-                    id, error
-                );
-                let project = build_project_from_domain(&connection, project_row.clone())?;
-                return Ok(LocalProjectLoadResult {
-                    project,
-                    source: "domain".into(),
-                    warning: Some("Backup snapshot was unreadable. Restored from domain state.".into()),
-                });
-            }
-        }
-
+        // Normalized domain tables are the authoritative state. The snapshot is
+        // deliberately used only as a recovery path when domain reconstruction fails.
         match build_project_from_domain(&connection, project_row.clone()) {
             Ok(project) => Ok(LocalProjectLoadResult {
                 project,
@@ -500,21 +473,34 @@ impl ProjectRepository {
                     "[ScanForge][Recovery] domain restore failed for {}: {}",
                     id, domain_error
                 );
-                if let Ok(Some(mut snapshot)) = load_snapshot_backup(&connection, id.clone()) {
-                    snapshot.meta = ProjectMeta {
-                        local_project_id: Some(project_row.id),
-                        name: project_row.name,
-                        created_at: project_row.created_at,
-                        updated_at: project_row.updated_at,
-                    };
-                    return Ok(LocalProjectLoadResult {
-                        project: snapshot,
-                        source: "snapshot".into(),
-                        warning: Some("Domain state was incomplete. Restored from backup snapshot.".into()),
-                    });
-                }
 
-                Err(domain_error)
+                match load_snapshot_backup(&connection, id.clone()) {
+                    Ok(Some(mut snapshot)) => {
+                        snapshot.meta = ProjectMeta {
+                            local_project_id: Some(project_row.id),
+                            name: project_row.name,
+                            created_at: project_row.created_at,
+                            updated_at: project_row.updated_at,
+                        };
+
+                        Ok(LocalProjectLoadResult {
+                            project: snapshot,
+                            source: "snapshot".into(),
+                            warning: Some(
+                                "Domain state was incomplete. Restored from backup snapshot."
+                                    .into(),
+                            ),
+                        })
+                    }
+                    Ok(None) => Err(domain_error),
+                    Err(snapshot_error) => {
+                        eprintln!(
+                            "[ScanForge][Recovery] snapshot backup unreadable for {}: {}",
+                            id, snapshot_error
+                        );
+                        Err(domain_error)
+                    }
+                }
             }
         }
     }
