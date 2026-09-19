@@ -15,6 +15,7 @@ export interface MtTranslateResponse {
 }
 
 const STORAGE_KEY = 'scanforge-mt-config';
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export function getMtConfig(): MangaTranslatorConfig {
   try {
@@ -36,10 +37,19 @@ export async function translateViaMangaTranslator(
   const config = getMtConfig();
   if (!config.enabled) throw new Error('manga-translator is disabled');
 
+  const endpoint = new URL(config.endpoint);
+  if (endpoint.protocol !== 'http:' && endpoint.protocol !== 'https:') {
+    throw new Error('Manga Translator endpoint must use HTTP(S)');
+  }
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   // Strip data URL prefix to get raw base64
   const base64 = imageDataUrl.split(',')[1] || imageDataUrl;
 
-  const resp = await fetch(`${config.endpoint}/translate`, {
+  let resp: Response;
+  try {
+    resp = await fetch(`${endpoint.href.replace(/\/$/, '')}/translate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -57,9 +67,23 @@ export async function translateViaMangaTranslator(
     throw new Error(`manga-translator error: ${resp.status} ${resp.statusText}`);
   }
 
-  const data = await resp.json();
+  const data: unknown = await resp.json();
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !('image' in data) ||
+    typeof data.image !== 'string' ||
+    !data.image.trim()
+  ) {
+    throw new Error('manga-translator response is missing a valid image payload');
+  }
+
+  const elapsed = 'elapsed' in data && typeof data.elapsed === 'number' && Number.isFinite(data.elapsed)
+    ? data.elapsed
+    : 0;
+
   return {
     translatedImage: `data:image/png;base64,${data.image}`,
-    elapsed: data.elapsed || 0,
+    elapsed,
   };
 }
