@@ -137,7 +137,7 @@ function applySnapshot(snapshot: HistorySnapshot) {
   });
   useStore('region').setState({
     selectedRegionId: snapshot.selectedRegionId,
-    multiSelectedRegionIds: snapshot.multiSelectedRegionIds,
+    multiSelectedRegionIds: [...snapshot.multiSelectedRegionIds],
   });
   useProjectStore.setState({ meta: structuredClone(snapshot.meta) });
   useStore('domain').setState({
