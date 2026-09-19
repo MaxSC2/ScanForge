@@ -107,6 +107,26 @@ describe('CRDT LWW', () => {
     });
   });
 
+
+  it('keeps transmitted remote versions ordered by their real timestamp', () => {
+    initCrdtMeta(RID, PID, USER_A);
+
+    expect(resolveRemote(RID, 'x', { t: 1000, u: USER_A })).toBe(true);
+    expect(resolveRemote(RID, 'x', { t: 1500, u: USER_B })).toBe(true);
+    expect(resolveRemote(RID, 'x', { t: 1200, u: USER_A })).toBe(false);
+
+    expect(getCrdtMeta(RID)!.versions['x']).toEqual({ t: 1500, u: USER_B });
+  });
+
+  it('rejects late field updates after a deletion tombstone', () => {
+    initCrdtMeta(RID, PID, USER_A);
+
+    expect(markDeleted(RID, USER_B, PID, { t: 2000, u: USER_B })).toBe(true);
+    expect(resolveRemote(RID, 'x', { t: 1000, u: USER_A })).toBe(false);
+    expect(resolveRemote(RID, 'x', { t: 3000, u: USER_A })).toBe(false);
+    expect(isDeleted(RID)).toBe(true);
+  });
+
   describe('buildVersionMap', () => {
     it('creates version entries for each field in patch', () => {
       initCrdtMeta(RID, PID, USER_A);
