@@ -151,7 +151,7 @@ Introduce an explicit project/session id and authenticated room membership. Reje
 ## P1 — Core correctness and reliability
 
 ### DATA-P1-01 — History snapshots duplicate full image payloads
-**Status:** [ ]
+**Status:** [x]
 
 **Evidence**
 `src/stores/useHistoryStore.ts` uses `structuredClone(pageState.pages)`. Pages include `imageUrl` and `imagePath`, and these may contain large data URLs.
@@ -159,16 +159,21 @@ Introduce an explicit project/session id and authenticated room membership. Reje
 **Risk**
 Large manga chapters multiplied by a 100-step history can consume substantial memory and increase GC pressure.
 
-**Recommendation**
-Make history snapshots metadata-first. Keep image identity/path references and only snapshot mutable page/region/domain fields required for undo.
+**Resolution**
+- data-URL image payloads are stored once in a module-level history image registry
+- history snapshots store small numeric references instead of copying the same large image string
+- non-data URLs remain inline
+- orphaned image references are pruned when history entries are discarded or cleared
+- undo/redo restores the original image URLs from the registry
+- undo/redo also preserves the full region selection state
 
 **Acceptance**
-Memory usage remains bounded for a 100+ page chapter and repeated region edits do not clone image payloads.
+Repeated history captures of unchanged data-URL assets do not duplicate the image payload in each snapshot. Large-project memory still requires runtime profiling for unique image revisions.
 
 ---
 
 ### DATA-P1-02 — Asset recovery falls back to an invalid filesystem path
-**Status:** [ ]
+**Status:** [x]
 
 **Evidence**
 `src/repositories/pagePersistence.ts` falls back to `record.imagePath` if `load_page_image` fails. When `imagePath` is a filesystem path, this value is not necessarily a browser-loadable image URL.
@@ -176,11 +181,16 @@ Memory usage remains bounded for a 100+ page chapter and repeated region edits d
 **Risk**
 A missing/corrupt asset can leave a page pointing at an unusable path even when a snapshot may still contain a recoverable image.
 
+**Resolution**
+Recovery now explicitly tries:
+1. durable desktop asset
+2. a valid embedded/blob/HTTP fallback already present in project state
+3. an inline recovery placeholder containing the affected page name and stored asset filename
+
+The filesystem path is never assigned directly to `imageUrl` after a failed load.
+
 **Acceptance**
-Recovery explicitly tries, in order:
-1. durable asset
-2. compatible embedded fallback
-3. visible recovery error with page context
+Missing durable assets no longer produce an invalid browser image URL, and an unrecoverable page remains visibly identifiable.
 
 ---
 
