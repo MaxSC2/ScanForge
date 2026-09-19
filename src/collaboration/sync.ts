@@ -90,7 +90,6 @@ function handleMessage(data: CollabMessage) {
           } & Record<string, unknown>;
 
           const resolvedPatch: Record<string, unknown> = {};
-          const userId = getUserId();
 
           for (const [field, value] of Object.entries(patch)) {
             if (field === 'id') continue;
@@ -102,18 +101,18 @@ function handleMessage(data: CollabMessage) {
 
           if (Object.keys(resolvedPatch).length > 0) {
             regionStore.updateRegion(op.pageId, id, resolvedPatch);
-            // re-mark local fields as newer after applying remote
-            for (const field of Object.keys(resolvedPatch)) {
-              writeLocal(id, field, userId);
-            }
+            // resolveRemote() already stores the transmitted remote tag.
+            // Re-writing it with Date.now() would incorrectly make this
+            // client look newer than later edits from other clients.
           }
           break;
         }
         case 'region:delete': {
           const { id } = op.payload as { id: string };
-          if (markDeleted(id, op.userId)) {
+          if (markDeleted(id, op.userId, op.pageId, { t: op.timestamp, u: op.userId })) {
             regionStore.deleteRegion(op.pageId, id);
-            clearCrdtMeta(id);
+            // Keep the tombstone until collaboration disconnects so late
+            // updates cannot mutate or resurrect the deleted region.
           }
           break;
         }
@@ -199,12 +198,17 @@ export function disconnectCollab() {
   useCollabStore.getState().reset();
 }
 
-function broadcastOp(type: CollabOp['type'], pageId: string, payload: Record<string, unknown>) {
+function broadcastOp(
+  type: CollabOp['type'],
+  pageId: string,
+  payload: Record<string, unknown>,
+  timestamp = Date.now(),
+) {
   if (ws?.readyState !== WebSocket.OPEN) return;
     const userId = getUserId();
     const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
-    const ts = Date.now();
+    const ts = timestamp;
     const op: CollabOp = {
       id,
       type: type as CollabOp['type'],
@@ -238,8 +242,10 @@ export function broadcastRegionUpdate(pageId: string, id: string, patch: Partial
 }
 
 export function broadcastRegionDelete(pageId: string, id: string) {
-  markDeleted(id, getUserId());
-  broadcastOp('region:delete', pageId, { id });
+  const userId = getUserId();
+  const timestamp = Date.now();
+  markDeleted(id, userId, pageId, { t: timestamp, u: userId });
+  broadcastOp('region:delete', pageId, { id }, timestamp);
 }
 
 export function isCollabConnected(): boolean {
