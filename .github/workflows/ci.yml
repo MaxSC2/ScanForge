@@ -25,6 +25,8 @@ jobs:
         run: npm run validate
       - name: TypeScript typecheck
         run: npx tsc --noEmit
+      - name: ESLint
+        run: npm run lint
       - name: Run tests
         run: npx vitest run --reporter=verbose
         env:
