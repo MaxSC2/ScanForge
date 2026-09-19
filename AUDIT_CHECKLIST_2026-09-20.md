@@ -241,7 +241,7 @@ Provider capability is derived from runtime/provider registry and the UI only of
 ---
 
 ### TEST-P1-01 — Region store tests are skipped
-**Status:** [ ]
+**Status:** [x]
 
 **Evidence**
 `src/tests/stores/useRegionStore.test.ts` wraps the suite in `describe.skip()`.
@@ -249,8 +249,13 @@ Provider capability is derived from runtime/provider registry and the UI only of
 **Risk**
 A critical editor state surface has extensive tests that CI does not execute.
 
+**Resolution**
+- re-enabled the full suite
+- fixed Shift-selection semantics so `multiSelectedRegionIds` remains the non-primary part of the selected set
+- retained coverage for single-select, multi-select, deletion, duplication, reordering and selection helpers
+
 **Acceptance**
-Unskip the suite, repair mocks/fixtures as needed, and require it in CI.
+The suite is no longer skipped and is included in the normal Vitest test command.
 
 ---
 
