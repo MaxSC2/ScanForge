@@ -213,7 +213,7 @@ Either provide real cancellation for each running job type or disable cancellati
 ---
 
 ### OCR-P1-01 — Browser Tesseract worker is hardcoded to English
-**Status:** [ ]
+**Status:** [x]
 
 **Evidence**
 `src/services/ocr.ts` creates the Tesseract worker with `createWorker('eng', 1, ...)` while project settings support Japanese, Chinese, Korean and English.
@@ -221,8 +221,15 @@ Either provide real cancellation for each running job type or disable cancellati
 **Risk**
 Browser OCR can use the wrong language model for non-English source material.
 
+**Resolution**
+- added explicit Tesseract language mapping for `ja/zh/ko/en`
+- `auto` and unknown values use the documented English fallback
+- workers are cached by resolved language code
+- browser OCR passes the resolved project/region language to worker initialization
+- unit coverage added for all supported mappings and fallback behavior
+
 **Acceptance**
-Resolve the worker language from project source language, cache workers by language, and test ja/zh/ko/en.
+Worker language is derived from project source language and model initialization is cached per resolved language.
 
 ---
 
