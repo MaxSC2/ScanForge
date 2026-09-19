@@ -69,7 +69,7 @@ export function recordExportSelectionCanceled(pageId: string, pageName: string) 
       : {}),
     pageId,
   });
-  useToastStore.getState().push(`Р­РєСЃРїРѕСЂС‚ РѕС‚РјРµРЅС‘РЅ: ${pageName}`, 'info');
+  useToastStore.getState().push(`Экспорт отменён: ${pageName}`, 'info');
 }
 
 async function refreshPageRegionsFromRepository(pageId: string) {
