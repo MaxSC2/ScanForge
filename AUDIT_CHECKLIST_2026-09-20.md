@@ -161,6 +161,18 @@ Project/session isolation is enforced server-side. Authentication remains a sepa
 **Resolution**
 The relay now caps WebSocket messages at 1 MiB and rejects operation types outside the supported protocol set. This is a resource/protocol hardening measure, not authentication.
 
+### COLLAB-P2-02 — Room changes after project save/load must rebind the WebSocket
+**Status:** [x]
+
+**Evidence**
+A client can connect while working on an unsaved draft and later receive a persistent project id during autosave or recovery.
+
+**Resolution**
+`ensureCollabRoomIsCurrent()` now detects a room-id change and reconnects the WebSocket to the current project room. Pending operations are replayed only for that room.
+
+**Acceptance**
+Saving or restoring a project while collaboration is connected does not leave the client attached to its old draft room.
+
 ## P1 — Core correctness and reliability
 
 ### DATA-P1-01 — History snapshots duplicate full image payloads
