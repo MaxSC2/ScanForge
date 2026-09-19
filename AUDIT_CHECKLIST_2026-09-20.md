@@ -418,7 +418,7 @@ Add the ESLint dependency set and then make lint a required quality gate.
 ---
 
 ### CI-P2-02 — Validation script checks only a small hardcoded subset
-**Status:** [ ]
+**Status:** [x]
 
 **Evidence**
 `scripts/validate.mjs` transpiles a fixed list of files rather than validating the complete source tree.
