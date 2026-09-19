@@ -28,6 +28,11 @@ function getUserId(): string {
   return id;
 }
 
+function getCollaborationRoomId(userId = getUserId()): string {
+  const projectId = useProjectStore.getState().meta.localProjectId;
+  return projectId ? `project:${projectId}` : `draft:${userId}`;
+}
+
 function getUserColor(id: string): string {
   const colors = [
     '#6366f1', '#22d3ee', '#f472b6', '#34d399',
@@ -46,6 +51,7 @@ function send(msg: CollabMessage) {
 
 function handleMessage(data: CollabMessage) {
   const store = useCollabStore.getState();
+  const roomId = getCollaborationRoomId();
 
   switch (data.type) {
     case 'users':
@@ -59,6 +65,7 @@ function handleMessage(data: CollabMessage) {
 
     case 'op': {
       const op = data.op;
+      if (op.roomId !== roomId) break;
       if (op.userId === getUserId()) {
         store.removePendingOp(op.id);
         send({ type: 'ack', opId: op.id });
@@ -125,6 +132,7 @@ function handleMessage(data: CollabMessage) {
 }
 
 function connectInternal(url: string) {
+  const roomId = getCollaborationRoomId();
   if (ws) {
     ws.close();
     ws = null;
@@ -143,10 +151,10 @@ function connectInternal(url: string) {
 
   ws.onopen = () => {
     useCollabStore.getState().setConnected(true);
-    send({ type: 'join', user: userInfo! });
+    send({ type: 'join', user: userInfo!, roomId });
     useToastStore.getState().push(t('collab.toast.connected'), 'success');
 
-    const pending = useCollabStore.getState().pendingOps;
+    const pending = useCollabStore.getState().pendingOps.filter((op) => op.roomId === roomId);
     for (const op of pending) send({ type: 'op', op });
   };
 
@@ -209,11 +217,12 @@ function broadcastOp(
     const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
     const ts = timestamp;
-    const op: CollabOp = {
-      id,
-      type: type as CollabOp['type'],
-      userId,
-      timestamp: ts,
+  const op: CollabOp = {
+    id,
+    type: type as CollabOp['type'],
+    userId,
+    roomId: getCollaborationRoomId(userId),
+    timestamp: ts,
     pageId,
     payload: { ...payload, _userId: userId, _timestamp: ts },
   };
