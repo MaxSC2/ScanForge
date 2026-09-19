@@ -208,16 +208,19 @@ Missing durable assets no longer produce an invalid browser image URL, and an un
 ---
 
 ### DATA-P1-03 — Snapshot vs normalized DB source of truth is ambiguous
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
-Project status documentation describes normalized SQLite as the core source of truth, while `src-tauri/src/storage.rs` loads the snapshot backup first when opening a project.
+The Tauri loader previously preferred the snapshot even when normalized domain tables contained newer state.
 
-**Risk**
-When snapshot and normalized tables diverge, behavior depends on which layer wins. This is especially risky after partial writes or crash recovery.
+**Resolution**
+`src-tauri/src/storage.rs` now reconstructs the project from normalized domain tables first. The snapshot is used only when domain reconstruction fails, matching the browser repository's domain-first behavior.
+
+**Remaining**
+Add an integration test that creates deliberate domain/snapshot divergence and verifies domain state wins, plus a crash/recovery fixture proving snapshot fallback still works.
 
 **Acceptance**
-Define one authoritative load order, document it, and add divergence/recovery tests.
+A documented domain-first load order is enforced by code and covered by divergence/recovery tests.
 
 ---
 
