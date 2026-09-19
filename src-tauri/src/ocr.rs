@@ -11,11 +11,42 @@ use crate::domain_storage::{DomainRepository, RegionRecord};
 use crate::storage::ProjectRepository;
 use provider::{build_provider_request, run_provider_chain, OcrError, OcrProvider, OcrProviderRequest};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, State};
 
 // Re-export types needed by the Tauri command
 pub use provider::OcrRegionResult;
+
+static CANCELLED_PAGES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+fn cancelled_pages() -> &'static Mutex<HashSet<String>> {
+    CANCELLED_PAGES.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn is_page_ocr_cancelled(page_id: &str) -> bool {
+    cancelled_pages()
+        .lock()
+        .map(|pages| pages.contains(page_id))
+        .unwrap_or(false)
+}
+
+fn clear_page_ocr_cancelled(page_id: &str) {
+    if let Ok(mut pages) = cancelled_pages().lock() {
+        pages.remove(page_id);
+    }
+}
+
+struct OcrCancellationGuard {
+    page_id: String,
+}
+
+impl Drop for OcrCancellationGuard {
+    fn drop(&mut self) {
+        clear_page_ocr_cancelled(&self.page_id);
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,6 +185,15 @@ fn emit_progress(
 }
 
 #[tauri::command]
+pub fn cancel_page_ocr(page_id: String) -> Result<(), String> {
+    cancelled_pages()
+        .lock()
+        .map_err(|_| "Failed to acquire OCR cancellation state".to_string())?
+        .insert(page_id);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn run_page_ocr(
     app_handle: tauri::AppHandle,
     page_id: String,
@@ -162,6 +202,11 @@ pub fn run_page_ocr(
     repository: State<'_, DomainRepository>,
     storage: State<'_, ProjectRepository>,
 ) -> Result<OcrPageResult, String> {
+    clear_page_ocr_cancelled(&page_id);
+    let _cancel_guard = OcrCancellationGuard {
+        page_id: page_id.clone(),
+    };
+
     emit_progress(&app_handle, &page_id, None, 0.05, "Starting OCR".to_string());
 
     let page = repository
@@ -231,6 +276,10 @@ pub fn run_page_ocr(
         format!("OCR failed: {e}")
     })?;
 
+    if is_page_ocr_cancelled(&page_id) {
+        return Err("OCR cancelled".to_string());
+    }
+
     let processed_at = now_ms();
     let result_by_id: std::collections::HashMap<&str, &OcrRegionResult> = provider_output
         .results
@@ -240,6 +289,10 @@ pub fn run_page_ocr(
 
     let total = regions.len() as f64;
     for (index, region) in regions.iter().enumerate() {
+        if is_page_ocr_cancelled(&page_id) {
+            return Err("OCR cancelled".to_string());
+        }
+
         if let Some(result) = result_by_id.get(region.id.as_str()) {
             apply_ocr_result_to_region(
                 &repository,
@@ -272,6 +325,10 @@ pub fn run_page_ocr(
         .results
         .len()
         .saturating_sub(filled_count);
+
+    if is_page_ocr_cancelled(&page_id) {
+        return Err("OCR cancelled".to_string());
+    }
 
     Ok(OcrPageResult {
         engine: provider_output.engine,
