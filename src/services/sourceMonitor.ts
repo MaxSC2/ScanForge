@@ -2,6 +2,33 @@ import type { MangaSource, ChapterEntry, SourceCheckResult } from '../types/sour
 
 const SOURCES_KEY = 'scanforge-sources';
 const CHAPTERS_KEY = 'scanforge-chapters';
+const NETWORK_TIMEOUT_MS = 15_000;
+
+function validateHttpUrl(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Only HTTP(S) source URLs are supported');
+  }
+  return url.href;
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Request timed out after ${NETWORK_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Persistence
@@ -41,7 +68,7 @@ async function parseRssFeed(
   source: MangaSource,
 ): Promise<{ chapters: ChapterEntry[]; error?: string }> {
   try {
-    const resp = await fetch(source.url, {
+    const resp = await fetchWithTimeout(validateHttpUrl(source.url), {
       headers: { 'User-Agent': 'ScanForge/0.1' },
     });
     if (!resp.ok) return { chapters: [], error: `HTTP ${resp.status}` };
@@ -154,11 +181,12 @@ export function getSources(): MangaSource[] {
 }
 
 export function addSource(title: string, url: string, type: 'rss' | 'scrape'): MangaSource {
+  const normalizedUrl = validateHttpUrl(url);
   const sources = loadSources();
   const source: MangaSource = {
     id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     title,
-    url,
+    url: normalizedUrl,
     type,
     lastCheckedAt: null,
     enabled: true,
@@ -251,7 +279,8 @@ export async function downloadChapterImages(
   chapterUrl: string,
 ): Promise<{ images: Blob[]; error?: string }> {
   try {
-    const resp = await fetch(chapterUrl, {
+    const normalizedChapterUrl = validateHttpUrl(chapterUrl);
+    const resp = await fetchWithTimeout(normalizedChapterUrl, {
       headers: { 'User-Agent': 'ScanForge/0.1' },
     });
     if (!resp.ok) return { images: [], error: `HTTP ${resp.status}` };
@@ -267,7 +296,7 @@ export async function downloadChapterImages(
       const src = img.getAttribute('src') || '';
       if (isPageImage(src)) {
         try {
-          const fullUrl = new URL(src, chapterUrl).href;
+          const fullUrl = new URL(src, normalizedChapterUrl).href;
           if (!imageUrls.includes(fullUrl)) imageUrls.push(fullUrl);
         } catch {}
       }
@@ -280,7 +309,7 @@ export async function downloadChapterImages(
     const blobs: Blob[] = [];
     for (const url of imageUrls) {
       try {
-        const imgResp = await fetch(url);
+        const imgResp = await fetchWithTimeout(url);
         if (imgResp.ok) {
           blobs.push(await imgResp.blob());
         }
