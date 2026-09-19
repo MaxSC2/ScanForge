@@ -21,8 +21,9 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws) => {
   const id = `client-${nextId++}`;
   let user = null;
+  let roomId = null;
 
-  clients.set(id, { ws, user });
+  clients.set(id, { ws, user, roomId });
 
   ws.on('message', (raw) => {
     let data;
@@ -33,46 +34,81 @@ wss.on('connection', (ws) => {
     }
 
     switch (data.type) {
-      case 'join':
+      case 'join': {
+        if (
+          !data.user ||
+          typeof data.user.id !== 'string' ||
+          typeof data.user.name !== 'string' ||
+          typeof data.user.color !== 'string' ||
+          typeof data.roomId !== 'string' ||
+          !data.roomId.trim()
+        ) {
+          ws.close(1008, 'Invalid collaboration join');
+          return;
+        }
+
         user = data.user;
-        clients.set(id, { ws, user });
-        broadcast({ type: 'users', users: getUsers() }, id);
+        roomId = data.roomId.trim();
+        clients.set(id, { ws, user, roomId });
+
+        broadcastToRoom(roomId, { type: 'users', users: getUsers(roomId) }, id);
         ws.send(JSON.stringify({
           type: 'users',
-          users: getUsers(),
+          users: getUsers(roomId),
         }));
         break;
+      }
 
-      case 'op':
-        broadcast({ type: 'op', op: data.op }, id);
+      case 'op': {
+        if (
+          !roomId ||
+          !data.op ||
+          typeof data.op.roomId !== 'string' ||
+          data.op.roomId !== roomId ||
+          typeof data.op.id !== 'string' ||
+          typeof data.op.userId !== 'string' ||
+          typeof data.op.pageId !== 'string' ||
+          !data.op.pageId.trim() ||
+          typeof data.op.type !== 'string' ||
+          typeof data.op.timestamp !== 'number'
+        ) {
+          return;
+        }
+
+        broadcastToRoom(roomId, { type: 'op', op: data.op }, id);
         break;
+      }
 
       case 'ack':
-        // Could track delivery, not needed for basic relay
+        // Delivery acknowledgement is intentionally client-side for now.
         break;
     }
   });
 
   ws.on('close', () => {
     clients.delete(id);
-    if (user) {
-      broadcast({ type: 'users', users: getUsers() });
+    if (user && roomId) {
+      broadcastToRoom(roomId, { type: 'users', users: getUsers(roomId) });
     }
   });
 
   ws.on('error', () => clients.delete(id));
 });
 
-function getUsers() {
+function getUsers(roomId) {
   return Array.from(clients.values())
-    .map((c) => c.user)
-    .filter(Boolean);
+    .filter((client) => client.roomId === roomId && client.user)
+    .map((client) => client.user);
 }
 
-function broadcast(msg, excludeId) {
+function broadcastToRoom(roomId, msg, excludeId) {
   const raw = JSON.stringify(msg);
   for (const [cid, client] of clients) {
-    if (cid !== excludeId && client.ws.readyState === 1) {
+    if (
+      client.roomId === roomId &&
+      cid !== excludeId &&
+      client.ws.readyState === 1
+    ) {
       client.ws.send(raw);
     }
   }
