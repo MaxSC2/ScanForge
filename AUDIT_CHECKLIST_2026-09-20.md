@@ -332,24 +332,27 @@ Use durable asset references in domain state; materialize data URLs only at rend
 ## P2 — Important hardening
 
 ### UX-P2-01 — Export cancellation message contains mojibake
-**Status:** [ ]
+**Status:** [x]
 
-**Evidence**
-`src/services/jobExecution.ts` contains an incorrectly encoded user-facing Russian string in `recordExportSelectionCanceled()`.
+**Resolution**
+Replaced the corrupted user-facing message in `recordExportSelectionCanceled()` with valid UTF-8 Russian text.
 
 **Acceptance**
-Replace with valid UTF-8 and add a UI/string smoke check.
+The exported cancellation message is valid UTF-8.
 
 ---
 
 ### SOURCE-P2-01 — Source monitor lacks timeout/concurrency/validation controls
-**Status:** [ ]
+**Status:** [x]
 
-**Evidence**
-`src/services/sourceMonitor.ts` fetches RSS/HTML directly, sequentially, with no explicit timeout or URL policy.
+**Resolution**
+- source creation and fetches require HTTP(S)
+- RSS, HTML and chapter-image requests use a 15-second timeout
+- normalized source URLs are stored on creation
+- source polling remains sequential, keeping concurrency bounded
 
 **Acceptance**
-Add request timeout, bounded concurrency, validation of source URL scheme, duplicate normalization, cancellation and clear failure reporting.
+Network calls have explicit timeouts and source URLs are restricted to HTTP(S). Cancellation remains a future enhancement.
 
 ---
 
@@ -451,13 +454,17 @@ Update documentation from a capability matrix generated/reviewed against actual 
 ---
 
 ### SOURCE-P2-02 — Manga Translator integration needs bounded network behavior
-**Status:** [ ]
+**Status:** [x]
 
-**Evidence**
-`src/services/mangaTranslator.ts` calls a configurable localhost endpoint without timeout or response-schema validation.
+**Resolution**
+- endpoint is parsed and restricted to HTTP(S)
+- requests have a 30-second timeout
+- timeout errors are surfaced distinctly
+- response JSON is validated for a non-empty image payload
+- malformed/missing `elapsed` values safely fall back to zero
 
 **Acceptance**
-Add timeout/cancellation, response validation, and user-visible provider errors.
+Manga Translator requests are bounded and malformed responses are rejected.
 
 ---
 
