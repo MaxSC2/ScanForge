@@ -70,7 +70,7 @@ function restoreImageUrl(image: HistoryImageRef): string {
   if (image.kind === 'inline') return image.value;
   const value = historyImageByRef.get(image.id);
   if (value === undefined) {
-    throw new Error(`History image reference undefined is unavailable`);
+    throw new Error(`History image reference ${image.id} is unavailable`);
   }
   return value;
 }
@@ -203,7 +203,6 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     const past = state.past.slice(0, -1);
     const future = [current, ...state.future];
     pruneHistoryImages(past, future);
-    pruneHistoryImages(past, future);
     set({
       isRestoring: false,
       past,
@@ -224,6 +223,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     applySnapshot(next);
     const past = [...state.past, current].slice(-100);
     const future = state.future.slice(1);
+    pruneHistoryImages(past, future);
     set({
       isRestoring: false,
       past,
