@@ -143,48 +143,48 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
 
   try {
     updateJob(job.id, {
-    status: 'running',
-    startedAt: Date.now(),
-    progress: 0.05,
-    message: 'Preparing OCR job',
-    error: null,
-    result: null,
-  });
+      status: 'running',
+      startedAt: Date.now(),
+      progress: 0.05,
+      message: 'Preparing OCR job',
+      error: null,
+      result: null,
+    });
 
     const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
-  if (!page) {
-    recordJobDiagnostic(job, 'error', 'OCR job failed', 'Page not found');
-    updateJob(job.id, {
-      status: 'failed',
-      finishedAt: Date.now(),
-      progress: 1,
-      error: 'Page not found',
-      message: 'OCR job failed',
-    });
-    return;
-  }
+    if (!page) {
+      recordJobDiagnostic(job, 'error', 'OCR job failed', 'Page not found');
+      updateJob(job.id, {
+        status: 'failed',
+        finishedAt: Date.now(),
+        progress: 1,
+        error: 'Page not found',
+        message: 'OCR job failed',
+      });
+      return;
+    }
 
-  const targetRegions =
-    job.regionIds?.length && job.regionIds.length > 0
-      ? page.regions.filter((region) => job.regionIds?.includes(region.id))
-      : page.regions;
+    const targetRegions =
+      job.regionIds?.length && job.regionIds.length > 0
+        ? page.regions.filter((region) => job.regionIds?.includes(region.id))
+        : page.regions;
 
-  if (targetRegions.length === 0) {
-    recordJobDiagnostic(
-      job,
-      'warning',
-      'OCR skipped: empty selection',
-      'No regions selected for OCR',
-    );
-    updateJob(job.id, {
-      status: 'failed',
-      finishedAt: Date.now(),
-      progress: 1,
-      error: 'No regions selected for OCR',
-      message: 'OCR skipped: empty selection',
-    });
-    return;
-  }
+    if (targetRegions.length === 0) {
+      recordJobDiagnostic(
+        job,
+        'warning',
+        'OCR skipped: empty selection',
+        'No regions selected for OCR',
+      );
+      updateJob(job.id, {
+        status: 'failed',
+        finishedAt: Date.now(),
+        progress: 1,
+        error: 'No regions selected for OCR',
+        message: 'OCR skipped: empty selection',
+      });
+      return;
+    }
 
     await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().ocrOverwrite;
@@ -228,8 +228,8 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       message: outcome.message,
       error: outcome.error,
     });
-    } catch (error) {
-      const isCancellation = error instanceof DOMException && error.name === 'AbortError';
+  } catch (error) {
+    const isCancellation = error instanceof DOMException && error.name === 'AbortError';
 
     if (isCancellation) {
       recordJobDiagnostic(
@@ -249,11 +249,12 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       return;
     }
 
-    const errorMessage = typeof error === 'object' && error !== null && 'message' in error
-      ? (error as OcrErrorDetail).message
-      : error instanceof Error
-        ? error.message
-        : 'OCR backend error';
+    const errorMessage =
+      typeof error === 'object' && error !== null && 'message' in error
+        ? (error as OcrErrorDetail).message
+        : error instanceof Error
+          ? error.message
+          : 'OCR backend error';
 
     recordJobDiagnostic(
       job,
@@ -261,20 +262,18 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       'OCR backend failed',
       formatDiagnosticError(error, 'OCR backend error'),
     );
-      updateJob(job.id, {
-        status: 'failed',
-        finishedAt: Date.now(),
-        progress: 1,
-        error: errorMessage,
-        message: 'OCR job failed',
-        result: null,
-      });
-    }
+    updateJob(job.id, {
+      status: 'failed',
+      finishedAt: Date.now(),
+      progress: 1,
+      error: errorMessage,
+      message: 'OCR job failed',
+      result: null,
+    });
   } finally {
     activeOcrControllers.delete(job.id);
   }
 }
-
 async function runTranslationJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
   updateJob(job.id, {
     status: 'running',
