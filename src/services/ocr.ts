@@ -418,13 +418,3 @@ export async function runPageOcr(
       emitError(page.id, detail);
       throw detail;
     }
-  }
-
-  onProgress?.(0.05, 'Starting OCR');
-
-  let unlisten: UnlistenFn | undefined;
-  let abortListener: (() => void) | undefined;
-  try {
-    unlisten = await listen<OcrProgressEvent>('ocr-progress', (event) => {
-      onProgress?.(event.payload.progress, event.payload.message);
-    });
