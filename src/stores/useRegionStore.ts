@@ -54,8 +54,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
   selectedRegionId: null,
   multiSelectedRegionIds: [],
 
-  /** Selects a region. With Shift, the clicked region becomes primary while preserving the rest of the selected set. */
-  selectRegion: (id, shift = false) => {
+  /** Selects a region. With Shift, the clicked region becomes primary while preserving the rest of the selected set. */  selectRegion: (id, shift = false) => {
     if (!shift || !id) {
       set({ selectedRegionId: id, multiSelectedRegionIds: [] });
       return;
@@ -73,10 +72,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
         return { selectedRegionId: id, multiSelectedRegionIds: otherSelected };
       }
 
-      const wasAlreadySelected = s.multiSelectedRegionIds.includes(id);
-      const multiSelectedRegionIds = wasAlreadySelected
-        ? [...otherSelected, previousPrimary]
-        : [...otherSelected, previousPrimary];
+      const multiSelectedRegionIds = [...otherSelected, previousPrimary];
 
       return {
         selectedRegionId: id,
@@ -87,8 +83,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
 
   /** Selects all regions on the active page, ordered by their `order` property. */
   selectAllRegions: () => {
-    const page = usePageStore.getState().getActivePage();
-    if (!page || page.regions.length === 0) return;
+    const page = usePageStore.getState().getActivePage();    if (!page || page.regions.length === 0) return;
     const ids = [...page.regions].sort((a, b) => a.order - b.order).map((r) => r.id);
     set({
       selectedRegionId: ids[0] ?? null,
