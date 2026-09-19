@@ -413,10 +413,20 @@ export async function runPageOcr(
   onProgress?.(0.05, 'Starting OCR');
 
   let unlisten: UnlistenFn | undefined;
+  let abortListener: (() => void) | undefined;
   try {
     unlisten = await listen<OcrProgressEvent>('ocr-progress', (event) => {
       onProgress?.(event.payload.progress, event.payload.message);
     });
+
+    if (signal) {
+      const handleAbort = () => {
+        void invoke('cancel_page_ocr', { pageId: page.id }).catch(() => {});
+      };
+      signal.addEventListener('abort', handleAbort, { once: true });
+      abortListener = () => signal.removeEventListener('abort', handleAbort);
+      assertNotAborted(signal);
+    }
 
     onProgress?.(0.25, 'Running Tauri OCR backend');
 
@@ -425,6 +435,8 @@ export async function runPageOcr(
       regionIds: options.regionIds,
       overwriteExisting: options.overwriteExisting ?? false,
     });
+
+    assertNotAborted(signal);
 
     return {
       ...result,
@@ -435,7 +447,14 @@ export async function runPageOcr(
     };
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    const message = typeof error === 'string' ? error : error instanceof Error ? error.message : 'OCR backend error';
+    if (signal?.aborted) {
+      throw new DOMException('OCR cancelled', 'AbortError');
+    }
+    const message = typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : 'OCR backend error';
     const detail: OcrErrorDetail = {
       provider: 'tauri-backend',
       message,
@@ -444,6 +463,7 @@ export async function runPageOcr(
     emitError(page.id, detail);
     throw detail;
   } finally {
+    abortListener?.();
     unlisten?.();
   }
 }
