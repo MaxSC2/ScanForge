@@ -263,8 +263,15 @@ export const useJobStore = create<JobState>((set, get) => ({
     const job = get().jobs.find((item) => item.id === jobId);
     if (!job || (job.status !== 'queued' && job.status !== 'running')) return;
 
-    if (job.stage === 'ocr' && job.status === 'running') {
-      if (cancelOcrJobExecution(jobId)) {
+    if (job.status === 'running') {
+      if (job.stage === 'ocr') {
+        if (cancelOcrJobExecution(jobId)) {
+          return;
+        }
+      } else {
+        useToastStore
+          .getState()
+          .push('Эта операция уже выполняется и пока не поддерживает отмену', 'warning');
         return;
       }
     }
