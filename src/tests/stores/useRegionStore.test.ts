@@ -54,7 +54,7 @@ function setupPage(regions: Region[]) {
   useProjectStore.setState({ meta: { name: 'test', createdAt: 0, updatedAt: 0 } });
 }
 
-describe.skip('useRegionStore', () => {
+describe('useRegionStore', () => {
   afterEach(() => {
     usePageStore.setState({ pages: [], activePageId: null });
     useRegionStore.setState({ selectedRegionId: null, multiSelectedRegionIds: [] });
@@ -75,7 +75,7 @@ describe.skip('useRegionStore', () => {
       expect(useRegionStore.getState().selectedRegionId).toBeNull();
     });
 
-    it.skip('adds to multi-selection with shift', () => {
+    it('adds to multi-selection with shift', () => {
       setupPage([createRegion('r1'), createRegion('r2'), createRegion('r3')]);
       useRegionStore.getState().selectRegion('r1');
       useRegionStore.getState().selectRegion('r2', true);
@@ -83,7 +83,7 @@ describe.skip('useRegionStore', () => {
       expect(useRegionStore.getState().multiSelectedRegionIds).toEqual(['r1']);
     });
 
-    it.skip('removes from multi-selection on shift+click when already selected', () => {
+    it('removes from multi-selection on shift+click when already selected', () => {
       setupPage([createRegion('r1'), createRegion('r2')]);
       useRegionStore.getState().selectRegion('r1');
       useRegionStore.getState().selectRegion('r2', true);
