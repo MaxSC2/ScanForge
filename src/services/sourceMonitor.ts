@@ -114,7 +114,7 @@ async function scrapeChapterList(
   source: MangaSource,
 ): Promise<{ chapters: ChapterEntry[]; error?: string }> {
   try {
-    const resp = await fetch(source.url, {
+    const resp = await fetchWithTimeout(validateHttpUrl(source.url), {
       headers: { 'User-Agent': 'ScanForge/0.1' },
     });
     if (!resp.ok) return { chapters: [], error: `HTTP ${resp.status}` };
