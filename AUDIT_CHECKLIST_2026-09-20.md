@@ -214,16 +214,19 @@ Define one authoritative load order, document it, and add divergence/recovery te
 ---
 
 ### JOB-P1-01 — Running translation/export jobs are not truly cancellable
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
-Only OCR received an execution cancellation path. Generic `cancelJob()` can change running translation/export jobs to failed without stopping the underlying operation.
+Only OCR has an execution cancellation path.
 
-**Risk**
-UI says a job was cancelled while work may continue and later mutate project state or produce an artifact.
+**Resolution**
+Running translation/export jobs are no longer falsely marked as cancelled. The job store now keeps them running and shows that cancellation is not yet supported; queued jobs can still be cancelled before execution.
+
+**Remaining**
+A true cancellation channel still needs to be implemented for translation and export execution.
 
 **Acceptance**
-Either provide real cancellation for each running job type or disable cancellation while the job is non-cancellable and label the behavior honestly.
+No running job is marked cancelled unless its underlying execution has actually been stopped.
 
 ---
 
@@ -249,16 +252,19 @@ Worker language is derived from project source language and model initialization
 ---
 
 ### TRANS-P1-01 — Desktop and browser translation providers disagree
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
 Browser code supports several provider ids, while `src-tauri/src/translation.rs` currently implements only local/mock and explicitly rejects remote.
 
-**Risk**
-The same setting can behave differently depending on runtime. A provider shown as available in the UI may silently fall back or fail on desktop.
+**Resolution**
+Desktop now routes implemented browser-capable providers (`offline`, `deepl`, `libre`, `ollama`, `sakura`) through the browser provider path instead of silently falling back to the Tauri local/mock chain.
+
+**Remaining**
+The `remote` provider is still not implemented as a desktop/browser executable provider, and there is no single capability registry shared by UI and runtime.
 
 **Acceptance**
-Provider capability is derived from runtime/provider registry and the UI only offers executable providers.
+A configured provider must execute through a matching implemented runtime path or be rejected explicitly. A unified capability registry remains follow-up work.
 
 ---
 
