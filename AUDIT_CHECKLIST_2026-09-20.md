@@ -405,16 +405,22 @@ Label it clearly as basic fallback and test IOPaint/content-aware providers as s
 ---
 
 ### PLUGIN-P2-01 — Plugin trust model is implicit
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
 `src/plugins/loader.ts` executes plugin source with `new Function()`, and plugin API exposes page/region access plus network fetch.
 
-**Risk**
-Installed plugin code has broad application-level privileges.
+**Resolution**
+- remote plugin source is restricted to HTTP(S)
+- remote plugin downloads have a 15-second timeout and 1 MiB size cap
+- failed plugin initialization no longer leaves a registered plugin entry behind
+- a plugin is registered only after successful factory initialization
+
+**Remaining**
+Plugin code is still trusted application-level JavaScript. No sandbox or capability isolation exists.
 
 **Acceptance**
-Document plugins as trusted local code at minimum. For untrusted plugins, introduce isolation/capability restrictions before distributing them as third-party extensions.
+Treat plugins as trusted code in product documentation. Add sandbox/capability restrictions before supporting untrusted third-party plugins.
 
 ---
 
