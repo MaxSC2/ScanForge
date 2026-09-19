@@ -47,7 +47,7 @@ for (const abs of sourceFiles) {
   const rel = path.relative(ROOT, abs).replace(/\\/g, '/');
   try {
     const src = fs.readFileSync(abs, 'utf8');
-    ts.transpileModule(src, {
+    const result = ts.transpileModule(src, {
       compilerOptions: {
         module: ts.ModuleKind.ESNext,
         target: ts.ScriptTarget.ES2020,
@@ -56,6 +56,15 @@ for (const abs of sourceFiles) {
       fileName: abs,
       reportDiagnostics: true,
     });
+
+    if (result.diagnostics?.length) {
+      const message = ts.flattenDiagnosticMessageText(
+        result.diagnostics.map((diagnostic) => diagnostic.messageText).join('\n'),
+        '\n',
+      );
+      throw new Error(message);
+    }
+
     console.log(`  ✓ ${rel}`);
   } catch (e) {
     console.log(`  ✗ ${rel}: ${e.message}`);
