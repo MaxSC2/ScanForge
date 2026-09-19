@@ -18,6 +18,8 @@ import {
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let userInfo: CollabUser | null = null;
+let connectedRoomId: string | null = null;
+let connectedServerUrl: string | null = null;
 
 function getUserId(): string {
   let id = localStorage.getItem('scanforge-collab-userid');
@@ -133,6 +135,8 @@ function handleMessage(data: CollabMessage) {
 
 function connectInternal(url: string) {
   const roomId = getCollaborationRoomId();
+  connectedRoomId = roomId;
+  connectedServerUrl = url;
   if (ws) {
     ws.close();
     ws = null;
@@ -166,6 +170,8 @@ function connectInternal(url: string) {
   };
 
   ws.onclose = () => {
+    connectedRoomId = null;
+    connectedServerUrl = null;
     useCollabStore.getState().setConnected(false);
     useToastStore.getState().push(t('collab.toast.disconnected'), 'info');
     ws = null;
@@ -189,6 +195,17 @@ function scheduleReconnect(url: string) {
 export function connectCollab(url?: string) {
   const serverUrl = url ?? useCollabStore.getState().serverUrl;
   useCollabStore.getState().setServerUrl(serverUrl);
+  clearAllCrdtMeta();
+  connectInternal(serverUrl);
+}
+
+export function ensureCollabRoomIsCurrent(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  const currentRoomId = getCollaborationRoomId();
+  if (connectedRoomId === currentRoomId) return;
+
+  const serverUrl = connectedServerUrl ?? useCollabStore.getState().serverUrl;
   clearAllCrdtMeta();
   connectInternal(serverUrl);
 }
