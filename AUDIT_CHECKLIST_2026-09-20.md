@@ -132,19 +132,24 @@ Every job state mutation launched its own asynchronous persistence operation. Ra
 ## P0 — Data isolation / security
 
 ### COLLAB-P0-01 — Collaboration has no project/session isolation
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
-- `CollabOp` has no project/room identifier
-- `collab-server.js` broadcasts operations to every connected client
-- no authentication or authorization exists
-- arbitrary clients connecting to the relay can receive operations from unrelated work
+The original protocol had no project/room identifier and the relay broadcast operations to every connected client. Authentication/authorization is still absent.
 
-**Risk**
-Two separate projects connected to the same relay can exchange region operations.
+**Resolution**
+- `CollabOp.roomId` now carries the logical collaboration room
+- room id is derived from the persisted project id, with a per-user draft room before persistence
+- reconnect only resends pending operations belonging to the current room
+- the client ignores operations from another room as defense in depth
+- `collab-server.js` stores each socket's room and broadcasts users/operations only inside that room
+- the relay validates the join payload and rejects operations whose room does not match the socket's room
+
+**Remaining**
+Authenticated room membership and a server-side credential/token are still required before collaboration should be treated as production-secure.
 
 **Acceptance**
-Introduce an explicit project/session id and authenticated room membership. Reject operations whose room/session does not match the connected client.
+Project/session isolation is enforced server-side. Authentication remains a separate follow-up hardening item.
 
 ---
 
@@ -506,7 +511,7 @@ The audit branch does not duplicate that change. The fix should be merged separa
 4. Redesign history snapshots to avoid copying image payloads.
 5. Fix browser OCR language selection.
 6. Resolve desktop/browser translation provider capability mismatch.
-7. Implement collaboration room isolation/authentication before treating collaboration as production-ready.
+7. Add authenticated collaboration room membership before treating collaboration as production-ready.
 8. Harden remaining cancellation semantics for translation/export.
 9. Tighten CI quality gates.
 10. Update README/status docs from actual current behavior.
