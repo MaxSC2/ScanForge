@@ -18,6 +18,7 @@ interface HistorySnapshot {
   activePageId: string | null;
   selectedPageIds: string[];
   selectedRegionId: string | null;
+  multiSelectedRegionIds: string[];
   meta: ProjectMeta;
   settings: ProjectSettingsRecord | null;
   textStyles: TextStyleRecord[];
@@ -121,6 +122,7 @@ function cloneSnapshot(): HistorySnapshot {
     activePageId: pageState.activePageId,
     selectedPageIds: [...pageState.selectedPageIds],
     selectedRegionId: regionState.selectedRegionId,
+    multiSelectedRegionIds: [...regionState.multiSelectedRegionIds],
     meta: structuredClone(projectState.meta),
     settings: domainState.settings ? structuredClone(domainState.settings) : null,
     textStyles: structuredClone(domainState.textStyles),
@@ -133,7 +135,10 @@ function applySnapshot(snapshot: HistorySnapshot) {
     activePageId: snapshot.activePageId,
     selectedPageIds: [...snapshot.selectedPageIds],
   });
-  useStore('region').setState({ selectedRegionId: snapshot.selectedRegionId });
+  useStore('region').setState({
+    selectedRegionId: snapshot.selectedRegionId,
+    multiSelectedRegionIds: snapshot.multiSelectedRegionIds,
+  });
   useProjectStore.setState({ meta: structuredClone(snapshot.meta) });
   useStore('domain').setState({
     settings: snapshot.settings ? structuredClone(snapshot.settings) : null,
