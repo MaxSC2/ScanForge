@@ -380,13 +380,16 @@ Document plugins as trusted local code at minimum. For untrusted plugins, introd
 ---
 
 ### CI-P2-01 — Lint is not a required CI gate
-**Status:** [ ]
+**Status:** [x]
 
 **Evidence**
 `package.json` exposes an ESLint script, but `.github/workflows/ci.yml` quality job does not run lint.
 
+**Resolution**
+The `quality` job now runs `npm run lint` before the test stage, so PRs must pass ESLint before downstream build jobs proceed.
+
 **Acceptance**
-Run lint in the quality job and make it required for PRs.
+Lint is part of the CI quality gate.
 
 ---
 
