@@ -80,6 +80,12 @@ export function resolveRemote(
   const meta = crdtMeta.get(regionId);
   if (!meta) return true; // no local state — accept remote
 
+  // A region deletion is a session-scoped tombstone. Do not allow an
+  // in-flight/late field update to resurrect or mutate a deleted region.
+  if (meta.deleted) {
+    return false;
+  }
+
   const k = key(field, sub);
   const local = meta.versions[k];
 
@@ -96,12 +102,22 @@ export function resolveRemote(
   return false;
 }
 
-export function markDeleted(regionId: string, userId: string): boolean {
+export function markDeleted(
+  regionId: string,
+  userId: string,
+  pageId = '',
+  version?: VersionTag,
+): boolean {
+  const remoteTag = version ?? tag(userId);
   const meta = crdtMeta.get(regionId);
-  const remoteTag = tag(userId);
 
   if (!meta) {
-    // region doesn't exist locally, or already cleaned up
+    crdtMeta.set(regionId, {
+      regionId,
+      pageId,
+      versions: {},
+      deleted: remoteTag,
+    });
     return true;
   }
 
