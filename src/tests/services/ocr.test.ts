@@ -1,11 +1,35 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { computeAverageConfidence } from '../../services/ocr';
+import { computeAverageConfidence, resolveTesseractLanguage } from '../../services/ocr';
 
 // Helper functions from ocr.ts — tested via their behavior
 // We test the publicly observable behavior through runBrowserPreviewOcr
 // and pure helper logic
 
 describe('OCR service helpers', () => {
+  describe('resolveTesseractLanguage', () => {
+    it('maps Japanese to the Japanese Tesseract model', () => {
+      expect(resolveTesseractLanguage('ja')).toBe('jpn');
+    });
+
+    it('maps Chinese to simplified Chinese model', () => {
+      expect(resolveTesseractLanguage('zh')).toBe('chi_sim');
+    });
+
+    it('maps Korean to the Korean Tesseract model', () => {
+      expect(resolveTesseractLanguage('ko')).toBe('kor');
+    });
+
+    it('maps English to the English Tesseract model', () => {
+      expect(resolveTesseractLanguage('en')).toBe('eng');
+    });
+
+    it('uses English as explicit fallback for auto or unknown values', () => {
+      expect(resolveTesseractLanguage('auto')).toBe('eng');
+      expect(resolveTesseractLanguage('xx')).toBe('eng');
+      expect(resolveTesseractLanguage()).toBe('eng');
+    });
+  });
+
   describe('computeAverageConfidence', () => {
     it('returns undefined for empty results', () => {
       expect(computeAverageConfidence([])).toBeUndefined();
