@@ -9,6 +9,14 @@ const { WebSocketServer } = require('ws');
 const PORT = parseInt(process.argv[2], 10) || 8080;
 
 const clients = new Map();
+const ALLOWED_OP_TYPES = new Set([
+  'region:create',
+  'region:update',
+  'region:delete',
+  'region:reorder',
+  'page:select',
+]);
+const MAX_MESSAGE_BYTES = 1024 * 1024;
 let nextId = 1;
 
 const server = http.createServer((req, res) => {
@@ -16,7 +24,7 @@ const server = http.createServer((req, res) => {
   res.end('ScanForge Collab Relay');
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, maxPayload: MAX_MESSAGE_BYTES });
 
 wss.on('connection', (ws) => {
   const id = `client-${nextId++}`;
@@ -70,6 +78,7 @@ wss.on('connection', (ws) => {
           typeof data.op.pageId !== 'string' ||
           !data.op.pageId.trim() ||
           typeof data.op.type !== 'string' ||
+          !ALLOWED_OP_TYPES.has(data.op.type) ||
           typeof data.op.timestamp !== 'number'
         ) {
           return;
