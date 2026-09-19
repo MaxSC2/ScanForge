@@ -54,19 +54,35 @@ export const useRegionStore = create<RegionState>((set, get) => ({
   selectedRegionId: null,
   multiSelectedRegionIds: [],
 
-  /** Selects a single region, or toggles multi-selection when shift is held. Clears multi-select on non-shift clicks. */
+  /** Selects a region. With Shift, the clicked region becomes primary while preserving the rest of the selected set. */
   selectRegion: (id, shift = false) => {
-    if (shift && id) {
-      set((s) => {
-        const exists = s.multiSelectedRegionIds.includes(id);
-        const multi = exists
-          ? s.multiSelectedRegionIds.filter((rid) => rid !== id)
-          : [...s.multiSelectedRegionIds, id];
-        return { selectedRegionId: id, multiSelectedRegionIds: multi.length > 0 ? multi : [] };
-      });
-    } else {
+    if (!shift || !id) {
       set({ selectedRegionId: id, multiSelectedRegionIds: [] });
+      return;
     }
+
+    set((s) => {
+      const previousPrimary = s.selectedRegionId;
+      const otherSelected = s.multiSelectedRegionIds.filter((rid) => rid !== id && rid !== previousPrimary);
+
+      if (!previousPrimary) {
+        return { selectedRegionId: id, multiSelectedRegionIds: otherSelected };
+      }
+
+      if (id === previousPrimary) {
+        return { selectedRegionId: id, multiSelectedRegionIds: otherSelected };
+      }
+
+      const wasAlreadySelected = s.multiSelectedRegionIds.includes(id);
+      const multiSelectedRegionIds = wasAlreadySelected
+        ? [...otherSelected, previousPrimary]
+        : [...otherSelected, previousPrimary];
+
+      return {
+        selectedRegionId: id,
+        multiSelectedRegionIds,
+      };
+    });
   },
 
   /** Selects all regions on the active page, ordered by their `order` property. */
@@ -77,8 +93,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     set({
       selectedRegionId: ids[0] ?? null,
       multiSelectedRegionIds: ids.length > 1 ? ids.slice(1) : [],
-    });
-  },
+    });  },
 
   /** Returns the full Region object for the currently selected region, or undefined. */
   getSelectedRegion: () => {
@@ -157,8 +172,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
               ...applyRegionLifecyclePatch(r, patch),
             });
             return updatedRegion;
-          }
-          return r;
+          }          return r;
         })
         .sort((a, b) => a.order - b.order)
         .map((r, i) => ({ ...r, order: i + 1 })),
@@ -238,7 +252,6 @@ export const useRegionStore = create<RegionState>((set, get) => ({
 
     const targets = page.regions.filter((r) => regionIds.includes(r.id));
     if (targets.length < 2) return;
-
     const minX = Math.min(...targets.map((r) => r.x));
     const minY = Math.min(...targets.map((r) => r.y));
     const maxX = Math.max(...targets.map((r) => r.x + r.width));
