@@ -37,20 +37,33 @@ interface StoredOcrContext {
   }>;
 }
 
-let tesseractWorker: Worker | null = null;
-let tesseractReady = false;
+const TESSERACT_LANGUAGE_CODES: Record<ProjectSourceLanguage, string> = {
+  ja: 'jpn',
+  zh: 'chi_sim',
+  ko: 'kor',
+  en: 'eng',
+  auto: 'eng',
+};
 
-async function getTesseractWorker(): Promise<Worker> {
-  if (tesseractWorker && tesseractReady) return tesseractWorker;
-  if (tesseractWorker) {
-    await tesseractWorker.terminate();
-    tesseractWorker = null;
+export function resolveTesseractLanguage(sourceLanguage?: string): string {
+  if (sourceLanguage && sourceLanguage in TESSERACT_LANGUAGE_CODES) {
+    return TESSERACT_LANGUAGE_CODES[sourceLanguage as ProjectSourceLanguage];
   }
-  tesseractWorker = await createWorker('eng', 1, {
+  return TESSERACT_LANGUAGE_CODES.eng;
+}
+
+const tesseractWorkers = new Map<string, Worker>();
+
+async function getTesseractWorker(sourceLanguage?: string): Promise<Worker> {
+  const language = resolveTesseractLanguage(sourceLanguage);
+  const cached = tesseractWorkers.get(language);
+  if (cached) return cached;
+
+  const worker = await createWorker(language, 1, {
     logger: () => {},
   });
-  tesseractReady = true;
-  return tesseractWorker;
+  tesseractWorkers.set(language, worker);
+  return worker;
 }
 
 function filterTargetRegions(regions: RegionRecord[], regionIds?: string[]) {
@@ -98,7 +111,6 @@ function cropImageToRegion(
     img.src = imageDataUrl;
   });
 }
-
 function emitError(pageId: string, detail: OcrErrorDetail) {
   console.error(`[ScanForge][OCR] ${detail.provider}: ${detail.message}`);
   useDiagnosticsStore.getState().record({
@@ -163,7 +175,7 @@ function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext
     fileName: page.fileName,
     naturalWidth: page.naturalWidth,
     naturalHeight: page.naturalHeight,
-    sourceLanguage: undefined,
+    sourceLanguage: page.regions.find((region) => region.sourceLanguage)?.sourceLanguage,
     ocrEngine: 'mock',
     regions: filterTargetRegions(fallbackRecords, options.regionIds).map((record, index) => ({
       record,
@@ -197,8 +209,7 @@ async function loadStoredOcrContext(page: Page, options: OcrRunOptions, signal?:
       record,
       order: record.order || index + 1,
       label: record.label || `Region ${index + 1}`,
-    })),
-  };
+    })),  };
 }
 
 export function computeAverageConfidence(results: OcrRegionResult[]): number | undefined {
@@ -282,7 +293,7 @@ async function runBrowserOcr(
   let worker: Worker | undefined;
   try {
     onProgress?.(0.1, 'Initializing Tesseract.js OCR engine');
-    worker = await getTesseractWorker();
+    worker = await getTesseractWorker(context.sourceLanguage);
 
     const results: OcrRegionResult[] = [];
 
@@ -297,8 +308,7 @@ async function runBrowserOcr(
           0.2 + ((index + 1) / context.regions.length) * 0.7,
           `Region ${index + 1}/${context.regions.length}: skipped (locked)`,
         );
-        continue;
-      }
+        continue;      }
       if (!(overwriteExisting || regionOverwrite) && region.record.sourceText.trim()) {
         results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'already_filled' });
         onProgress?.(
@@ -418,52 +428,3 @@ export async function runPageOcr(
     unlisten = await listen<OcrProgressEvent>('ocr-progress', (event) => {
       onProgress?.(event.payload.progress, event.payload.message);
     });
-
-    if (signal) {
-      const handleAbort = () => {
-        void invoke('cancel_page_ocr', { pageId: page.id }).catch(() => {});
-      };
-      signal.addEventListener('abort', handleAbort, { once: true });
-      abortListener = () => signal.removeEventListener('abort', handleAbort);
-      assertNotAborted(signal);
-    }
-
-    onProgress?.(0.25, 'Running Tauri OCR backend');
-
-    const result = await invoke<OcrPageResult>('run_page_ocr', {
-      pageId: page.id,
-      regionIds: options.regionIds,
-      overwriteExisting: options.overwriteExisting ?? false,
-    });
-
-    assertNotAborted(signal);
-
-    return {
-      ...result,
-      averageConfidence: computeAverageConfidence(result.results ?? []),
-      failedCount: result.results?.filter(
-        (r) => r.reason === 'invalid_bounds' || r.reason === 'no_text',
-      ).length,
-    };
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    if (signal?.aborted) {
-      throw new DOMException('OCR cancelled', 'AbortError');
-    }
-    const message = typeof error === 'string'
-      ? error
-      : error instanceof Error
-        ? error.message
-        : 'OCR backend error';
-    const detail: OcrErrorDetail = {
-      provider: 'tauri-backend',
-      message,
-      recoverable: true,
-    };
-    emitError(page.id, detail);
-    throw detail;
-  } finally {
-    abortListener?.();
-    unlisten?.();
-  }
-}
