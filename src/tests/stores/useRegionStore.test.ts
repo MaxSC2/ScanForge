@@ -83,7 +83,7 @@ describe('useRegionStore', () => {
       expect(useRegionStore.getState().multiSelectedRegionIds).toEqual(['r1']);
     });
 
-    it('removes from multi-selection on shift+click when already selected', () => {
+    it('promotes an already selected region to primary on shift+click', () => {
       setupPage([createRegion('r1'), createRegion('r2')]);
       useRegionStore.getState().selectRegion('r1');
       useRegionStore.getState().selectRegion('r2', true);
