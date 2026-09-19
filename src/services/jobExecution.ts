@@ -26,6 +26,18 @@ export interface JobExecutionBindings {
   updateJob: (jobId: string, patch: Partial<JobRecord>) => void;
 }
 
+const activeOcrControllers = new Map<string, AbortController>();
+
+export function cancelOcrJobExecution(jobId: string): boolean {
+  const controller = activeOcrControllers.get(jobId);
+  if (!controller) {
+    return false;
+  }
+
+  controller.abort();
+  return true;
+}
+
 function recordJobDiagnostic(
   job: JobRecord,
   level: 'warning' | 'error',
@@ -126,7 +138,11 @@ export async function persistTranslationTargets(pageId: string) {
 }
 
 async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
-  updateJob(job.id, {
+  const abortController = new AbortController();
+  activeOcrControllers.set(job.id, abortController);
+
+  try {
+    updateJob(job.id, {
     status: 'running',
     startedAt: Date.now(),
     progress: 0.05,
@@ -135,7 +151,7 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
     result: null,
   });
 
-  const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
+    const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
   if (!page) {
     recordJobDiagnostic(job, 'error', 'OCR job failed', 'Page not found');
     updateJob(job.id, {
@@ -170,9 +186,6 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
     return;
   }
 
-  const abortController = new AbortController();
-
-  try {
     await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().ocrOverwrite;
     const ocrResult = await runPageOcr(
@@ -215,8 +228,8 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       message: outcome.message,
       error: outcome.error,
     });
-  } catch (error) {
-    const isCancellation = error instanceof DOMException && error.name === 'AbortError';
+    } catch (error) {
+      const isCancellation = error instanceof DOMException && error.name === 'AbortError';
 
     if (isCancellation) {
       recordJobDiagnostic(
@@ -248,14 +261,17 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       'OCR backend failed',
       formatDiagnosticError(error, 'OCR backend error'),
     );
-    updateJob(job.id, {
-      status: 'failed',
-      finishedAt: Date.now(),
-      progress: 1,
-      error: errorMessage,
-      message: 'OCR job failed',
-      result: null,
-    });
+      updateJob(job.id, {
+        status: 'failed',
+        finishedAt: Date.now(),
+        progress: 1,
+        error: errorMessage,
+        message: 'OCR job failed',
+        result: null,
+      });
+    }
+  } finally {
+    activeOcrControllers.delete(job.id);
   }
 }
 
