@@ -153,6 +153,14 @@ Project/session isolation is enforced server-side. Authentication remains a sepa
 
 ---
 
+## Collaboration hardening follow-up
+
+### COLLAB-P2-01 — Relay resource and message bounds
+**Status:** [x]
+
+**Resolution**
+The relay now caps WebSocket messages at 1 MiB and rejects operation types outside the supported protocol set. This is a resource/protocol hardening measure, not authentication.
+
 ## P1 — Core correctness and reliability
 
 ### DATA-P1-01 — History snapshots duplicate full image payloads
@@ -313,16 +321,20 @@ Either fully implement the protocol cases or remove/deprecate them and add proto
 ---
 
 ### COLLAB-P1-02 — Collaboration server has no authentication or authorization
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
-`collab-server.js` is an open WebSocket relay.
+`collab-server.js` remains an open WebSocket relay without a credential-based authentication protocol.
 
-**Risk**
-Anyone who can connect can inject operations or observe connected-user activity.
+**Resolution**
+- server-side room isolation is now enforced
+- join payloads are structurally validated
+- operations are accepted only after a room join and only when `op.roomId` matches the socket room
+- operation type is allowlisted
+- WebSocket message size is capped at 1 MiB
 
-**Acceptance**
-Add authenticated room membership, operation validation, rate limits, and explicit server-side room isolation.
+**Remaining**
+Authenticated room membership, credential/token validation and rate limiting remain required for production-secure collaboration.
 
 ---
 
