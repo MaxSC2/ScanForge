@@ -11,7 +11,6 @@ import {
   writeLocal,
   resolveRemote,
   markDeleted,
-  clearCrdtMeta,
   clearAllCrdtMeta,
   buildVersionMap,
 } from './crdt';
@@ -129,9 +128,6 @@ function handleMessage(data: CollabMessage) {
               ),
             }));
             useProjectStore.getState().touch();
-            // resolveRemote() already stores the transmitted remote tag.
-            // Re-writing it with Date.now() would incorrectly make this
-            // client look newer than later edits from other clients.
           }
           break;
         }
@@ -151,8 +147,6 @@ function handleMessage(data: CollabMessage) {
               ),
             }));
             useProjectStore.getState().touch();
-            // Keep the tombstone until collaboration disconnects so late
-            // updates cannot mutate or resurrect the deleted region.
           }
           break;
         }
@@ -168,7 +162,12 @@ function handleMessage(data: CollabMessage) {
                   const r = change.region as Region;
                   if (!regions.some((region) => region.id === r.id)) {
                     initCrdtMeta(r.id, op.pageId, op.userId);
-                    for (const field of Object.keys(r)) resolveRemote(r.id, field, { t: op.timestamp, u: op.userId });
+                    const createVersions = change.versions && typeof change.versions === 'object'
+                      ? change.versions as Record<string, { t: number; u: string }>
+                      : {};
+                    for (const field of Object.keys(r)) {
+                      resolveRemote(r.id, field, createVersions[field] ?? { t: op.timestamp, u: op.userId });
+                    }
                     regions.push(r);
                   }
                 } else if (change.kind === 'delete' && typeof change.id === 'string') {
@@ -177,7 +176,9 @@ function handleMessage(data: CollabMessage) {
                   }
                 } else if (change.kind === 'update' && typeof change.id === 'string' && change.patch && typeof change.patch === 'object') {
                   const patch = change.patch as Record<string, unknown>;
-                  const versions = change.versions && typeof change.versions === 'object' ? change.versions as Record<string, { t: number; u: string }> : {};
+                  const versions = change.versions && typeof change.versions === 'object'
+                    ? change.versions as Record<string, { t: number; u: string }>
+                    : {};
                   const resolved: Record<string, unknown> = {};
                   for (const [field, value] of Object.entries(patch)) {
                     const tag = versions[field] ?? { t: op.timestamp, u: op.userId };
@@ -324,18 +325,18 @@ function broadcastOp(
   timestamp = Date.now(),
 ) {
   if (ws?.readyState !== WebSocket.OPEN) return;
-    const userId = getUserId();
-    const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
-    const ts = timestamp;
+  const userId = getUserId();
+  const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+
   const op: CollabOp = {
     id,
     type: type as CollabOp['type'],
     userId,
     roomId: getCollaborationRoomId(userId),
-    timestamp: ts,
+    timestamp,
     pageId,
-    payload: { ...payload, _userId: userId, _timestamp: ts },
+    payload,
   };
 
   useCollabStore.getState().addPendingOp(op);
@@ -344,21 +345,23 @@ function broadcastOp(
 
 export function broadcastRegionCreate(pageId: string, region: Region) {
   const userId = getUserId();
+  const timestamp = Date.now();
   initCrdtMeta(region.id, pageId, userId);
   for (const field of Object.keys(region)) {
-    writeLocal(region.id, field, userId);
+    writeLocal(region.id, field, userId, undefined, timestamp);
   }
-  const versions = buildVersionMap(region.id, region as unknown as Record<string, unknown>, userId);
-  broadcastOp('region:create', pageId, { ...region, versions });
+  const versions = buildVersionMap(region.id, region as unknown as Record<string, unknown>, userId, timestamp);
+  broadcastOp('region:create', pageId, { ...region, versions }, timestamp);
 }
 
 export function broadcastRegionUpdate(pageId: string, id: string, patch: Partial<Region>) {
   const userId = getUserId();
-  const versions = buildVersionMap(id, patch as Record<string, unknown>, userId);
+  const timestamp = Date.now();
+  const versions = buildVersionMap(id, patch as Record<string, unknown>, userId, timestamp);
   for (const field of Object.keys(patch)) {
-    writeLocal(id, field, userId);
+    writeLocal(id, field, userId, undefined, timestamp);
   }
-  broadcastOp('region:update', pageId, { id, ...patch, versions });
+  broadcastOp('region:update', pageId, { id, ...patch, versions }, timestamp);
 }
 
 export function broadcastRegionDelete(pageId: string, id: string) {
@@ -372,9 +375,8 @@ export function broadcastRegionReorder(pageId: string, regionIds: string[]) {
   broadcastOp('region:reorder', pageId, { ids: [...regionIds] });
 }
 
-
 export type RegionBatchChange =
-  | { kind: 'create'; region: Region }
+  | { kind: 'create'; region: Region; versions?: Record<string, { t: number; u: string }> }
   | { kind: 'update'; id: string; patch: Partial<Region>; versions?: Record<string, { t: number; u: string }> }
   | { kind: 'delete'; id: string };
 
@@ -382,19 +384,28 @@ export function broadcastRegionBatch(pageId: string, changes: RegionBatchChange[
   if (changes.length === 0) return;
   const userId = getUserId();
   const timestamp = Date.now();
-  for (const change of changes) {
+  const normalizedChanges = changes.map((change) => {
     if (change.kind === 'create') {
       initCrdtMeta(change.region.id, pageId, userId);
-      for (const field of Object.keys(change.region)) writeLocal(change.region.id, field, userId);
-    } else if (change.kind === 'update') {
-      for (const field of Object.keys(change.patch)) writeLocal(change.id, field, userId);
-    } else {
-      markDeleted(change.id, userId, pageId, { t: timestamp, u: userId });
+      for (const field of Object.keys(change.region)) {
+        writeLocal(change.region.id, field, userId, undefined, timestamp);
+      }
+      return {
+        ...change,
+        versions: buildVersionMap(change.region.id, change.region as unknown as Record<string, unknown>, userId, timestamp),
+      };
     }
-  }
-  const normalizedChanges = changes.map((change) => {
-    if (change.kind !== 'update') return change;
-    return { ...change, versions: buildVersionMap(change.id, change.patch as Record<string, unknown>, userId) };
+    if (change.kind === 'update') {
+      for (const field of Object.keys(change.patch)) {
+        writeLocal(change.id, field, userId, undefined, timestamp);
+      }
+      return {
+        ...change,
+        versions: buildVersionMap(change.id, change.patch as Record<string, unknown>, userId, timestamp),
+      };
+    }
+    markDeleted(change.id, userId, pageId, { t: timestamp, u: userId });
+    return change;
   });
   broadcastOp('region:batch', pageId, { changes: normalizedChanges }, timestamp);
 }
