@@ -1,7 +1,6 @@
 # ScanForge Full Audit Checklist — 2026-09-20
 
 ## Audit scope
-
 Static cross-layer audit of the current `main` codebase, followed by targeted fixes on branch `audit/hardening-2026-09-20`.
 
 Reviewed areas:
@@ -48,8 +47,9 @@ A later remote operation could be rejected incorrectly because the receiver had 
 
 **Fix**
 - remote application no longer rewrites resolved fields with a local timestamp
-- transmitted version tags remain authoritative
-- tests cover ordering of multiple remote timestamps
+- local writes now use the exact timestamp that is transmitted with the operation
+- batch create/update changes carry explicit field versions
+- tests cover ordering and exact timestamp alignment
 
 **Files**
 - `src/collaboration/sync.ts`
@@ -144,6 +144,7 @@ The original protocol had no project/room identifier and the relay broadcast ope
 - the client ignores operations from another room as defense in depth
 - `collab-server.js` stores each socket's room and broadcasts users/operations only inside that room
 - the relay validates the join payload and rejects operations whose room does not match the socket's room
+- the relay now requires `op.userId` to match the user id established by the socket's join, preventing simple identity spoofing
 
 **Remaining**
 Authenticated room membership and a server-side credential/token are still required before collaboration should be treated as production-secure.
@@ -159,7 +160,7 @@ Project/session isolation is enforced server-side. Authentication remains a sepa
 **Status:** [x]
 
 **Resolution**
-The relay now caps WebSocket messages at 1 MiB and rejects operation types outside the supported protocol set. This is a resource/protocol hardening measure, not authentication.
+The relay now caps WebSocket messages at 1 MiB, rejects operation types outside the supported protocol set, bounds key ids, validates finite operation timestamps, and limits atomic region batches to 500 changes.
 
 ### COLLAB-P2-02 — Room changes after project save/load must rebind the WebSocket
 **Status:** [x]
@@ -220,19 +221,19 @@ Missing durable assets no longer produce an invalid browser image URL, and an un
 ---
 
 ### DATA-P1-03 — Snapshot vs normalized DB source of truth is ambiguous
-**Status:** [~]
+**Status:** [x]
 
 **Evidence**
 The Tauri loader previously preferred the snapshot even when normalized domain tables contained newer state.
 
 **Resolution**
-`src-tauri/src/storage.rs` now reconstructs the project from normalized domain tables first. The snapshot is used only when domain reconstruction fails, matching the browser repository's domain-first behavior. If snapshot recovery is required, the recovered snapshot is also written back into the normalized project/page/region tables in a transaction, so the next restart does not repeatedly hit the same broken domain state.
+`src-tauri/src/storage.rs` now reconstructs the project from normalized domain tables first. The snapshot is used only when domain reconstruction fails, matching the browser repository's domain-first behavior. If snapshot recovery is required, the recovered snapshot is also written back into the normalized project/page/region tables in a transaction. Tauri `save_project` now imports the supplied project into normalized domain tables and writes the recovery snapshot inside the same SQLite transaction.
 
 **Remaining**
-Add an integration test that creates deliberate domain/snapshot divergence and verifies domain state wins, plus a crash/recovery fixture proving snapshot fallback still works. The autosave sequence still writes the snapshot before the separate page/region sync calls, so a crash-window test is needed before claiming full atomic persistence.
+Add an integration test that creates deliberate domain/snapshot divergence and verifies domain state wins, plus a crash/recovery fixture proving snapshot fallback still works.
 
 **Acceptance**
-A documented domain-first load order is enforced by code and covered by divergence/recovery tests.
+A documented domain-first load order is enforced by code and the save path no longer has the previous JavaScript snapshot-then-domain-sync ordering window.
 
 ---
 
@@ -337,19 +338,16 @@ The protocol previously declared `page:select` as an operation even though page 
 **Acceptance**
 Every client-originated operation type is implemented end-to-end or explicitly removed when its semantics are local-only.
 
-**Acceptance**
-Every protocol message/op type is either implemented end-to-end or explicitly deprecated.
-
 ---
 
 ### COLLAB-P1-03 — Complex region mutations were not synchronized atomically
 **Status:** [x]
 
 **Resolution**
-Added a `region:batch` collaboration operation and relay allowlist. Batch updates, duplicate, merge and split now transmit their related create/update/delete changes as one logical operation, while remote application bypasses local mutation methods to prevent rebroadcast loops.
+Added a `region:batch` collaboration operation and relay allowlist. Batch updates, duplicate, merge and split now transmit their related create/update/delete changes as one logical operation, while remote application bypasses local mutation methods to prevent rebroadcast loops. Local CRDT metadata and transmitted field versions now share the exact operation timestamp.
 
 **Acceptance**
-Complex region mutations have an explicit protocol representation and do not re-enter local collaboration broadcasters when received remotely.
+Complex region mutations have an explicit protocol representation, do not re-enter local collaboration broadcasters when received remotely, and preserve the operation timestamp used for conflict resolution.
 
 ### STORAGE-P1-03 — Tauri project save had a snapshot/domain crash window
 **Status:** [x]
@@ -370,8 +368,10 @@ A successful Tauri save commits normalized domain state and snapshot together, e
 - server-side room isolation is now enforced
 - join payloads are structurally validated
 - operations are accepted only after a room join and only when `op.roomId` matches the socket room
+- operation user id must match the authenticated-by-join socket identity
 - operation type is allowlisted
 - WebSocket message size is capped at 1 MiB
+- batch operation count and key lengths are bounded
 
 **Remaining**
 Authenticated room membership, credential/token validation and rate limiting remain required for production-secure collaboration.
