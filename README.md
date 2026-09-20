@@ -33,36 +33,35 @@ node collab-server.js  # WebSocket relay (для коллаборации)
 
 ## Технологии
 
-- **React 19** + **TypeScript 5.6**
-- **Vite** + **Tauri 2**
-- **Zustand** (все state stores)
-- **Framer Motion** (анимации)
+- **React 19** + **TypeScript 5.9**
+- **Vite 7** + **Tauri 2**
+- **Zustand** (state stores)
+- **Motion** (анимации)
 - **Tailwind CSS 4** (стилизация)
 
-## Фичи
+## Возможности и ограничения
 
-| Фича | Статус |
+| Возможность | Текущее состояние |
 |---|---|
-| Открытие/сохранение проектов (.scanforge.json) | ✅ |
-| Импорт PNG, JPG, PDF, CBZ, CBR | ✅ |
-| Прямоугольные и полигональные регионы | ✅ |
-| Snap-to-grid, snap-to-edges | ✅ |
-| Кисть очистки/ластик | ✅ |
-| Batch-edit регионов (lock, unlock, тип, merge, split) | ✅ |
-| Undo/redo (100 шагов) | ✅ |
-| OCR (Tesseract, PaddleOCR, MangaOCR, Windows OCR) | ✅ |
-| Перевод (mock, local, remote) | ✅ |
-| Пайплайн: OCR → Перевод → Inpaint → Экспорт | ✅ |
-| AI-агент (OpenAI, Anthropic, Ollama) | ✅ |
-| Пресеты проектов | ✅ |
-| Текстовые стили | ✅ |
-| Источники и мониторинг | ✅ |
-| Stitch (склейка страниц) | ✅ |
-| Экспорт: PNG, CBZ, PDF, TIFF | ✅ |
-| i18n (RU/EN) | ✅ |
-| Плагины (пользовательские скрипты) | ✅ |
-| Коллаборация (WebSocket + LWW CRDT) | ✅ |
-| Темы (Dark, Darker, High Contrast) | ✅ |
-| Шаблоны регионов | ✅ |
-| PDF-загрузка (pdf.js) | ✅ |
-| API-сервер (manga-translator, EasyOCR) | ✅ |
+| Проекты и автосохранение | ✅ Нормализованное domain-state; snapshot используется как recovery fallback |
+| Импорт PNG, JPG, PDF, CBZ, CBR | ✅ Реализован |
+| Прямоугольные регионы и batch-операции | ✅ Реализовано |
+| Snap-to-grid / snap-to-edges | ✅ Реализовано |
+| Кисть очистки / ластик | ✅ Реализовано |
+| Undo/redo | ✅ До 100 шагов; data-URL изображения дедуплицируются между snapshot |
+| OCR | ✅ Windows OCR на desktop; Tesseract.js в browser с выбором модели для ja/zh/ko/en |
+| Дополнительные OCR движки | ⚠️ Зависят от runtime/адаптера; capability не везде одинакова |
+| Перевод | ⚠️ Browser: local/mock/offline/DeepL/Libre/Ollama/Sakura; desktop Tauri backend: local/mock |
+| `remote` translation provider | ⚠️ Не реализован как полноценный backend |
+| Pipeline: OCR → Translate → Inpaint → Export | ✅ Основной pipeline реализован; провайдерные ограничения зависят от runtime |
+| AI-агент | ✅ Провайдеры определяются AI runtime/config |
+| Источники и мониторинг | ✅ HTTP(S) с таймаутами; polling последовательный |
+| Stitch | ✅ Реализован |
+| Экспорт PNG/CBZ/PDF/TIFF | ✅ Реализован |
+| i18n RU/EN | ✅ Реализовано |
+| Плагины | ⚠️ Пользовательские скрипты считаются trusted code |
+| Коллаборация | ⚠️ WebSocket + LWW CRDT с server-side room isolation; аутентификация пока не реализована |
+| Темы | ✅ Dark / Darker / High Contrast |
+| Шаблоны регионов | ✅ Реализованы |
+| PDF loading | ✅ Реализован |
+| API-сервер | ⚠️ Локальные/сетевые HTTP endpoints; полноценная auth/TLS модель не реализована |

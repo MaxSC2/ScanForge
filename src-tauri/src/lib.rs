@@ -19,7 +19,7 @@ use domain_storage::{
 };
 use imagick::{check_imagick, convert_with_imagick};
 use ocr::detect::auto_detect_regions;
-use ocr::run_page_ocr;
+use ocr::{cancel_page_ocr, run_page_ocr};
 use std::io;
 use storage::{
     delete_page_image, delete_project_assets, list_project_summaries, load_latest_project_snapshot,
@@ -83,6 +83,7 @@ pub fn run() {
             check_imagick,
             convert_with_imagick,
             run_page_ocr,
+            cancel_page_ocr,
             run_page_translation,
             save_page_image,
             load_page_image,

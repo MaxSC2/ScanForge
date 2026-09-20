@@ -54,31 +54,41 @@ export const useRegionStore = create<RegionState>((set, get) => ({
   selectedRegionId: null,
   multiSelectedRegionIds: [],
 
-  /** Selects a single region, or toggles multi-selection when shift is held. Clears multi-select on non-shift clicks. */
-  selectRegion: (id, shift = false) => {
-    if (shift && id) {
-      set((s) => {
-        const exists = s.multiSelectedRegionIds.includes(id);
-        const multi = exists
-          ? s.multiSelectedRegionIds.filter((rid) => rid !== id)
-          : [...s.multiSelectedRegionIds, id];
-        return { selectedRegionId: id, multiSelectedRegionIds: multi.length > 0 ? multi : [] };
-      });
-    } else {
+  /** Selects a region. With Shift, the clicked region becomes primary while preserving the rest of the selected set. */  selectRegion: (id, shift = false) => {
+    if (!shift || !id) {
       set({ selectedRegionId: id, multiSelectedRegionIds: [] });
+      return;
     }
+
+    set((s) => {
+      const previousPrimary = s.selectedRegionId;
+      const otherSelected = s.multiSelectedRegionIds.filter((rid) => rid !== id && rid !== previousPrimary);
+
+      if (!previousPrimary) {
+        return { selectedRegionId: id, multiSelectedRegionIds: otherSelected };
+      }
+
+      if (id === previousPrimary) {
+        return { selectedRegionId: id, multiSelectedRegionIds: otherSelected };
+      }
+
+      const multiSelectedRegionIds = [...otherSelected, previousPrimary];
+
+      return {
+        selectedRegionId: id,
+        multiSelectedRegionIds,
+      };
+    });
   },
 
   /** Selects all regions on the active page, ordered by their `order` property. */
   selectAllRegions: () => {
-    const page = usePageStore.getState().getActivePage();
-    if (!page || page.regions.length === 0) return;
+    const page = usePageStore.getState().getActivePage();    if (!page || page.regions.length === 0) return;
     const ids = [...page.regions].sort((a, b) => a.order - b.order).map((r) => r.id);
     set({
       selectedRegionId: ids[0] ?? null,
       multiSelectedRegionIds: ids.length > 1 ? ids.slice(1) : [],
-    });
-  },
+    });  },
 
   /** Returns the full Region object for the currently selected region, or undefined. */
   getSelectedRegion: () => {
@@ -157,8 +167,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
               ...applyRegionLifecyclePatch(r, patch),
             });
             return updatedRegion;
-          }
-          return r;
+          }          return r;
         })
         .sort((a, b) => a.order - b.order)
         .map((r, i) => ({ ...r, order: i + 1 })),
@@ -181,6 +190,11 @@ export const useRegionStore = create<RegionState>((set, get) => ({
       ),
     );
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) {
+        m.broadcastRegionBatch(pageId, regionIds.map((id) => ({ kind: 'update' as const, id, patch })));
+      }
+    });
   },
 
   /** Deletes a region and re-numbers the remaining regions. Clears selection if the deleted region was selected. */
@@ -195,6 +209,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     void import('../collaboration/sync').then(m => { if (m.isCollabConnected()) m.broadcastRegionDelete(pageId, regionId); });
     set((s) => ({
       selectedRegionId: s.selectedRegionId === regionId ? null : s.selectedRegionId,
+      multiSelectedRegionIds: s.multiSelectedRegionIds.filter((id) => id !== regionId),
     }));
   },
 
@@ -215,18 +230,35 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     mutatePage(pageId, (regions) => [...regions, newRegion]);
     set({ selectedRegionId: newRegion.id });
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) m.broadcastRegionBatch(pageId, [{ kind: 'create', region: newRegion }]);
+    });
   },
 
   /** Moves a region from one position to another in the region list and re-numbers all regions by order. Captures history. */
   reorderRegions: (pageId, fromIndex, toIndex) => {
+    const page = usePageStore.getState().pages.find((p) => p.id === pageId);
+    if (!page || fromIndex < 0 || toIndex < 0 || fromIndex >= page.regions.length || toIndex >= page.regions.length) {
+      return;
+    }
+
     useHistoryStore.getState().capture();
+    let orderedRegionIds: string[] = [];
     mutatePage(pageId, (regions) => {
       const list = [...regions];
       const [moved] = list.splice(fromIndex, 1);
+      if (!moved) return regions;
       list.splice(toIndex, 0, moved);
+      orderedRegionIds = list.map((region) => region.id);
       return list.map((r, i) => ({ ...r, order: i + 1 }));
     });
     useProjectStore.getState().touch();
+
+    void import('../collaboration/sync').then((m) => {
+      if (orderedRegionIds.length > 0 && m.isCollabConnected()) {
+        m.broadcastRegionReorder(pageId, orderedRegionIds);
+      }
+    });
   },
 
   mergeRegions: (pageId, regionIds) => {
@@ -238,7 +270,6 @@ export const useRegionStore = create<RegionState>((set, get) => ({
 
     const targets = page.regions.filter((r) => regionIds.includes(r.id));
     if (targets.length < 2) return;
-
     const minX = Math.min(...targets.map((r) => r.x));
     const minY = Math.min(...targets.map((r) => r.y));
     const maxX = Math.max(...targets.map((r) => r.x + r.width));
@@ -274,6 +305,14 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     );
     set({ selectedRegionId: merged.id, multiSelectedRegionIds: [] });
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) {
+        m.broadcastRegionBatch(pageId, [
+          ...regionIds.map((id) => ({ kind: 'delete' as const, id })),
+          { kind: 'create' as const, region: merged },
+        ]);
+      }
+    });
   },
 
   splitRegion: (pageId, regionId) => {
@@ -309,6 +348,15 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     );
     set({ selectedRegionId: leftHalf.id, multiSelectedRegionIds: [rightHalf.id] });
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) {
+        m.broadcastRegionBatch(pageId, [
+          { kind: 'delete' as const, id: regionId },
+          { kind: 'create' as const, region: leftHalf },
+          { kind: 'create' as const, region: rightHalf },
+        ]);
+      }
+    });
   },
 }));
 

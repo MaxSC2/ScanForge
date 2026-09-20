@@ -22,8 +22,8 @@ export interface CrdtRegionMeta {
 
 const crdtMeta = new Map<string, CrdtRegionMeta>();
 
-function tag(userId: string): VersionTag {
-  return { t: Date.now(), u: userId };
+function tag(userId: string, timestamp = Date.now()): VersionTag {
+  return { t: timestamp, u: userId };
 }
 
 function isNewer(a: VersionTag, b: VersionTag): boolean {
@@ -60,11 +60,17 @@ export function clearAllCrdtMeta() {
  * Record a local field write and return the version tag.
  * Does NOT check conflicts — this is the authority.
  */
-export function writeLocal(regionId: string, field: string, userId: string, sub?: string) {
+export function writeLocal(
+  regionId: string,
+  field: string,
+  userId: string,
+  sub?: string,
+  timestamp = Date.now(),
+) {
   const meta = crdtMeta.get(regionId);
   if (!meta) return;
   const k = key(field, sub);
-  meta.versions[k] = tag(userId);
+  meta.versions[k] = tag(userId, timestamp);
 }
 
 /**
@@ -79,6 +85,12 @@ export function resolveRemote(
 ): boolean {
   const meta = crdtMeta.get(regionId);
   if (!meta) return true; // no local state — accept remote
+
+  // A region deletion is a session-scoped tombstone. Do not allow an
+  // in-flight/late field update to resurrect or mutate a deleted region.
+  if (meta.deleted) {
+    return false;
+  }
 
   const k = key(field, sub);
   const local = meta.versions[k];
@@ -96,12 +108,22 @@ export function resolveRemote(
   return false;
 }
 
-export function markDeleted(regionId: string, userId: string): boolean {
+export function markDeleted(
+  regionId: string,
+  userId: string,
+  pageId = '',
+  version?: VersionTag,
+): boolean {
+  const remoteTag = version ?? tag(userId);
   const meta = crdtMeta.get(regionId);
-  const remoteTag = tag(userId);
 
   if (!meta) {
-    // region doesn't exist locally, or already cleaned up
+    crdtMeta.set(regionId, {
+      regionId,
+      pageId,
+      versions: {},
+      deleted: remoteTag,
+    });
     return true;
   }
 
@@ -119,16 +141,19 @@ export function isDeleted(regionId: string): boolean {
 
 /**
  * Build a version tag map for a patch, marking all changed fields.
+ * The optional timestamp lets callers use the exact operation timestamp,
+ * keeping local metadata and the transmitted operation causally aligned.
  */
 export function buildVersionMap(
   _regionId: string,
   patch: Record<string, unknown>,
   userId: string,
+  timestamp = Date.now(),
 ): VersionMap {
   const versions: VersionMap = {};
-  const now = tag(userId);
+  const version = tag(userId, timestamp);
   for (const field of Object.keys(patch)) {
-    versions[field] = now;
+    versions[field] = version;
   }
   return versions;
 }

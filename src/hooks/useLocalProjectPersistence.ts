@@ -19,6 +19,7 @@ import {
   syncRegionsForPages,
 } from '../repositories';
 import { hydrateProjectFile } from '../utils/persistence';
+import { ensureCollabRoomIsCurrent } from '../collaboration/sync';
 
 const AUTOSAVE_DELAY_MS = 1500;
 
@@ -65,6 +66,7 @@ export function useLocalProjectPersistence() {
           : pages[0]?.id ?? null;
 
         setMeta(hydrated.meta);
+        ensureCollabRoomIsCurrent();
         setProjectState({
           pages,
           activePageId,
@@ -144,6 +146,7 @@ export function useLocalProjectPersistence() {
           if (useProjectStore.getState().meta.localProjectId !== result.project.meta.localProjectId) {
             useProjectStore.getState().setMeta(result.project.meta);
           }
+          ensureCollabRoomIsCurrent();
           await useProjectDomainStore.getState().hydrateProjectDomain(
             result.project.meta.localProjectId,
           );

@@ -7,6 +7,7 @@ import { pickRenderedPageExportPath } from '../features/export/renderExport';
 import { ensureProjectDomainStatePersisted } from '../services/projectSync';
 import { useProjectDomainStore } from './useProjectDomainStore';
 import {
+  cancelOcrJobExecution,
   recordExportSelectionCanceled,
   runQueuedJob,
 } from '../services/jobExecution';
@@ -24,6 +25,9 @@ import { useToastStore } from './useToastStore';
 import { isDesktopRuntime } from '../utils/runtime';
 
 const MAX_JOBS = 30;
+
+let jobPersistenceRequested = false;
+let jobPersistenceWorker: Promise<void> | null = null;
 
 interface OcrJobTarget {
   pageId: string;
@@ -61,20 +65,52 @@ function trimJobs(jobs: JobRecord[]) {
     .slice(0, MAX_JOBS);
 }
 
-async function persistCurrentJobs() {
-  let meta = useProjectStore.getState().meta;
-  if (!meta.localProjectId && useJobStore.getState().jobs.length > 0) {
-    meta = await ensureProjectDomainStatePersisted();
+function persistCurrentJobs() {
+  jobPersistenceRequested = true;
+  if (jobPersistenceWorker) {
+    return;
   }
 
-  await syncJobsForProject(meta, useJobStore.getState().jobs);
+  jobPersistenceWorker = (async () => {
+    while (jobPersistenceRequested) {
+      jobPersistenceRequested = false;
+
+      let meta = useProjectStore.getState().meta;
+      if (!meta.localProjectId && useJobStore.getState().jobs.length > 0) {
+        meta = await ensureProjectDomainStatePersisted();
+      }
+
+      // Read state only when the serialized worker is ready to persist.
+      // Newer mutations arriving while the write is in flight set
+      // jobPersistenceRequested again and are persisted by the next pass.
+      const jobs = useJobStore.getState().jobs;
+      await syncJobsForProject(meta, jobs);
+    }
+  })()
+    .catch((error) => {
+      useDiagnosticsStore.getState().record({
+        scope: 'autosave',
+        level: 'error',
+        message: 'Job persistence failed',
+        detail: error instanceof Error ? error.message : 'Job persistence failed',
+        ...(useProjectStore.getState().meta.localProjectId
+          ? { projectId: useProjectStore.getState().meta.localProjectId }
+          : {}),
+      });
+    })
+    .finally(() => {
+      jobPersistenceWorker = null;
+      if (jobPersistenceRequested) {
+        persistCurrentJobs();
+      }
+    });
 }
 
 function setJobsAndPersist(recipe: (jobs: JobRecord[]) => JobRecord[]) {
   useJobStore.setState((state) => ({
     jobs: trimJobs(recipe(state.jobs)),
   }));
-  void persistCurrentJobs();
+  persistCurrentJobs();
 }
 
 function updateJob(jobId: string, patch: Partial<JobRecord>) {
@@ -225,12 +261,32 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   cancelJob: (jobId) => {
     const job = get().jobs.find((item) => item.id === jobId);
-    if (!job || job.status !== 'queued' && job.status !== 'running') return;
+    if (!job || (job.status !== 'queued' && job.status !== 'running')) return;
+
+    if (job.status === 'running') {
+      if (job.stage === 'ocr') {
+        if (cancelOcrJobExecution(jobId)) {
+          return;
+        }
+      } else {
+        useToastStore
+          .getState()
+          .push('Эта операция уже выполняется и пока не поддерживает отмену', 'warning');
+        return;
+      }
+    }
 
     setJobsAndPersist((jobs) =>
       jobs.map((j) =>
         j.id === jobId
-          ? { ...j, status: 'failed' as const, finishedAt: Date.now(), progress: 1, error: 'Cancelled', message: 'Job cancelled' }
+          ? {
+              ...j,
+              status: 'failed' as const,
+              finishedAt: Date.now(),
+              progress: 1,
+              error: 'Cancelled',
+              message: 'Job cancelled',
+            }
           : j,
       ),
     );
@@ -245,20 +301,35 @@ export const useJobStore = create<JobState>((set, get) => ({
         (!regionIds?.length || regionIds.some((rid) => job.regionIds?.includes(rid))),
     );
 
-    if (runningOrQueued.length > 0) {
-      const cancelIds = new Set(runningOrQueued.map((j) => j.id));
-      const now = Date.now();
+    for (const job of runningOrQueued) {
+      if (job.status === 'running') {
+        cancelOcrJobExecution(job.id);
+      }
+    }
+
+    const queuedIds = new Set(
+      runningOrQueued.filter((job) => job.status === 'queued').map((job) => job.id),
+    );
+
+    if (queuedIds.size > 0) {
       setJobsAndPersist((jobs) =>
         jobs.map((j) =>
-          cancelIds.has(j.id)
-            ? { ...j, status: 'failed' as const, finishedAt: now, progress: 1, error: 'Cancelled', message: 'OCR cancelled' }
+          queuedIds.has(j.id)
+            ? {
+                ...j,
+                status: 'failed' as const,
+                finishedAt: Date.now(),
+                progress: 1,
+                error: 'Cancelled',
+                message: 'OCR cancelled',
+              }
             : j,
         ),
       );
     }
 
     if (runningOrQueued.length > 0) {
-      useToastStore.getState().push(`OCR cancelled: ${runningOrQueued.length} job(s)`, 'info');
+      useToastStore.getState().push(`OCR cancellation requested: ${runningOrQueued.length} job(s)`, 'info');
     }
   },
 

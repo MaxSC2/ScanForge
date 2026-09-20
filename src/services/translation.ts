@@ -86,6 +86,14 @@ function isBrowserTranslationProviderAvailable(provider: string) {
     || provider === 'sakura';
 }
 
+const DESKTOP_BROWSER_PROVIDERS = new Set([
+  'offline',
+  'deepl',
+  'libre',
+  'ollama',
+  'sakura',
+]);
+
 async function runBrowserProviderTranslation(
   provider: string,
   sourceText: string,
@@ -368,8 +376,8 @@ export async function runPageTranslation(
 
   // Offline provider runs in-browser even on desktop (uses kuromoji.js + dictionary)
   const context = await loadStoredTranslationContext(page, options);
-  if (context.translationProvider === 'offline') {
-    onProgress?.(0.15, 'Running offline browser translation provider');
+  if (DESKTOP_BROWSER_PROVIDERS.has(context.translationProvider)) {
+    onProgress?.(0.15, `Running ${context.translationProvider} browser translation provider`);
     return runBrowserTranslation(page, options, onProgress);
   }
 

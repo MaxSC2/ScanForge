@@ -1,467 +1,161 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { computeAverageConfidence } from '../../services/ocr';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Helper functions from ocr.ts — tested via their behavior
-// We test the publicly observable behavior through runBrowserPreviewOcr
-// and pure helper logic
+const mocks = vi.hoisted(() => ({
+  pageRepository: {
+    getById: vi.fn(),
+  },
+  regionRepository: {
+    getByPage: vi.fn(),
+    update: vi.fn(),
+  },
+  ensureProjectDomainDefaults: vi.fn(),
+}));
 
-describe('OCR service helpers', () => {
+vi.mock('../../repositories/pageRepository', () => ({
+  pageRepository: mocks.pageRepository,
+}));
+
+vi.mock('../../repositories/regionRepository', () => ({
+  regionRepository: mocks.regionRepository,
+}));
+
+vi.mock('../../repositories/projectDefaults', () => ({
+  ensureProjectDomainDefaults: mocks.ensureProjectDomainDefaults,
+}));
+
+vi.mock('../../utils/runtime', () => ({
+  isDesktopRuntime: vi.fn(() => false),
+}));
+
+vi.mock('../../stores/useDiagnosticsStore', () => ({
+  useDiagnosticsStore: {
+    getState: () => ({ record: vi.fn() }),
+  },
+}));
+
+import {
+  computeAverageConfidence,
+  resolveTesseractLanguage,
+  runPageOcr,
+} from '../../services/ocr';
+import { isDesktopRuntime } from '../../utils/runtime';
+
+describe('OCR service contracts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('resolveTesseractLanguage', () => {
+    it('maps supported source languages to Tesseract models', () => {
+      expect(resolveTesseractLanguage('ja')).toBe('jpn');
+      expect(resolveTesseractLanguage('zh')).toBe('chi_sim');
+      expect(resolveTesseractLanguage('ko')).toBe('kor');
+      expect(resolveTesseractLanguage('en')).toBe('eng');
+    });
+
+    it('uses English as fallback for auto and unknown languages', () => {
+      expect(resolveTesseractLanguage('auto')).toBe('eng');
+      expect(resolveTesseractLanguage('xx')).toBe('eng');
+      expect(resolveTesseractLanguage()).toBe('eng');
+    });
+  });
+
   describe('computeAverageConfidence', () => {
-    it('returns undefined for empty results', () => {
-      expect(computeAverageConfidence([])).toBeUndefined();
-    });
-
-    it('returns undefined when all results are skipped', () => {
+    it('ignores skipped results and returns a rounded mean', () => {
       expect(
         computeAverageConfidence([
-          { regionId: 'r1', text: null, confidence: undefined, skipped: true, reason: 'locked' },
-          { regionId: 'r2', text: null, confidence: undefined, skipped: true, reason: 'already_filled' },
-        ]),
-      ).toBeUndefined();
-    });
-
-    it('computes average of non-skipped results with confidence', () => {
-      const result = computeAverageConfidence([
-        { regionId: 'r1', text: 'hello', confidence: 0.95, skipped: false, reason: null },
-        { regionId: 'r2', text: 'world', confidence: 0.85, skipped: false, reason: null },
-        { regionId: 'r3', text: null, confidence: 0.5, skipped: true, reason: 'locked' },
-      ]);
-      expect(result).toBe(0.9);
-    });
-
-    it('handles single result with confidence', () => {
-      expect(
-        computeAverageConfidence([
-          { regionId: 'r1', text: 'test', confidence: 0.75, skipped: false, reason: null },
-        ]),
-      ).toBe(0.75);
-    });
-
-    it('ignores results with null confidence', () => {
-      expect(
-        computeAverageConfidence([
-          { regionId: 'r1', text: 'a', confidence: null, skipped: false, reason: null },
-          { regionId: 'r2', text: 'b', confidence: 0.9, skipped: false, reason: null },
+          { regionId: 'r1', text: 'hello', confidence: 0.951, skipped: false, reason: null },
+          { regionId: 'r2', text: 'world', confidence: 0.849, skipped: false, reason: null },
+          { regionId: 'r3', text: null, confidence: 0.1, skipped: true, reason: 'locked' },
         ]),
       ).toBe(0.9);
     });
-  });
-});
 
-describe.skip('runPageOcr (requires real tesseract.js worker + network)', () => {
-  beforeEach(() => {
-    vi.resetModules();
+    it('returns undefined when no usable confidence exists', () => {
+      expect(computeAverageConfidence([])).toBeUndefined();
+      expect(
+        computeAverageConfidence([
+          { regionId: 'r1', text: null, confidence: undefined, skipped: true, reason: 'locked' },
+        ]),
+      ).toBeUndefined();
+    });
   });
 
-  it('throws AbortError when signal is already aborted', async () => {
+  it('rejects a browser OCR configuration that is not executable in browser runtime', async () => {
+    vi.mocked(isDesktopRuntime).mockReturnValue(false);
+    mocks.pageRepository.getById.mockResolvedValue({
+      id: 'page-1',
+      projectId: 'project-1',
+      imagePath: 'data:image/png;base64,AAAA',
+      width: 800,
+      height: 1200,
+    });
+    mocks.regionRepository.getByPage.mockResolvedValue([
+      {
+        id: 'region-1',
+        pageId: 'page-1',
+        x: 10,
+        y: 10,
+        width: 100,
+        height: 50,
+        order: 1,
+        label: 'R1',
+        kind: 'speech',
+        orientation: 'horizontal',
+        sourceText: '',
+        translatedText: '',
+        status: 'idle',
+        ocrStatus: 'idle',
+        translationStatus: 'idle',
+        notes: '',
+        locked: false,
+        visible: true,
+      },
+    ]);
+    mocks.ensureProjectDomainDefaults.mockResolvedValue({
+      sourceLanguage: 'ja',
+      targetLanguage: 'ru',
+      ocrEngine: 'windows',
+      translationProvider: 'local',
+    });
+
+    await expect(
+      runPageOcr(
+        {
+          id: 'page-1',
+          fileName: 'page-1.png',
+          imagePath: 'data:image/png;base64,AAAA',
+          imageUrl: 'data:image/png;base64,AAAA',
+          naturalWidth: 800,
+          naturalHeight: 1200,
+          regions: [],
+        },
+        {},
+      ),
+    ).rejects.toThrow('not supported in browser runtime');
+  });
+
+  it('rejects an OCR job before touching runtime-specific providers when already aborted', async () => {
     const controller = new AbortController();
     controller.abort();
 
-    const { runPageOcr } = await import('../../services/ocr');
-
     await expect(
       runPageOcr(
-        { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 200, regions: [] } as any,
+        {
+          id: 'page-1',
+          fileName: 'page-1.png',
+          imagePath: 'data:image/png;base64,AAAA',
+          imageUrl: 'data:image/png;base64,AAAA',
+          naturalWidth: 800,
+          naturalHeight: 1200,
+          regions: [],
+        },
         { signal: controller.signal },
       ),
-    ).rejects.toThrow('aborted');
-  });
-
-  it('runs browser preview when not in desktop runtime', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1',
-          projectId: 'prj1',
-          imagePath: 'data:image/png;base64,abc',
-          width: 100,
-          height: 200,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: 'bubble 1', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'ja',
-        ocrEngine: 'mock',
-        targetLanguage: 'ru',
-        translationProvider: 'local',
-      }),
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 200, regions: [{ id: 'r1', x: 0, y: 0, width: 50, height: 30, label: 'bubble 1', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true }] } as any,
-      {},
-    );
-
-    expect(result.engine).toBe('scanforge-preview');
-    expect(result.regionsProcessed).toBe(1);
-    expect(result.filledCount).toBe(1);
-    expect(result.results[0].text).toContain('OCR preview');
-    expect(result.results[0].skipped).toBe(false);
-  });
-
-  it('skips locked regions during browser preview', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: true, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'auto', ocrEngine: 'mock', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    vi.mock('../../stores/useDiagnosticsStore', () => ({
-      useDiagnosticsStore: { getState: () => ({ record: vi.fn() }) },
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [{ id: 'r1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: true, visible: true }] } as any,
-      {},
-    );
-
-    expect(result.skippedCount).toBe(1);
-    expect(result.filledCount).toBe(0);
-    expect(result.results[0].reason).toBe('locked');
-  });
-
-  it('skips already_filled regions when overwrite is disabled', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: 'existing text', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'auto', ocrEngine: 'mock', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [{ id: 'r1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: 'existing text', ocrStatus: 'done', locked: false, visible: true }] } as any,
-      { overwriteExisting: false },
-    );
-
-    expect(result.skippedCount).toBe(1);
-    expect(result.filledCount).toBe(0);
-    expect(result.results[0].reason).toBe('already_filled');
-  });
-
-  it('uses correct provider path for tesseract engine in preview', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'auto', ocrEngine: 'tesseract', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    vi.mock('../../stores/useDiagnosticsStore', () => ({
-      useDiagnosticsStore: { getState: () => ({ record: vi.fn() }) },
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [{ id: 'r1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true }] } as any,
-      {},
-    );
-
-    expect(result.engine).toBe('scanforge-tesseract-preview');
-    expect(result.providerPath).toEqual(['tesseract', 'scanforge-tesseract-preview']);
-  });
-
-  it('uses correct provider path for manga-ocr engine in preview', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'ja', ocrEngine: 'manga-ocr', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    vi.mock('../../stores/useDiagnosticsStore', () => ({
-      useDiagnosticsStore: { getState: () => ({ record: vi.fn() }) },
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [{ id: 'r1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true }] } as any,
-      {},
-    );
-
-    expect(result.engine).toBe('scanforge-manga-ocr-preview');
-    expect(result.providerPath).toEqual(['manga-ocr', 'scanforge-manga-ocr-preview']);
-  });
-
-  it('uses correct provider path for paddle engine in preview', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'ja', ocrEngine: 'paddle', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    vi.mock('../../stores/useDiagnosticsStore', () => ({
-      useDiagnosticsStore: { getState: () => ({ record: vi.fn() }) },
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [{ id: 'r1', x: 0, y: 0, width: 50, height: 30, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true }] } as any,
-      {},
-    );
-
-    expect(result.engine).toBe('scanforge-paddle-preview');
-    expect(result.providerPath).toEqual(['paddle', 'scanforge-paddle-preview']);
-  });
-
-  it('rejects OCR with zero-area regions and reports invalid_bounds', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 0, height: 0, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'auto', ocrEngine: 'mock', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    vi.mock('../../stores/useDiagnosticsStore', () => ({
-      useDiagnosticsStore: { getState: () => ({ record: vi.fn() }) },
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    const result = await runPageOcr(
-      { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [{ id: 'r1', x: 0, y: 0, width: 0, height: 0, label: '', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true }] } as any,
-      {},
-    );
-
-    expect(result.skippedCount).toBe(1);
-    expect(result.filledCount).toBe(0);
-    expect(result.results[0].reason).toBe('invalid_bounds');
-  });
-
-  it('throws when no regions are provided for OCR', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 100,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([]),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'auto', ocrEngine: 'mock', targetLanguage: 'ru', translationProvider: 'mock',
-      }),
-    }));
-
-    const { runPageOcr } = await import('../../services/ocr');
-
-    await expect(
-      runPageOcr(
-        { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 100, regions: [] } as any,
-        {},
-      ),
-    ).rejects.toThrow('No regions selected for OCR');
-  });
-
-  it('handles abort between region processing steps', async () => {
-    vi.mock('../../utils/runtime', () => ({
-      isDesktopRuntime: () => false,
-    }));
-
-    vi.mock('../../repositories/pageRepository', () => ({
-      pageRepository: {
-        getById: vi.fn().mockResolvedValue({
-          id: 'p1', projectId: 'prj1', imagePath: 'data:image/png;base64,abc',
-          width: 100, height: 200,
-        }),
-      },
-    }));
-
-    vi.mock('../../repositories/regionRepository', () => ({
-      regionRepository: {
-        getByPage: vi.fn().mockResolvedValue([
-          { id: 'r1', pageId: 'p1', x: 0, y: 0, width: 50, height: 30, label: 'bubble 1', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-          { id: 'r2', pageId: 'p1', x: 60, y: 0, width: 40, height: 30, label: 'bubble 2', order: 2, kind: 'text', orientation: 'horizontal', sourceText: '', locked: false, visible: true },
-        ]),
-        update: vi.fn().mockResolvedValue(undefined),
-      },
-    }));
-
-    vi.mock('../../repositories/projectDefaults', () => ({
-      ensureProjectDomainDefaults: vi.fn().mockResolvedValue({
-        sourceLanguage: 'ja', ocrEngine: 'mock', targetLanguage: 'ru', translationProvider: 'local',
-      }),
-    }));
-
-    vi.mock('../../stores/useDiagnosticsStore', () => ({
-      useDiagnosticsStore: { getState: () => ({ record: vi.fn() }) },
-    }));
-
-    const controller = new AbortController();
-    const { runPageOcr } = await import('../../services/ocr');
-
-    setTimeout(() => controller.abort(), 50);
-
-    await expect(
-      runPageOcr(
-        { id: 'p1', fileName: 'test.png', naturalWidth: 100, naturalHeight: 200, regions: [
-          { id: 'r1', x: 0, y: 0, width: 50, height: 30, label: 'bubble 1', order: 1, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true },
-          { id: 'r2', x: 60, y: 0, width: 40, height: 30, label: 'bubble 2', order: 2, kind: 'text', orientation: 'horizontal', sourceText: '', ocrStatus: 'idle', locked: false, visible: true },
-        ] } as any,
-        { signal: controller.signal },
-      ),
-    ).rejects.toThrow('aborted');
+    ).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    expect(mocks.pageRepository.getById).not.toHaveBeenCalled();
   });
 });

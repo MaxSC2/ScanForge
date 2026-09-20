@@ -11,19 +11,21 @@ export type CollabOpType =
   | 'region:update'
   | 'region:delete'
   | 'region:reorder'
-  | 'page:select';
+  | 'region:batch'
 
 export interface CollabOp {
   id: string;
   type: CollabOpType;
   userId: string;
+  /** Logical collaboration room. */
+  roomId: string;
   timestamp: number;
   pageId: string;
   payload: Record<string, unknown>;
 }
 
 export type CollabMessage =
-  | { type: 'join'; user: CollabUser }
+  | { type: 'join'; user: CollabUser; roomId: string }
   | { type: 'leave'; userId: string }
   | { type: 'op'; op: CollabOp }
   | { type: 'state'; regions: Region[]; users: CollabUser[] }

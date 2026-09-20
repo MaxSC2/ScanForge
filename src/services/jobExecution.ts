@@ -26,6 +26,18 @@ export interface JobExecutionBindings {
   updateJob: (jobId: string, patch: Partial<JobRecord>) => void;
 }
 
+const activeOcrControllers = new Map<string, AbortController>();
+
+export function cancelOcrJobExecution(jobId: string): boolean {
+  const controller = activeOcrControllers.get(jobId);
+  if (!controller) {
+    return false;
+  }
+
+  controller.abort();
+  return true;
+}
+
 function recordJobDiagnostic(
   job: JobRecord,
   level: 'warning' | 'error',
@@ -57,7 +69,7 @@ export function recordExportSelectionCanceled(pageId: string, pageName: string) 
       : {}),
     pageId,
   });
-  useToastStore.getState().push(`Р­РєСЃРїРѕСЂС‚ РѕС‚РјРµРЅС‘РЅ: ${pageName}`, 'info');
+  useToastStore.getState().push(`Экспорт отменён: ${pageName}`, 'info');
 }
 
 async function refreshPageRegionsFromRepository(pageId: string) {
@@ -126,53 +138,54 @@ export async function persistTranslationTargets(pageId: string) {
 }
 
 async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
-  updateJob(job.id, {
-    status: 'running',
-    startedAt: Date.now(),
-    progress: 0.05,
-    message: 'Preparing OCR job',
-    error: null,
-    result: null,
-  });
-
-  const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
-  if (!page) {
-    recordJobDiagnostic(job, 'error', 'OCR job failed', 'Page not found');
-    updateJob(job.id, {
-      status: 'failed',
-      finishedAt: Date.now(),
-      progress: 1,
-      error: 'Page not found',
-      message: 'OCR job failed',
-    });
-    return;
-  }
-
-  const targetRegions =
-    job.regionIds?.length && job.regionIds.length > 0
-      ? page.regions.filter((region) => job.regionIds?.includes(region.id))
-      : page.regions;
-
-  if (targetRegions.length === 0) {
-    recordJobDiagnostic(
-      job,
-      'warning',
-      'OCR skipped: empty selection',
-      'No regions selected for OCR',
-    );
-    updateJob(job.id, {
-      status: 'failed',
-      finishedAt: Date.now(),
-      progress: 1,
-      error: 'No regions selected for OCR',
-      message: 'OCR skipped: empty selection',
-    });
-    return;
-  }
-
   const abortController = new AbortController();
+  activeOcrControllers.set(job.id, abortController);
 
   try {
+    updateJob(job.id, {
+      status: 'running',
+      startedAt: Date.now(),
+      progress: 0.05,
+      message: 'Preparing OCR job',
+      error: null,
+      result: null,
+    });
+
+    const page = usePageStore.getState().pages.find((item) => item.id === job.pageId);
+    if (!page) {
+      recordJobDiagnostic(job, 'error', 'OCR job failed', 'Page not found');
+      updateJob(job.id, {
+        status: 'failed',
+        finishedAt: Date.now(),
+        progress: 1,
+        error: 'Page not found',
+        message: 'OCR job failed',
+      });
+      return;
+    }
+
+    const targetRegions =
+      job.regionIds?.length && job.regionIds.length > 0
+        ? page.regions.filter((region) => job.regionIds?.includes(region.id))
+        : page.regions;
+
+    if (targetRegions.length === 0) {
+      recordJobDiagnostic(
+        job,
+        'warning',
+        'OCR skipped: empty selection',
+        'No regions selected for OCR',
+      );
+      updateJob(job.id, {
+        status: 'failed',
+        finishedAt: Date.now(),
+        progress: 1,
+        error: 'No regions selected for OCR',
+        message: 'OCR skipped: empty selection',
+      });
+      return;
+    }
+
     await ensureProjectDomainStatePersisted();
     const overwriteExisting = useEditorStore.getState().ocrOverwrite;
     const ocrResult = await runPageOcr(
@@ -236,11 +249,12 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       return;
     }
 
-    const errorMessage = typeof error === 'object' && error !== null && 'message' in error
-      ? (error as OcrErrorDetail).message
-      : error instanceof Error
-        ? error.message
-        : 'OCR backend error';
+    const errorMessage =
+      typeof error === 'object' && error !== null && 'message' in error
+        ? (error as OcrErrorDetail).message
+        : error instanceof Error
+          ? error.message
+          : 'OCR backend error';
 
     recordJobDiagnostic(
       job,
@@ -256,9 +270,10 @@ async function runOcrJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
       message: 'OCR job failed',
       result: null,
     });
+  } finally {
+    activeOcrControllers.delete(job.id);
   }
 }
-
 async function runTranslationJob(job: JobRecord, { updateJob }: JobExecutionBindings) {
   updateJob(job.id, {
     status: 'running',

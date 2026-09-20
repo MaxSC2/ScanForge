@@ -37,20 +37,33 @@ interface StoredOcrContext {
   }>;
 }
 
-let tesseractWorker: Worker | null = null;
-let tesseractReady = false;
+const TESSERACT_LANGUAGE_CODES: Record<ProjectSourceLanguage, string> = {
+  ja: 'jpn',
+  zh: 'chi_sim',
+  ko: 'kor',
+  en: 'eng',
+  auto: 'eng',
+};
 
-async function getTesseractWorker(): Promise<Worker> {
-  if (tesseractWorker && tesseractReady) return tesseractWorker;
-  if (tesseractWorker) {
-    await tesseractWorker.terminate();
-    tesseractWorker = null;
+export function resolveTesseractLanguage(sourceLanguage?: string): string {
+  if (sourceLanguage && sourceLanguage in TESSERACT_LANGUAGE_CODES) {
+    return TESSERACT_LANGUAGE_CODES[sourceLanguage as ProjectSourceLanguage];
   }
-  tesseractWorker = await createWorker('eng', 1, {
+  return TESSERACT_LANGUAGE_CODES.eng;
+}
+
+const tesseractWorkers = new Map<string, Worker>();
+
+async function getTesseractWorker(sourceLanguage?: string): Promise<Worker> {
+  const language = resolveTesseractLanguage(sourceLanguage);
+  const cached = tesseractWorkers.get(language);
+  if (cached) return cached;
+
+  const worker = await createWorker(language, 1, {
     logger: () => {},
   });
-  tesseractReady = true;
-  return tesseractWorker;
+  tesseractWorkers.set(language, worker);
+  return worker;
 }
 
 function filterTargetRegions(regions: RegionRecord[], regionIds?: string[]) {
@@ -98,7 +111,6 @@ function cropImageToRegion(
     img.src = imageDataUrl;
   });
 }
-
 function emitError(pageId: string, detail: OcrErrorDetail) {
   console.error(`[ScanForge][OCR] ${detail.provider}: ${detail.message}`);
   useDiagnosticsStore.getState().record({
@@ -163,7 +175,7 @@ function toFallbackContext(page: Page, options: OcrRunOptions): StoredOcrContext
     fileName: page.fileName,
     naturalWidth: page.naturalWidth,
     naturalHeight: page.naturalHeight,
-    sourceLanguage: undefined,
+    sourceLanguage: page.regions.find((region) => region.sourceLanguage)?.sourceLanguage,
     ocrEngine: 'mock',
     regions: filterTargetRegions(fallbackRecords, options.regionIds).map((record, index) => ({
       record,
@@ -197,8 +209,7 @@ async function loadStoredOcrContext(page: Page, options: OcrRunOptions, signal?:
       record,
       order: record.order || index + 1,
       label: record.label || `Region ${index + 1}`,
-    })),
-  };
+    })),  };
 }
 
 export function computeAverageConfidence(results: OcrRegionResult[]): number | undefined {
@@ -220,43 +231,41 @@ async function applyBrowserOcrResult(
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
 
-  await Promise.all(
-    regions.map(async ({ record }) => {
-      assertNotAborted(signal);
+  for (const { record } of regions) {
+    assertNotAborted(signal);
 
-      const result = resultMap.get(record.id);
-      if (!result) return;
+    const result = resultMap.get(record.id);
+    if (!result) continue;
 
-      if (!result.skipped && result.text) {
-        await regionRepository.update({
-          ...record,
-          sourceText: result.text,
-          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
-          status: record.translatedText.trim() ? 'translated' : 'ocr_done',
-          ocrStatus: 'done',
-          ocrEngine: 'tesseract',
-          ocrUpdatedAt: updatedAt,
-          ...(typeof result.confidence === 'number'
-            ? { ocrConfidence: result.confidence }
-            : {}),
-        });
-        return;
-      }
+    if (!result.skipped && result.text) {
+      await regionRepository.update({
+        ...record,
+        sourceText: result.text,
+        ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
+        status: record.translatedText.trim() ? 'translated' : 'ocr_done',
+        ocrStatus: 'done',
+        ocrEngine: 'tesseract',
+        ocrUpdatedAt: updatedAt,
+        ...(typeof result.confidence === 'number'
+          ? { ocrConfidence: result.confidence }
+          : {}),
+      });
+      continue;
+    }
 
-      if (result.reason === 'invalid_bounds' || result.reason === 'no_text') {
-        await regionRepository.update({
-          ...record,
-          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
-          ocrStatus: 'failed',
-          ocrEngine: 'tesseract',
-          ocrUpdatedAt: updatedAt,
-          ...(typeof result.confidence === 'number'
-            ? { ocrConfidence: result.confidence }
-            : {}),
-        });
-      }
-    }),
-  );
+    if (result.reason === 'invalid_bounds' || result.reason === 'no_text') {
+      await regionRepository.update({
+        ...record,
+        ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
+        ocrStatus: 'failed',
+        ocrEngine: 'tesseract',
+        ocrUpdatedAt: updatedAt,
+        ...(typeof result.confidence === 'number'
+          ? { ocrConfidence: result.confidence }
+          : {}),
+      });
+    }
+  }
 }
 
 async function runBrowserOcr(
@@ -273,6 +282,13 @@ async function runBrowserOcr(
   }
 
   const overwriteExisting = runOptions.overwriteExisting ?? false;
+  const configuredEngine = context.ocrEngine;
+  if (configuredEngine !== 'tesseract') {
+    throw new Error(
+      `OCR engine "${configuredEngine}" is not supported in browser runtime; select Tesseract`,
+    );
+  }
+
   const engineName = 'tesseract.js';
   const imageDataUrl = page.imageUrl || page.imagePath;
   if (!imageDataUrl || !imageDataUrl.startsWith('data:')) {
@@ -282,7 +298,7 @@ async function runBrowserOcr(
   let worker: Worker | undefined;
   try {
     onProgress?.(0.1, 'Initializing Tesseract.js OCR engine');
-    worker = await getTesseractWorker();
+    worker = await getTesseractWorker(context.sourceLanguage);
 
     const results: OcrRegionResult[] = [];
 
@@ -297,8 +313,7 @@ async function runBrowserOcr(
           0.2 + ((index + 1) / context.regions.length) * 0.7,
           `Region ${index + 1}/${context.regions.length}: skipped (locked)`,
         );
-        continue;
-      }
+        continue;      }
       if (!(overwriteExisting || regionOverwrite) && region.record.sourceText.trim()) {
         results.push({ regionId: region.record.id, text: null, skipped: true, reason: 'already_filled' });
         onProgress?.(
@@ -408,42 +423,3 @@ export async function runPageOcr(
       emitError(page.id, detail);
       throw detail;
     }
-  }
-
-  onProgress?.(0.05, 'Starting OCR');
-
-  let unlisten: UnlistenFn | undefined;
-  try {
-    unlisten = await listen<OcrProgressEvent>('ocr-progress', (event) => {
-      onProgress?.(event.payload.progress, event.payload.message);
-    });
-
-    onProgress?.(0.25, 'Running Tauri OCR backend');
-
-    const result = await invoke<OcrPageResult>('run_page_ocr', {
-      pageId: page.id,
-      regionIds: options.regionIds,
-      overwriteExisting: options.overwriteExisting ?? false,
-    });
-
-    return {
-      ...result,
-      averageConfidence: computeAverageConfidence(result.results ?? []),
-      failedCount: result.results?.filter(
-        (r) => r.reason === 'invalid_bounds' || r.reason === 'no_text',
-      ).length,
-    };
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    const message = typeof error === 'string' ? error : error instanceof Error ? error.message : 'OCR backend error';
-    const detail: OcrErrorDetail = {
-      provider: 'tauri-backend',
-      message,
-      recoverable: true,
-    };
-    emitError(page.id, detail);
-    throw detail;
-  } finally {
-    unlisten?.();
-  }
-}

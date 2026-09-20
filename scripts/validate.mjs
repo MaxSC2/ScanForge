@@ -15,29 +15,56 @@ const path = require('path');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ── 1. Syntax check via transpile ──────────────────────────────────
-const filesToCheck = [
-  'src/services/ai/types.ts',
-  'src/services/ai/provider.ts',
-  'src/services/ai/tools.ts',
-  'src/services/ai/orchestrator.ts',
-  'src/services/ai/memory.ts',
-  'src/services/ai/graph.ts',
-  'eslint.config.js',
+function collectSourceFiles(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+
+    const absolute = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectSourceFiles(absolute));
+      continue;
+    }
+
+    if (/\.(ts|tsx)$/.test(entry.name)) {
+      files.push(absolute);
+    }
+  }
+
+  return files;
+}
+
+const sourceFiles = [
+  ...collectSourceFiles(path.join(ROOT, 'src')),
+  path.join(ROOT, 'eslint.config.js'),
+  path.join(ROOT, 'collab-server.js'),
 ];
 
 let syntaxOk = true;
-for (const rel of filesToCheck) {
-  const abs = path.join(ROOT, rel);
-  if (!fs.existsSync(abs)) { console.log(`  ⊘ ${rel} (missing)`); continue; }
+for (const abs of sourceFiles) {
+  const rel = path.relative(ROOT, abs).replace(/\\/g, '/');
   try {
     const src = fs.readFileSync(abs, 'utf8');
-    ts.transpileModule(src, {
+    const result = ts.transpileModule(src, {
       compilerOptions: {
         module: ts.ModuleKind.ESNext,
         target: ts.ScriptTarget.ES2020,
         jsx: ts.JsxEmit.ReactJSX,
       },
+      fileName: abs,
+      reportDiagnostics: true,
     });
+
+    if (result.diagnostics?.length) {
+      const message = ts.flattenDiagnosticMessageText(
+        result.diagnostics.map((diagnostic) => diagnostic.messageText).join('\n'),
+        '\n',
+      );
+      throw new Error(message);
+    }
+
     console.log(`  ✓ ${rel}`);
   } catch (e) {
     console.log(`  ✗ ${rel}: ${e.message}`);

@@ -41,6 +41,15 @@ describe('CRDT LWW', () => {
       expect(meta.versions['x'].u).toBe(USER_A);
     });
 
+    it('local write can use the exact transmitted operation timestamp', () => {
+      initCrdtMeta(RID, PID, USER_A);
+      writeLocal(RID, 'x', USER_A, undefined, 5000);
+      const versions = buildVersionMap(RID, { x: 100 }, USER_A, 5000);
+
+      expect(getCrdtMeta(RID)!.versions.x).toEqual({ t: 5000, u: USER_A });
+      expect(versions.x).toEqual({ t: 5000, u: USER_A });
+    });
+
     it('accepts remote when no local version exists', () => {
       initCrdtMeta(RID, PID, USER_A);
       const result = resolveRemote(RID, 'x', { t: 100, u: USER_B });
@@ -49,10 +58,9 @@ describe('CRDT LWW', () => {
       expect(meta.versions['x'].u).toBe(USER_B);
     });
 
-    it('remote wins when timestamp is newer', async () => {
+    it('remote wins when timestamp is newer', () => {
       initCrdtMeta(RID, PID, USER_A);
       writeLocal(RID, 'x', USER_A);
-      await new Promise((r) => setTimeout(r, 10));
       const result = resolveRemote(RID, 'x', { t: Date.now() + 1000, u: USER_B });
       expect(result).toBe(true);
     });
@@ -70,10 +78,8 @@ describe('CRDT LWW', () => {
     it('tie broken by userId', () => {
       initCrdtMeta(RID, PID, USER_A);
       const tag = { t: Date.now(), u: USER_A };
-      writeLocal(RID, 'x', USER_A);
+      writeLocal(RID, 'x', USER_A, undefined, tag.t);
       const result = resolveRemote(RID, 'x', tag);
-      // local A >= remote A (same timestamp), userIds equal, so local wins
-      // resolveRemote returns true only if remote is strictly newer
       expect(result).toBe(false);
     });
 
@@ -82,7 +88,6 @@ describe('CRDT LWW', () => {
       writeLocal(RID, 'x', USER_B);
       const tag = { t: getCrdtMeta(RID)!.versions['x'].t, u: USER_A };
       const result = resolveRemote(RID, 'x', tag);
-      // remote A < local B (lexicographically), so local wins
       expect(result).toBe(false);
     });
   });
@@ -99,20 +104,41 @@ describe('CRDT LWW', () => {
       initCrdtMeta(RID, PID, USER_A);
       markDeleted(RID, USER_B);
       const result = markDeleted(RID, USER_A);
-      // second delete may win (newer timestamp) or lose (if same ms, user-b > user-a)
-      // either way the region is deleted
       expect(isDeleted(RID)).toBe(true);
-      // if second delete was rejected, result is false but region stays deleted
       expect(result === true || result === false).toBe(true);
     });
+  });
+
+  it('keeps transmitted remote versions ordered by their real timestamp', () => {
+    initCrdtMeta(RID, PID, USER_A);
+
+    expect(resolveRemote(RID, 'x', { t: 1000, u: USER_A })).toBe(true);
+    expect(resolveRemote(RID, 'x', { t: 1500, u: USER_B })).toBe(true);
+    expect(resolveRemote(RID, 'x', { t: 1200, u: USER_A })).toBe(false);
+
+    expect(getCrdtMeta(RID)!.versions['x']).toEqual({ t: 1500, u: USER_B });
+  });
+
+  it('rejects late field updates after a deletion tombstone', () => {
+    initCrdtMeta(RID, PID, USER_A);
+
+    expect(markDeleted(RID, USER_B, PID, { t: 2000, u: USER_B })).toBe(true);
+    expect(resolveRemote(RID, 'x', { t: 1000, u: USER_A })).toBe(false);
+    expect(resolveRemote(RID, 'x', { t: 3000, u: USER_A })).toBe(false);
+    expect(isDeleted(RID)).toBe(true);
   });
 
   describe('buildVersionMap', () => {
     it('creates version entries for each field in patch', () => {
       initCrdtMeta(RID, PID, USER_A);
       const patch = { x: 100, y: 200, width: 300 };
-      const versions = buildVersionMap(RID, patch, USER_A);
+      const versions = buildVersionMap(RID, patch, USER_A, 7000);
       expect(Object.keys(versions)).toEqual(['x', 'y', 'width']);
+      expect(Object.values(versions)).toEqual([
+        { t: 7000, u: USER_A },
+        { t: 7000, u: USER_A },
+        { t: 7000, u: USER_A },
+      ]);
     });
   });
 });

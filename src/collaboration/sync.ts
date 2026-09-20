@@ -1,6 +1,7 @@
 import type { Region } from '../types';
 import { usePageStore } from '../stores/usePageStore';
-import { useRegionStore } from '../stores/useRegionStore';
+import { useProjectStore } from '../stores/useProjectStore';
+import { normalizeRegion } from '../types/region';
 import { useToastStore } from '../stores/useToastStore';
 import { useCollabStore } from './store';
 import { t } from '../i18n';
@@ -10,7 +11,6 @@ import {
   writeLocal,
   resolveRemote,
   markDeleted,
-  clearCrdtMeta,
   clearAllCrdtMeta,
   buildVersionMap,
 } from './crdt';
@@ -18,6 +18,8 @@ import {
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let userInfo: CollabUser | null = null;
+let connectedRoomId: string | null = null;
+let connectedServerUrl: string | null = null;
 
 function getUserId(): string {
   let id = localStorage.getItem('scanforge-collab-userid');
@@ -26,6 +28,11 @@ function getUserId(): string {
     localStorage.setItem('scanforge-collab-userid', id);
   }
   return id;
+}
+
+function getCollaborationRoomId(userId = getUserId()): string {
+  const projectId = useProjectStore.getState().meta.localProjectId;
+  return projectId ? `project:${projectId}` : `draft:${userId}`;
 }
 
 function getUserColor(id: string): string {
@@ -46,6 +53,7 @@ function send(msg: CollabMessage) {
 
 function handleMessage(data: CollabMessage) {
   const store = useCollabStore.getState();
+  const roomId = getCollaborationRoomId();
 
   switch (data.type) {
     case 'users':
@@ -59,6 +67,7 @@ function handleMessage(data: CollabMessage) {
 
     case 'op': {
       const op = data.op;
+      if (op.roomId !== roomId) break;
       if (op.userId === getUserId()) {
         store.removePendingOp(op.id);
         send({ type: 'ack', opId: op.id });
@@ -66,7 +75,6 @@ function handleMessage(data: CollabMessage) {
       }
 
       const pageStore = usePageStore.getState();
-      const regionStore = useRegionStore.getState();
       const page = pageStore.pages.find((p) => p.id === op.pageId);
       if (!page) break;
 
@@ -79,7 +87,14 @@ function handleMessage(data: CollabMessage) {
             for (const field of Object.keys(r)) {
               resolveRemote(r.id, field, remoteTag);
             }
-            regionStore.addRegion(op.pageId, r);
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) =>
+                entry.id === op.pageId && !entry.regions.some((region) => region.id === r.id)
+                  ? { ...entry, regions: [...entry.regions, r].map((region, index) => ({ ...region, order: index + 1 })) }
+                  : entry,
+              ),
+            }));
+            useProjectStore.getState().touch();
           }
           break;
         }
@@ -90,7 +105,6 @@ function handleMessage(data: CollabMessage) {
           } & Record<string, unknown>;
 
           const resolvedPatch: Record<string, unknown> = {};
-          const userId = getUserId();
 
           for (const [field, value] of Object.entries(patch)) {
             if (field === 'id') continue;
@@ -101,19 +115,108 @@ function handleMessage(data: CollabMessage) {
           }
 
           if (Object.keys(resolvedPatch).length > 0) {
-            regionStore.updateRegion(op.pageId, id, resolvedPatch);
-            // re-mark local fields as newer after applying remote
-            for (const field of Object.keys(resolvedPatch)) {
-              writeLocal(id, field, userId);
-            }
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) =>
+                entry.id !== op.pageId
+                  ? entry
+                  : {
+                      ...entry,
+                      regions: entry.regions.map((region) =>
+                        region.id === id ? normalizeRegion({ ...region, ...resolvedPatch }) : region,
+                      ),
+                    },
+              ),
+            }));
+            useProjectStore.getState().touch();
           }
           break;
         }
         case 'region:delete': {
           const { id } = op.payload as { id: string };
-          if (markDeleted(id, op.userId)) {
-            regionStore.deleteRegion(op.pageId, id);
-            clearCrdtMeta(id);
+          if (markDeleted(id, op.userId, op.pageId, { t: op.timestamp, u: op.userId })) {
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) =>
+                entry.id !== op.pageId
+                  ? entry
+                  : {
+                      ...entry,
+                      regions: entry.regions
+                        .filter((region) => region.id !== id)
+                        .map((region, index) => ({ ...region, order: index + 1 })),
+                    },
+              ),
+            }));
+            useProjectStore.getState().touch();
+          }
+          break;
+        }
+        case 'region:batch': {
+          const changes = Array.isArray(op.payload.changes) ? op.payload.changes : [];
+          usePageStore.setState((state) => ({
+            pages: state.pages.map((entry) => {
+              if (entry.id !== op.pageId) return entry;
+              let regions = [...entry.regions];
+              for (const change of changes) {
+                if (!change || typeof change !== 'object' || typeof change.kind !== 'string') continue;
+                if (change.kind === 'create' && change.region && typeof change.region.id === 'string') {
+                  const r = change.region as Region;
+                  if (!regions.some((region) => region.id === r.id)) {
+                    initCrdtMeta(r.id, op.pageId, op.userId);
+                    const createVersions = change.versions && typeof change.versions === 'object'
+                      ? change.versions as Record<string, { t: number; u: string }>
+                      : {};
+                    for (const field of Object.keys(r)) {
+                      resolveRemote(r.id, field, createVersions[field] ?? { t: op.timestamp, u: op.userId });
+                    }
+                    regions.push(r);
+                  }
+                } else if (change.kind === 'delete' && typeof change.id === 'string') {
+                  if (markDeleted(change.id, op.userId, op.pageId, { t: op.timestamp, u: op.userId })) {
+                    regions = regions.filter((region) => region.id !== change.id);
+                  }
+                } else if (change.kind === 'update' && typeof change.id === 'string' && change.patch && typeof change.patch === 'object') {
+                  const patch = change.patch as Record<string, unknown>;
+                  const versions = change.versions && typeof change.versions === 'object'
+                    ? change.versions as Record<string, { t: number; u: string }>
+                    : {};
+                  const resolved: Record<string, unknown> = {};
+                  for (const [field, value] of Object.entries(patch)) {
+                    const tag = versions[field] ?? { t: op.timestamp, u: op.userId };
+                    if (resolveRemote(change.id, field, tag)) resolved[field] = value;
+                  }
+                  if (Object.keys(resolved).length) {
+                    regions = regions.map((region) => region.id === change.id ? normalizeRegion({ ...region, ...resolved }) : region);
+                  }
+                }
+              }
+              return { ...entry, regions: regions.map((region, index) => ({ ...region, order: index + 1 })) };
+            }),
+          }));
+          useProjectStore.getState().touch();
+          break;
+        }
+        case 'region:reorder': {
+          const ids = Array.isArray(op.payload.ids)
+            ? op.payload.ids.filter((value): value is string => typeof value === 'string')
+            : [];
+          if (ids.length > 0) {
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) => {
+                if (entry.id !== op.pageId) return entry;
+                const byId = new Map(entry.regions.map((region) => [region.id, region] as const));
+                const ordered = ids
+                  .map((id) => byId.get(id))
+                  .filter((region): region is Region => Boolean(region));
+                const missing = entry.regions.filter((region) => !ids.includes(region.id));
+                return {
+                  ...entry,
+                  regions: [...ordered, ...missing].map((region, index) => ({
+                    ...region,
+                    order: index + 1,
+                  })),
+                };
+              }),
+            }));
           }
           break;
         }
@@ -126,6 +229,9 @@ function handleMessage(data: CollabMessage) {
 }
 
 function connectInternal(url: string) {
+  const roomId = getCollaborationRoomId();
+  connectedRoomId = roomId;
+  connectedServerUrl = url;
   if (ws) {
     ws.close();
     ws = null;
@@ -144,10 +250,10 @@ function connectInternal(url: string) {
 
   ws.onopen = () => {
     useCollabStore.getState().setConnected(true);
-    send({ type: 'join', user: userInfo! });
+    send({ type: 'join', user: userInfo!, roomId });
     useToastStore.getState().push(t('collab.toast.connected'), 'success');
 
-    const pending = useCollabStore.getState().pendingOps;
+    const pending = useCollabStore.getState().pendingOps.filter((op) => op.roomId === roomId);
     for (const op of pending) send({ type: 'op', op });
   };
 
@@ -159,6 +265,8 @@ function connectInternal(url: string) {
   };
 
   ws.onclose = () => {
+    connectedRoomId = null;
+    connectedServerUrl = null;
     useCollabStore.getState().setConnected(false);
     useToastStore.getState().push(t('collab.toast.disconnected'), 'info');
     ws = null;
@@ -186,6 +294,17 @@ export function connectCollab(url?: string) {
   connectInternal(serverUrl);
 }
 
+export function ensureCollabRoomIsCurrent(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  const currentRoomId = getCollaborationRoomId();
+  if (connectedRoomId === currentRoomId) return;
+
+  const serverUrl = connectedServerUrl ?? useCollabStore.getState().serverUrl;
+  clearAllCrdtMeta();
+  connectInternal(serverUrl);
+}
+
 export function disconnectCollab() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -199,19 +318,25 @@ export function disconnectCollab() {
   useCollabStore.getState().reset();
 }
 
-function broadcastOp(type: CollabOp['type'], pageId: string, payload: Record<string, unknown>) {
+function broadcastOp(
+  type: CollabOp['type'],
+  pageId: string,
+  payload: Record<string, unknown>,
+  timestamp = Date.now(),
+) {
   if (ws?.readyState !== WebSocket.OPEN) return;
-    const userId = getUserId();
-    const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
-    const ts = Date.now();
-    const op: CollabOp = {
-      id,
-      type: type as CollabOp['type'],
-      userId,
-      timestamp: ts,
+  const userId = getUserId();
+  const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+
+  const op: CollabOp = {
+    id,
+    type: type as CollabOp['type'],
+    userId,
+    roomId: getCollaborationRoomId(userId),
+    timestamp,
     pageId,
-    payload: { ...payload, _userId: userId, _timestamp: ts },
+    payload,
   };
 
   useCollabStore.getState().addPendingOp(op);
@@ -220,26 +345,69 @@ function broadcastOp(type: CollabOp['type'], pageId: string, payload: Record<str
 
 export function broadcastRegionCreate(pageId: string, region: Region) {
   const userId = getUserId();
+  const timestamp = Date.now();
   initCrdtMeta(region.id, pageId, userId);
   for (const field of Object.keys(region)) {
-    writeLocal(region.id, field, userId);
+    writeLocal(region.id, field, userId, undefined, timestamp);
   }
-  const versions = buildVersionMap(region.id, region as unknown as Record<string, unknown>, userId);
-  broadcastOp('region:create', pageId, { ...region, versions });
+  const versions = buildVersionMap(region.id, region as unknown as Record<string, unknown>, userId, timestamp);
+  broadcastOp('region:create', pageId, { ...region, versions }, timestamp);
 }
 
 export function broadcastRegionUpdate(pageId: string, id: string, patch: Partial<Region>) {
   const userId = getUserId();
-  const versions = buildVersionMap(id, patch as Record<string, unknown>, userId);
+  const timestamp = Date.now();
+  const versions = buildVersionMap(id, patch as Record<string, unknown>, userId, timestamp);
   for (const field of Object.keys(patch)) {
-    writeLocal(id, field, userId);
+    writeLocal(id, field, userId, undefined, timestamp);
   }
-  broadcastOp('region:update', pageId, { id, ...patch, versions });
+  broadcastOp('region:update', pageId, { id, ...patch, versions }, timestamp);
 }
 
 export function broadcastRegionDelete(pageId: string, id: string) {
-  markDeleted(id, getUserId());
-  broadcastOp('region:delete', pageId, { id });
+  const userId = getUserId();
+  const timestamp = Date.now();
+  markDeleted(id, userId, pageId, { t: timestamp, u: userId });
+  broadcastOp('region:delete', pageId, { id }, timestamp);
+}
+
+export function broadcastRegionReorder(pageId: string, regionIds: string[]) {
+  broadcastOp('region:reorder', pageId, { ids: [...regionIds] });
+}
+
+export type RegionBatchChange =
+  | { kind: 'create'; region: Region; versions?: Record<string, { t: number; u: string }> }
+  | { kind: 'update'; id: string; patch: Partial<Region>; versions?: Record<string, { t: number; u: string }> }
+  | { kind: 'delete'; id: string };
+
+export function broadcastRegionBatch(pageId: string, changes: RegionBatchChange[]) {
+  if (changes.length === 0) return;
+  const userId = getUserId();
+  const timestamp = Date.now();
+  const normalizedChanges = changes.map((change) => {
+    if (change.kind === 'create') {
+      initCrdtMeta(change.region.id, pageId, userId);
+      for (const field of Object.keys(change.region)) {
+        writeLocal(change.region.id, field, userId, undefined, timestamp);
+      }
+      return {
+        ...change,
+        versions: buildVersionMap(change.region.id, change.region as unknown as Record<string, unknown>, userId, timestamp),
+      };
+    }
+    if (change.kind === 'update') {
+      for (const field of Object.keys(change.patch)) {
+        writeLocal(change.id, field, userId, undefined, timestamp);
+      }
+      return {
+        ...change,
+        versions: buildVersionMap(change.id, change.patch as Record<string, unknown>, userId, timestamp),
+      };
+    }
+    markDeleted(change.id, userId, pageId, { t: timestamp, u: userId });
+    return change;
+  });
+  broadcastOp('region:batch', pageId, { changes: normalizedChanges }, timestamp);
 }
 
 export function isCollabConnected(): boolean {

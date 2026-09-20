@@ -17,6 +17,7 @@ import { SNAP_THRESHOLD, GRID_STEP } from '../utils/snapping';
 import { formatKeys, SHORTCUT_DEFS, useShortcutsStore, type ShortcutDef } from '../stores/useShortcutsStore';
 import { useLocaleStore, type LocaleId } from '../i18n';
 import { ThemeSelector } from '../themes/ThemeSelector';
+import { isDesktopRuntime } from '../utils/runtime';
 
 type SettingsTab = 'editor' | 'pipeline' | 'shortcuts' | 'ai';
 
@@ -239,18 +240,29 @@ function LanguageSelector() {
 function PipelineSettings() {
   const domain = useProjectDomainStore();
 
-  const ocrEngines = [
-    { id: 'mock' as const, label: 'Тестовый (mock)' },
-    { id: 'windows' as const, label: 'Windows OCR' },
-    { id: 'tesseract' as const, label: 'Tesseract' },
-    { id: 'paddle' as const, label: 'PaddleOCR' },
-    { id: 'manga-ocr' as const, label: 'MangaOCR' },
-  ] as const;
+  const desktop = isDesktopRuntime();
+
+  const ocrEngines = desktop
+    ? [
+        { id: 'mock' as const, label: 'Тестовый (mock)' },
+        { id: 'windows' as const, label: 'Windows OCR' },
+        { id: 'tesseract' as const, label: 'Tesseract' },
+        { id: 'paddle' as const, label: 'PaddleOCR' },
+        { id: 'manga-ocr' as const, label: 'MangaOCR' },
+        { id: 'easyocr' as const, label: 'EasyOCR' },
+      ]
+    : [
+        { id: 'tesseract' as const, label: 'Tesseract.js (browser)' },
+      ];
 
   const translationProviders = [
     { id: 'mock' as const, label: 'Тестовый (mock)' },
     { id: 'local' as const, label: 'Локальный' },
-    { id: 'remote' as const, label: 'Удалённый' },
+    { id: 'offline' as const, label: 'Offline' },
+    { id: 'deepl' as const, label: 'DeepL' },
+    { id: 'libre' as const, label: 'LibreTranslate' },
+    { id: 'ollama' as const, label: 'Ollama' },
+    { id: 'sakura' as const, label: 'Sakura' },
   ] as const;
 
   const sourceLanguages = [
