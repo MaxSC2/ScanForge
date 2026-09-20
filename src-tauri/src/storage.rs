@@ -451,7 +451,7 @@ impl ProjectRepository {
     }
 
     pub fn load_project(&self, id: String) -> Result<LocalProjectLoadResult, String> {
-        let connection = self.connect()?;
+        let mut connection = self.connect()?;
         migrate_snapshot_projects(&connection)?;
 
         let project_row = get_project_row(&connection, id.clone())?
