@@ -15,7 +15,7 @@ export async function ensureProjectDomainDefaults(projectId: string) {
   ]);
   const runtimeDefaults = {
     ...DEFAULT_PROJECT_SETTINGS,
-    ocrEngine: isDesktopRuntime() ? 'windows' : DEFAULT_PROJECT_SETTINGS.ocrEngine,
+    ocrEngine: isDesktopRuntime() ? 'windows' : 'tesseract',
     translationProvider: 'local',
   } as const;
 
@@ -30,8 +30,8 @@ export async function ensureProjectDomainDefaults(projectId: string) {
   const nextSettings: ProjectSettingsRecord = {
     projectId,
     ...(existingSettings ?? runtimeDefaults),
-    ...(existingSettings?.ocrEngine === 'mock' && isDesktopRuntime()
-      ? { ocrEngine: 'windows' }
+    ...(existingSettings?.ocrEngine === 'mock'
+      ? { ocrEngine: isDesktopRuntime() ? 'windows' : 'tesseract' }
       : {}),
     ...(existingSettings?.translationProvider === 'mock'
       ? { translationProvider: 'local' }
