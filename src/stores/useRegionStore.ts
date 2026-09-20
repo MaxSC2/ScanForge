@@ -190,6 +190,11 @@ export const useRegionStore = create<RegionState>((set, get) => ({
       ),
     );
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) {
+        m.broadcastRegionBatch(pageId, regionIds.map((id) => ({ kind: 'update' as const, id, patch })));
+      }
+    });
   },
 
   /** Deletes a region and re-numbers the remaining regions. Clears selection if the deleted region was selected. */
