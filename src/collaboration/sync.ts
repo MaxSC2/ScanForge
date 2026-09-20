@@ -156,6 +156,44 @@ function handleMessage(data: CollabMessage) {
           }
           break;
         }
+        case 'region:batch': {
+          const changes = Array.isArray(op.payload.changes) ? op.payload.changes : [];
+          usePageStore.setState((state) => ({
+            pages: state.pages.map((entry) => {
+              if (entry.id !== op.pageId) return entry;
+              let regions = [...entry.regions];
+              for (const change of changes) {
+                if (!change || typeof change !== 'object' || typeof change.kind !== 'string') continue;
+                if (change.kind === 'create' && change.region && typeof change.region.id === 'string') {
+                  const r = change.region as Region;
+                  if (!regions.some((region) => region.id === r.id)) {
+                    initCrdtMeta(r.id, op.pageId, op.userId);
+                    for (const field of Object.keys(r)) resolveRemote(r.id, field, { t: op.timestamp, u: op.userId });
+                    regions.push(r);
+                  }
+                } else if (change.kind === 'delete' && typeof change.id === 'string') {
+                  if (markDeleted(change.id, op.userId, op.pageId, { t: op.timestamp, u: op.userId })) {
+                    regions = regions.filter((region) => region.id !== change.id);
+                  }
+                } else if (change.kind === 'update' && typeof change.id === 'string' && change.patch && typeof change.patch === 'object') {
+                  const patch = change.patch as Record<string, unknown>;
+                  const versions = change.versions && typeof change.versions === 'object' ? change.versions as Record<string, { t: number; u: string }> : {};
+                  const resolved: Record<string, unknown> = {};
+                  for (const [field, value] of Object.entries(patch)) {
+                    const tag = versions[field] ?? { t: op.timestamp, u: op.userId };
+                    if (resolveRemote(change.id, field, tag)) resolved[field] = value;
+                  }
+                  if (Object.keys(resolved).length) {
+                    regions = regions.map((region) => region.id === change.id ? normalizeRegion({ ...region, ...resolved }) : region);
+                  }
+                }
+              }
+              return { ...entry, regions: regions.map((region, index) => ({ ...region, order: index + 1 })) };
+            }),
+          }));
+          useProjectStore.getState().touch();
+          break;
+        }
         case 'region:reorder': {
           const ids = Array.isArray(op.payload.ids)
             ? op.payload.ids.filter((value): value is string => typeof value === 'string')
@@ -332,6 +370,33 @@ export function broadcastRegionDelete(pageId: string, id: string) {
 
 export function broadcastRegionReorder(pageId: string, regionIds: string[]) {
   broadcastOp('region:reorder', pageId, { ids: [...regionIds] });
+}
+
+
+export type RegionBatchChange =
+  | { kind: 'create'; region: Region }
+  | { kind: 'update'; id: string; patch: Partial<Region>; versions?: Record<string, { t: number; u: string }> }
+  | { kind: 'delete'; id: string };
+
+export function broadcastRegionBatch(pageId: string, changes: RegionBatchChange[]) {
+  if (changes.length === 0) return;
+  const userId = getUserId();
+  const timestamp = Date.now();
+  for (const change of changes) {
+    if (change.kind === 'create') {
+      initCrdtMeta(change.region.id, pageId, userId);
+      for (const field of Object.keys(change.region)) writeLocal(change.region.id, field, userId);
+    } else if (change.kind === 'update') {
+      for (const field of Object.keys(change.patch)) writeLocal(change.id, field, userId);
+    } else {
+      markDeleted(change.id, userId, pageId, { t: timestamp, u: userId });
+    }
+  }
+  const normalizedChanges = changes.map((change) => {
+    if (change.kind !== 'update') return change;
+    return { ...change, versions: buildVersionMap(change.id, change.patch as Record<string, unknown>, userId) };
+  });
+  broadcastOp('region:batch', pageId, { changes: normalizedChanges }, timestamp);
 }
 
 export function isCollabConnected(): boolean {
