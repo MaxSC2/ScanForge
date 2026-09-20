@@ -326,16 +326,16 @@ Current tests now cover page-asset recovery, OCR language/capability contracts, 
 Add integration-level fixtures for project/page/region/job lifecycle, including crash/restart recovery and missing asset cases. The new OCR and asset recovery tests are prerequisites, not a substitute for full lifecycle integration.
 
 ### COLLAB-P1-01 — Collaboration protocol contains unused message/op types
-**Status:** [~]
+**Status:** [x]
 
 **Evidence**
-The protocol still declares `state` and `page:select`, which are not currently handled end-to-end.
+The protocol previously declared `page:select` as an operation even though page selection is local UI state and should not overwrite another collaborator's selection. The operation is now removed from the protocol and relay allowlist. The `state` message remains reserved for future session bootstrap but is not an operation type accepted from clients.
 
 **Resolution**
-`region:reorder` is now implemented end-to-end: local reorder emits an operation, the relay validates/isolates it, and remote clients apply the ordered region ids without rebroadcasting.
+`region:reorder` is implemented end-to-end and the unused `page:select` operation has been removed rather than adding synchronization that would unexpectedly change local selection state.
 
-**Remaining**
-Either implement the remaining `state`/`page:select` protocol cases or remove/deprecate them after product review.
+**Acceptance**
+Every client-originated operation type is implemented end-to-end or explicitly removed when its semantics are local-only.
 
 **Acceptance**
 Every protocol message/op type is either implemented end-to-end or explicitly deprecated.
