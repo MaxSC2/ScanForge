@@ -14,6 +14,7 @@ const ALLOWED_OP_TYPES = new Set([
   'region:update',
   'region:delete',
   'region:reorder',
+  'region:batch',
 ]);
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 let nextId = 1;
