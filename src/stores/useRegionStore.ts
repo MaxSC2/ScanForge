@@ -225,6 +225,9 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     mutatePage(pageId, (regions) => [...regions, newRegion]);
     set({ selectedRegionId: newRegion.id });
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) m.broadcastRegionBatch(pageId, [{ kind: 'create', region: newRegion }]);
+    });
   },
 
   /** Moves a region from one position to another in the region list and re-numbers all regions by order. Captures history. */
@@ -297,6 +300,14 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     );
     set({ selectedRegionId: merged.id, multiSelectedRegionIds: [] });
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) {
+        m.broadcastRegionBatch(pageId, [
+          ...regionIds.map((id) => ({ kind: 'delete' as const, id })),
+          { kind: 'create' as const, region: merged },
+        ]);
+      }
+    });
   },
 
   splitRegion: (pageId, regionId) => {
@@ -332,6 +343,15 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     );
     set({ selectedRegionId: leftHalf.id, multiSelectedRegionIds: [rightHalf.id] });
     useProjectStore.getState().touch();
+    void import('../collaboration/sync').then(m => {
+      if (m.isCollabConnected()) {
+        m.broadcastRegionBatch(pageId, [
+          { kind: 'delete' as const, id: regionId },
+          { kind: 'create' as const, region: leftHalf },
+          { kind: 'create' as const, region: rightHalf },
+        ]);
+      }
+    });
   },
 }));
 
