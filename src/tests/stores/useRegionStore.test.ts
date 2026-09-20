@@ -179,6 +179,15 @@ describe('useRegionStore', () => {
       useRegionStore.getState().deleteRegion('page-1', 'r1');
       expect(useRegionStore.getState().selectedRegionId).toBeNull();
     });
+
+    it('removes deleted region from multi-selection', () => {
+      setupPage([createRegion('r1'), createRegion('r2', { order: 2 })]);
+      useRegionStore.getState().selectRegion('r1');
+      useRegionStore.getState().selectRegion('r2', true);
+      useRegionStore.getState().deleteRegion('page-1', 'r1');
+      expect(useRegionStore.getState().multiSelectedRegionIds).toEqual([]);
+      expect(useRegionStore.getState().selectedRegionId).toBe('r2');
+    });
   });
 
   describe('duplicateRegion', () => {
@@ -204,6 +213,14 @@ describe('useRegionStore', () => {
       expect(page?.regions[1]?.id).toBe('r1');
       expect(page?.regions[2]?.id).toBe('r2');
       expect(page?.regions.map((r) => r.order)).toEqual([1, 2, 3]);
+    });
+
+    it('ignores invalid reorder indexes', () => {
+      setupPage([createRegion('r1'), createRegion('r2', { order: 2 })]);
+      const before = usePageStore.getState().pages[0].regions.map((r) => r.id);
+      useRegionStore.getState().reorderRegions('page-1', -1, 0);
+      useRegionStore.getState().reorderRegions('page-1', 0, 99);
+      expect(usePageStore.getState().pages[0].regions.map((r) => r.id)).toEqual(before);
     });
   });
 
