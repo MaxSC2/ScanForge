@@ -11,7 +11,6 @@ export type CollabOpType =
   | 'region:update'
   | 'region:delete'
   | 'region:reorder'
-  | 'page:select';
 
 export interface CollabOp {
   id: string;
