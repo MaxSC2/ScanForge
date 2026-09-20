@@ -226,10 +226,10 @@ Missing durable assets no longer produce an invalid browser image URL, and an un
 The Tauri loader previously preferred the snapshot even when normalized domain tables contained newer state.
 
 **Resolution**
-`src-tauri/src/storage.rs` now reconstructs the project from normalized domain tables first. The snapshot is used only when domain reconstruction fails, matching the browser repository's domain-first behavior.
+`src-tauri/src/storage.rs` now reconstructs the project from normalized domain tables first. The snapshot is used only when domain reconstruction fails, matching the browser repository's domain-first behavior. If snapshot recovery is required, the recovered snapshot is also written back into the normalized project/page/region tables in a transaction, so the next restart does not repeatedly hit the same broken domain state.
 
 **Remaining**
-Add an integration test that creates deliberate domain/snapshot divergence and verifies domain state wins, plus a crash/recovery fixture proving snapshot fallback still works.
+Add an integration test that creates deliberate domain/snapshot divergence and verifies domain state wins, plus a crash/recovery fixture proving snapshot fallback still works. The autosave sequence still writes the snapshot before the separate page/region sync calls, so a crash-window test is needed before claiming full atomic persistence.
 
 **Acceptance**
 A documented domain-first load order is enforced by code and covered by divergence/recovery tests.
