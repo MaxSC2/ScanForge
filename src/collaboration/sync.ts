@@ -2,7 +2,6 @@ import type { Region } from '../types';
 import { usePageStore } from '../stores/usePageStore';
 import { useProjectStore } from '../stores/useProjectStore';
 import { normalizeRegion } from '../types/region';
-import { useRegionStore } from '../stores/useRegionStore';
 import { useToastStore } from '../stores/useToastStore';
 import { useCollabStore } from './store';
 import { t } from '../i18n';
@@ -77,7 +76,6 @@ function handleMessage(data: CollabMessage) {
       }
 
       const pageStore = usePageStore.getState();
-      const regionStore = useRegionStore.getState();
       const page = pageStore.pages.find((p) => p.id === op.pageId);
       if (!page) break;
 
