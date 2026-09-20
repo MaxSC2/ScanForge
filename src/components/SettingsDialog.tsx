@@ -242,15 +242,21 @@ function PipelineSettings() {
   const ocrEngines = [
     { id: 'mock' as const, label: 'Тестовый (mock)' },
     { id: 'windows' as const, label: 'Windows OCR' },
-    { id: 'tesseract' as const, label: 'Tesseract' },
+    { id: 'tesseract' as const, label: 'Tesseract.js' },
     { id: 'paddle' as const, label: 'PaddleOCR' },
     { id: 'manga-ocr' as const, label: 'MangaOCR' },
+    { id: 'easyocr' as const, label: 'EasyOCR' },
   ] as const;
 
   const translationProviders = [
     { id: 'mock' as const, label: 'Тестовый (mock)' },
     { id: 'local' as const, label: 'Локальный' },
-    { id: 'remote' as const, label: 'Удалённый' },
+    { id: 'offline' as const, label: 'Offline' },
+    { id: 'deepl' as const, label: 'DeepL' },
+    { id: 'libre' as const, label: 'LibreTranslate' },
+    { id: 'ollama' as const, label: 'Ollama' },
+    { id: 'sakura' as const, label: 'Sakura' },
+    { id: 'remote' as const, label: 'Удалённый (не реализован)' },
   ] as const;
 
   const sourceLanguages = [
