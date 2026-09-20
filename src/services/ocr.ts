@@ -231,43 +231,41 @@ async function applyBrowserOcrResult(
   const resultMap = new Map(results.map((result) => [result.regionId, result] as const));
   const updatedAt = Date.now();
 
-  await Promise.all(
-    regions.map(async ({ record }) => {
-      assertNotAborted(signal);
+  for (const { record } of regions) {
+    assertNotAborted(signal);
 
-      const result = resultMap.get(record.id);
-      if (!result) return;
+    const result = resultMap.get(record.id);
+    if (!result) continue;
 
-      if (!result.skipped && result.text) {
-        await regionRepository.update({
-          ...record,
-          sourceText: result.text,
-          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
-          status: record.translatedText.trim() ? 'translated' : 'ocr_done',
-          ocrStatus: 'done',
-          ocrEngine: 'tesseract',
-          ocrUpdatedAt: updatedAt,
-          ...(typeof result.confidence === 'number'
-            ? { ocrConfidence: result.confidence }
-            : {}),
-        });
-        return;
-      }
+    if (!result.skipped && result.text) {
+      await regionRepository.update({
+        ...record,
+        sourceText: result.text,
+        ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
+        status: record.translatedText.trim() ? 'translated' : 'ocr_done',
+        ocrStatus: 'done',
+        ocrEngine: 'tesseract',
+        ocrUpdatedAt: updatedAt,
+        ...(typeof result.confidence === 'number'
+          ? { ocrConfidence: result.confidence }
+          : {}),
+      });
+      continue;
+    }
 
-      if (result.reason === 'invalid_bounds' || result.reason === 'no_text') {
-        await regionRepository.update({
-          ...record,
-          ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
-          ocrStatus: 'failed',
-          ocrEngine: 'tesseract',
-          ocrUpdatedAt: updatedAt,
-          ...(typeof result.confidence === 'number'
-            ? { ocrConfidence: result.confidence }
-            : {}),
-        });
-      }
-    }),
-  );
+    if (result.reason === 'invalid_bounds' || result.reason === 'no_text') {
+      await regionRepository.update({
+        ...record,
+        ...(context.sourceLanguage ? { sourceLanguage: context.sourceLanguage as ProjectSourceLanguage } : {}),
+        ocrStatus: 'failed',
+        ocrEngine: 'tesseract',
+        ocrUpdatedAt: updatedAt,
+        ...(typeof result.confidence === 'number'
+          ? { ocrConfidence: result.confidence }
+          : {}),
+      });
+    }
+  }
 }
 
 async function runBrowserOcr(
@@ -284,6 +282,13 @@ async function runBrowserOcr(
   }
 
   const overwriteExisting = runOptions.overwriteExisting ?? false;
+  const configuredEngine = context.ocrEngine;
+  if (configuredEngine !== 'tesseract') {
+    throw new Error(
+      `OCR engine "${configuredEngine}" is not supported in browser runtime; select Tesseract`,
+    );
+  }
+
   const engineName = 'tesseract.js';
   const imageDataUrl = page.imageUrl || page.imagePath;
   if (!imageDataUrl || !imageDataUrl.startsWith('data:')) {
