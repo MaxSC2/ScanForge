@@ -125,6 +125,31 @@ function handleMessage(data: CollabMessage) {
           }
           break;
         }
+        case 'region:reorder': {
+          const ids = Array.isArray(op.payload.ids)
+            ? op.payload.ids.filter((value): value is string => typeof value === 'string')
+            : [];
+          if (ids.length > 0) {
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) => {
+                if (entry.id !== op.pageId) return entry;
+                const byId = new Map(entry.regions.map((region) => [region.id, region] as const));
+                const ordered = ids
+                  .map((id) => byId.get(id))
+                  .filter((region): region is Region => Boolean(region));
+                const missing = entry.regions.filter((region) => !ids.includes(region.id));
+                return {
+                  ...entry,
+                  regions: [...ordered, ...missing].map((region, index) => ({
+                    ...region,
+                    order: index + 1,
+                  })),
+                };
+              }),
+            }));
+          }
+          break;
+        }
       }
       store.removePendingOp(op.id);
       send({ type: 'ack', opId: op.id });
@@ -272,6 +297,10 @@ export function broadcastRegionDelete(pageId: string, id: string) {
   const timestamp = Date.now();
   markDeleted(id, userId, pageId, { t: timestamp, u: userId });
   broadcastOp('region:delete', pageId, { id }, timestamp);
+}
+
+export function broadcastRegionReorder(pageId: string, regionIds: string[]) {
+  broadcastOp('region:reorder', pageId, { ids: [...regionIds] });
 }
 
 export function isCollabConnected(): boolean {
