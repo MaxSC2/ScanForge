@@ -204,6 +204,7 @@ export const useRegionStore = create<RegionState>((set, get) => ({
     void import('../collaboration/sync').then(m => { if (m.isCollabConnected()) m.broadcastRegionDelete(pageId, regionId); });
     set((s) => ({
       selectedRegionId: s.selectedRegionId === regionId ? null : s.selectedRegionId,
+      multiSelectedRegionIds: s.multiSelectedRegionIds.filter((id) => id !== regionId),
     }));
   },
 
@@ -228,14 +229,28 @@ export const useRegionStore = create<RegionState>((set, get) => ({
 
   /** Moves a region from one position to another in the region list and re-numbers all regions by order. Captures history. */
   reorderRegions: (pageId, fromIndex, toIndex) => {
+    const page = usePageStore.getState().pages.find((p) => p.id === pageId);
+    if (!page || fromIndex < 0 || toIndex < 0 || fromIndex >= page.regions.length || toIndex >= page.regions.length) {
+      return;
+    }
+
     useHistoryStore.getState().capture();
+    let orderedRegionIds: string[] = [];
     mutatePage(pageId, (regions) => {
       const list = [...regions];
       const [moved] = list.splice(fromIndex, 1);
+      if (!moved) return regions;
       list.splice(toIndex, 0, moved);
+      orderedRegionIds = list.map((region) => region.id);
       return list.map((r, i) => ({ ...r, order: i + 1 }));
     });
     useProjectStore.getState().touch();
+
+    void import('../collaboration/sync').then((m) => {
+      if (orderedRegionIds.length > 0 && m.isCollabConnected()) {
+        m.broadcastRegionReorder(pageId, orderedRegionIds);
+      }
+    });
   },
 
   mergeRegions: (pageId, regionIds) => {
