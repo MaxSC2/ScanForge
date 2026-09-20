@@ -310,6 +310,12 @@ The suite is no longer skipped and is included in the normal Vitest test command
 
 ---
 
+### TEST-P2-01 — Region selection and reorder edge cases need regression coverage
+**Status:** [x]
+
+**Resolution**
+Added regression tests for deleting a region that is part of multi-selection and for invalid reorder indexes.
+
 ### TEST-P1-02 — Repository/job lifecycle coverage is incomplete
 **Status:** [ ]
 
@@ -322,16 +328,19 @@ Add integration-level fixtures for project/page/region/job lifecycle, including 
 ---
 
 ### COLLAB-P1-01 — Collaboration protocol contains unused message/op types
-**Status:** [ ]
+**Status:** [~]
 
 **Evidence**
-`src/collaboration/types.ts` defines `state`, `region:reorder`, and `page:select`, while the current relay/sync path primarily handles create/update/delete.
+The protocol still declares `state` and `page:select`, which are not currently handled end-to-end.
 
-**Risk**
-The protocol advertises behavior that is not necessarily synchronized.
+**Resolution**
+`region:reorder` is now implemented end-to-end: local reorder emits an operation, the relay validates/isolates it, and remote clients apply the ordered region ids without rebroadcasting.
+
+**Remaining**
+Either implement the remaining `state`/`page:select` protocol cases or remove/deprecate them after product review.
 
 **Acceptance**
-Either fully implement the protocol cases or remove/deprecate them and add protocol tests.
+Every protocol message/op type is either implemented end-to-end or explicitly deprecated.
 
 ---
 
