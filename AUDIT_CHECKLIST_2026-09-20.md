@@ -342,6 +342,24 @@ Every protocol message/op type is either implemented end-to-end or explicitly de
 
 ---
 
+### COLLAB-P1-03 — Complex region mutations were not synchronized atomically
+**Status:** [x]
+
+**Resolution**
+Added a `region:batch` collaboration operation and relay allowlist. Batch updates, duplicate, merge and split now transmit their related create/update/delete changes as one logical operation, while remote application bypasses local mutation methods to prevent rebroadcast loops.
+
+**Acceptance**
+Complex region mutations have an explicit protocol representation and do not re-enter local collaboration broadcasters when received remotely.
+
+### STORAGE-P1-03 — Tauri project save had a snapshot/domain crash window
+**Status:** [x]
+
+**Resolution**
+`save_project` now imports the supplied project into normalized project/page/region tables and writes the recovery snapshot inside the same SQLite transaction.
+
+**Acceptance**
+A successful Tauri save commits normalized domain state and snapshot together, eliminating the previous JavaScript ordering window.
+
 ### COLLAB-P1-02 — Collaboration server has no authentication or authorization
 **Status:** [~]
 
