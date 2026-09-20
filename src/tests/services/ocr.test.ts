@@ -1,26 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const pageRepositoryMock = {
-  getById: vi.fn(),
-};
-
-const regionRepositoryMock = {
-  getByPage: vi.fn(),
-  update: vi.fn(),
-};
-
-const ensureProjectDomainDefaultsMock = vi.fn();
+const mocks = vi.hoisted(() => ({
+  pageRepository: {
+    getById: vi.fn(),
+  },
+  regionRepository: {
+    getByPage: vi.fn(),
+    update: vi.fn(),
+  },
+  ensureProjectDomainDefaults: vi.fn(),
+}));
 
 vi.mock('../../repositories/pageRepository', () => ({
-  pageRepository: pageRepositoryMock,
+  pageRepository: mocks.pageRepository,
 }));
 
 vi.mock('../../repositories/regionRepository', () => ({
-  regionRepository: regionRepositoryMock,
+  regionRepository: mocks.regionRepository,
 }));
 
 vi.mock('../../repositories/projectDefaults', () => ({
-  ensureProjectDomainDefaults: ensureProjectDomainDefaultsMock,
+  ensureProjectDomainDefaults: mocks.ensureProjectDomainDefaults,
 }));
 
 vi.mock('../../utils/runtime', () => ({
