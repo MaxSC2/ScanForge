@@ -83,14 +83,14 @@ describe('OCR service contracts', () => {
 
   it('rejects a browser OCR configuration that is not executable in browser runtime', async () => {
     vi.mocked(isDesktopRuntime).mockReturnValue(false);
-    pageRepositoryMock.getById.mockResolvedValue({
+    mocks.pageRepository.getById.mockResolvedValue({
       id: 'page-1',
       projectId: 'project-1',
       imagePath: 'data:image/png;base64,AAAA',
       width: 800,
       height: 1200,
     });
-    regionRepositoryMock.getByPage.mockResolvedValue([
+    mocks.regionRepository.getByPage.mockResolvedValue([
       {
         id: 'region-1',
         pageId: 'page-1',
@@ -112,7 +112,7 @@ describe('OCR service contracts', () => {
         visible: true,
       },
     ]);
-    ensureProjectDomainDefaultsMock.mockResolvedValue({
+    mocks.ensureProjectDomainDefaults.mockResolvedValue({
       sourceLanguage: 'ja',
       targetLanguage: 'ru',
       ocrEngine: 'windows',
@@ -156,6 +156,6 @@ describe('OCR service contracts', () => {
       name: 'AbortError',
     });
 
-    expect(pageRepositoryMock.getById).not.toHaveBeenCalled();
+    expect(mocks.pageRepository.getById).not.toHaveBeenCalled();
   });
 });
