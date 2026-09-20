@@ -1,5 +1,7 @@
 import type { Region } from '../types';
 import { usePageStore } from '../stores/usePageStore';
+import { useProjectStore } from '../stores/useProjectStore';
+import { normalizeRegion } from '../types/region';
 import { useRegionStore } from '../stores/useRegionStore';
 import { useToastStore } from '../stores/useToastStore';
 import { useCollabStore } from './store';
@@ -88,7 +90,14 @@ function handleMessage(data: CollabMessage) {
             for (const field of Object.keys(r)) {
               resolveRemote(r.id, field, remoteTag);
             }
-            regionStore.addRegion(op.pageId, r);
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) =>
+                entry.id === op.pageId && !entry.regions.some((region) => region.id === r.id)
+                  ? { ...entry, regions: [...entry.regions, r].map((region, index) => ({ ...region, order: index + 1 })) }
+                  : entry,
+              ),
+            }));
+            useProjectStore.getState().touch();
           }
           break;
         }
@@ -109,7 +118,19 @@ function handleMessage(data: CollabMessage) {
           }
 
           if (Object.keys(resolvedPatch).length > 0) {
-            regionStore.updateRegion(op.pageId, id, resolvedPatch);
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) =>
+                entry.id !== op.pageId
+                  ? entry
+                  : {
+                      ...entry,
+                      regions: entry.regions.map((region) =>
+                        region.id === id ? normalizeRegion({ ...region, ...resolvedPatch }) : region,
+                      ),
+                    },
+              ),
+            }));
+            useProjectStore.getState().touch();
             // resolveRemote() already stores the transmitted remote tag.
             // Re-writing it with Date.now() would incorrectly make this
             // client look newer than later edits from other clients.
@@ -119,7 +140,19 @@ function handleMessage(data: CollabMessage) {
         case 'region:delete': {
           const { id } = op.payload as { id: string };
           if (markDeleted(id, op.userId, op.pageId, { t: op.timestamp, u: op.userId })) {
-            regionStore.deleteRegion(op.pageId, id);
+            usePageStore.setState((state) => ({
+              pages: state.pages.map((entry) =>
+                entry.id !== op.pageId
+                  ? entry
+                  : {
+                      ...entry,
+                      regions: entry.regions
+                        .filter((region) => region.id !== id)
+                        .map((region, index) => ({ ...region, order: index + 1 })),
+                    },
+              ),
+            }));
+            useProjectStore.getState().touch();
             // Keep the tombstone until collaboration disconnects so late
             // updates cannot mutate or resurrect the deleted region.
           }
