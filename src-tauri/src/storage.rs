@@ -483,13 +483,39 @@ impl ProjectRepository {
                             updated_at: project_row.updated_at,
                         };
 
+                        let repair_warning = match connection.transaction() {
+                            Ok(transaction) => {
+                                match import_snapshot_project_into_domain(&transaction, &snapshot) {
+                                    Ok(()) => match transaction.commit() {
+                                        Ok(()) => None,
+                                        Err(error) => Some(format!(
+                                            "Snapshot was restored in memory, but domain repair could not be committed: {error}"
+                                        )),
+                                    },
+                                    Err(error) => Some(format!(
+                                        "Snapshot was restored in memory, but domain repair failed: {error}"
+                                    )),
+                                }
+                            }
+                            Err(error) => Some(format!(
+                                "Snapshot was restored in memory, but domain repair transaction could not start: {error}"
+                            )),
+                        };
+
+                        let warning = match repair_warning {
+                            Some(repair_warning) => format!(
+                                "Domain state was incomplete. Restored from backup snapshot. {repair_warning}"
+                            ),
+                            None => {
+                                "Domain state was incomplete. Restored from backup snapshot and repaired normalized tables."
+                                    .into()
+                            }
+                        };
+
                         Ok(LocalProjectLoadResult {
                             project: snapshot,
                             source: "snapshot".into(),
-                            warning: Some(
-                                "Domain state was incomplete. Restored from backup snapshot."
-                                    .into(),
-                            ),
+                            warning: Some(warning),
                         })
                     }
                     Ok(None) => Err(domain_error),
