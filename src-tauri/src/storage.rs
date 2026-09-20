@@ -410,7 +410,10 @@ impl ProjectRepository {
                 ],
             )
             .map_err(|error| error.to_string())?;
-        ensure_project_defaults(&transaction, &summary.id)?;
+        // Persist the normalized domain and the recovery snapshot in the same
+        // transaction. This removes the crash window where the snapshot could be
+        // newer than pages/regions because JavaScript synced those tables later.
+        import_snapshot_project_into_domain(&transaction, &project)?;
 
         transaction
             .execute(
