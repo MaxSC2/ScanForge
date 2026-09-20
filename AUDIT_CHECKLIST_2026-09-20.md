@@ -320,12 +320,10 @@ Added regression tests for deleting a region that is part of multi-selection and
 **Status:** [ ]
 
 **Evidence**
-Current tests cover job persistence helpers and utility logic, but there is limited end-to-end coverage for repository CRUD + job recovery + state restoration.
+Current tests now cover page-asset recovery, OCR language/capability contracts, and region selection/reorder edge cases, but there is still limited end-to-end coverage for repository CRUD + job recovery + state restoration.
 
 **Acceptance**
-Add integration-level fixtures for project/page/region/job lifecycle, including crash/restart recovery and missing asset cases.
-
----
+Add integration-level fixtures for project/page/region/job lifecycle, including crash/restart recovery and missing asset cases. The new OCR and asset recovery tests are prerequisites, not a substitute for full lifecycle integration.
 
 ### COLLAB-P1-01 — Collaboration protocol contains unused message/op types
 **Status:** [~]
